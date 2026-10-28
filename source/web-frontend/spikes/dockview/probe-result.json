@@ -1,0 +1,227 @@
+{
+ "semantics": {
+  "tabs": [
+   {
+    "tag": "DIV",
+    "cls": "dv-tab dv-inactive-tab",
+    "tabindex": "-1",
+    "draggable": "true",
+    "role": "tab",
+    "aria-selected": "false",
+    "aria-label": "Manajemen Pasien",
+    "aria-controls": "dv-tabpanel-0"
+   },
+   {
+    "tag": "DIV",
+    "cls": "dv-tab dv-active-tab",
+    "tabindex": "0",
+    "draggable": "true",
+    "role": "tab",
+    "aria-selected": "true",
+    "aria-label": "RM 000123 · Pasien Uji",
+    "aria-controls": "dv-tabpanel-0"
+   },
+   {
+    "tag": "DIV",
+    "cls": "dv-tab dv-active-tab",
+    "tabindex": "0",
+    "draggable": "true",
+    "role": "tab",
+    "aria-selected": "true",
+    "aria-label": "Laboratorium",
+    "aria-controls": "dv-tabpanel-1"
+   }
+  ],
+  "tablist": [
+   {
+    "tag": "DIV",
+    "cls": "dv-tabs-container",
+    "role": "tablist",
+    "aria-orientation": "horizontal"
+   },
+   {
+    "tag": "DIV",
+    "cls": "dv-tabs-container",
+    "role": "tablist",
+    "aria-orientation": "horizontal"
+   }
+  ],
+  "groups": [
+   {
+    "tag": "DIV",
+    "cls": "dv-groupview dv-groupview-header-top dv-",
+    "tabindex": "-1",
+    "role": "region",
+    "aria-label": "RM 000123 · Pasien Uji"
+   },
+   {
+    "tag": "DIV",
+    "cls": "dv-groupview dv-groupview-header-top dv-",
+    "tabindex": "-1",
+    "role": "region",
+    "aria-label": "Laboratorium"
+   }
+  ],
+  "floating": [
+   {
+    "tag": "DIV",
+    "cls": "dv-resize-container dv-resize-container-",
+    "role": "dialog",
+    "aria-modal": "false",
+    "aria-level": "0",
+    "aria-label": "Laboratorium"
+   }
+  ],
+  "headerActions": [
+   {
+    "tag": "DIV",
+    "cls": "dv-tabs-and-actions-container"
+   },
+   {
+    "tag": "DIV",
+    "cls": "dv-right-actions-container"
+   },
+   {
+    "tag": "DIV",
+    "cls": "dv-tabs-and-actions-container dv-single-"
+   }
+  ],
+  "anyRoleTab": 3,
+  "anyRoleTabpanel": 2,
+  "anyRoleDialog": 1,
+  "ariaLabelled": 13
+ },
+ "tabOrder": [
+  "DIV.dv-tab|RM 000123 · Pasien",
+  "BUTTON.|first focusable",
+  "INPUT.|",
+  "DIV.dv-tab|Laboratorium",
+  "BUTTON.|first focusable",
+  "INPUT.|",
+  "body",
+  "DIV.dv-tab|RM 000123 · Pasien",
+  "BUTTON.|first focusable",
+  "INPUT.|",
+  "DIV.dv-tab|Laboratorium",
+  "BUTTON.|first focusable"
+ ],
+ "keyboardMoveFloating": {
+  "before": [
+   120,
+   80,
+   482,
+   322
+  ],
+  "afterKb": [
+   120,
+   80,
+   482,
+   322
+  ],
+  "moved": false
+ },
+ "pointerDragFloating": {
+  "before": [
+   120,
+   80,
+   482,
+   322
+  ],
+  "after": [
+   203,
+   130,
+   482,
+   322
+  ],
+  "groupsAfter": {
+   "total": 2,
+   "floating": 1
+  }
+ },
+ "serialise": {
+  "bytes": 665,
+  "containsTitleWithRM": true,
+  "containsAnyTitle": true,
+  "panelKeys": [
+   "id",
+   "contentComponent",
+   "tabComponent",
+   "params",
+   "title",
+   "renderer",
+   "minimumHeight",
+   "maximumHeight",
+   "minimumWidth",
+   "maximumWidth",
+   "pinned"
+  ],
+  "sample": {
+   "id": "rm-synthetic",
+   "contentComponent": "p",
+   "params": {
+    "note": "y"
+   },
+   "title": "RM 000123 · Pasien Uji"
+  }
+ },
+ "tile": {
+  "groups": 4,
+  "patients": [
+   0,
+   0,
+   720,
+   450
+  ],
+  "billing": [
+   720,
+   0,
+   720,
+   900
+  ],
+  "rad": [
+   0,
+   450,
+   720,
+   450
+  ]
+ },
+ "api": {
+  "groupApi": [
+   "_isVisible"
+  ],
+  "dockviewApi": [
+   "addFloatingGroup",
+   "addGroupFromJSON",
+   "addPanelFromJSON",
+   "addPopoutGroup",
+   "exitMaximizedGroup",
+   "fromJSON",
+   "getPopouts",
+   "hasMaximizedGroup",
+   "layout",
+   "maximizeGroup",
+   "maximumHeight",
+   "maximumWidth",
+   "minimumHeight",
+   "minimumWidth",
+   "onDidAddPopoutGroup",
+   "onDidLayoutChange",
+   "onDidLayoutFromJSON",
+   "onDidMaximizedGroupChange",
+   "onDidMutateLayout",
+   "onDidOpenPopoutWindowFail",
+   "onDidPopoutGroupPositionChange",
+   "onDidPopoutGroupSizeChange",
+   "onDidRemovePopoutGroup",
+   "onDidSnapFloat",
+   "onWillClosePopoutWindow",
+   "onWillMutateLayout",
+   "popoutRestorationPromise",
+   "toJSON"
+  ]
+ },
+ "styling": {
+  "distinctDvVars": 126,
+  "bgFromOurTheme": "#f4f7fb"
+ }
+}

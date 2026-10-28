@@ -1,0 +1,59 @@
+.root {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.content:focus-visible {
+  outline: 2px solid var(--hms-color-border-focus);
+  outline-offset: -2px;
+}
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--hms-space-12);
+  padding: var(--hms-space-24);
+  color: var(--hms-color-text-secondary);
+}
+.stateTitle {
+  margin: 0;
+  font: 600 var(--hms-text-title-md-size) / var(--hms-text-title-md-line) var(--hms-font-base);
+  color: var(--hms-color-text-primary);
+}
+.skeleton {
+  width: 320px;
+  max-width: 100%;
+  height: 56px;
+  border-radius: var(--hms-radius-md);
+  background: linear-gradient(
+    90deg,
+    var(--hms-color-bg-hover),
+    var(--hms-color-border-subtle),
+    var(--hms-color-bg-hover)
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}

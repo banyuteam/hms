@@ -15,7 +15,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   return (
     <IntlProvider
       locale={locale}
-      defaultLocale="id"
+      defaultLocale="en"
       messages={MESSAGES[locale]}
       onError={(err) => {
         // Missing keys must be loud in dev/tests, never silent (CI also checks catalog parity).

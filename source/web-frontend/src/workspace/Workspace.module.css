@@ -1,5 +1,6 @@
 .shell {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: var(--hms-size-topbar) minmax(0, 1fr) var(--hms-size-dock);
   height: 100%;
   background: var(--hms-color-bg-canvas);
@@ -31,4 +32,56 @@
 }
 .windows > * {
   pointer-events: auto;
+}
+/* Empty tile slot (window-states.md T6/T10): placeholder with an "Open module…" button. */
+.emptySlot {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--hms-space-8);
+  background: var(--hms-color-bg-surface-subtle);
+  border: 1px dashed var(--hms-color-border-default);
+  border-radius: var(--hms-radius-lg);
+}
+.emptySlotButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hms-space-8);
+  height: var(--hms-size-control);
+  padding: 0 var(--hms-space-16);
+  background: var(--hms-color-bg-surface);
+  color: var(--hms-color-text-link);
+  border: 1px solid var(--hms-color-border-selected);
+  border-radius: var(--hms-radius-md);
+  font: 600 var(--hms-text-body-size) / var(--hms-text-body-line) var(--hms-font-base);
+  cursor: pointer;
+}
+.emptySlotButton:focus-visible {
+  outline: 2px solid var(--hms-color-border-focus);
+  outline-offset: 2px;
+}
+.emptySlotHint {
+  color: var(--hms-color-text-muted);
+  font-size: var(--hms-text-caption-size);
+}
+/* Compact shell: tiling paused (status text, not colour alone). */
+.compactNote {
+  position: absolute;
+  top: var(--hms-space-4);
+  left: 50%;
+  z-index: 40;
+  margin: 0;
+  max-width: calc(100% - var(--hms-space-48));
+  padding: var(--hms-space-4) var(--hms-space-16);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  background: var(--hms-color-status-warning-bg);
+  color: var(--hms-color-status-warning-fg);
+  border-radius: var(--hms-radius-md);
+  font: 600 var(--hms-text-caption-size) / var(--hms-text-caption-line) var(--hms-font-base);
 }

@@ -1,6 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { RequireAuth } from '@/auth/RequireAuth';
-import { I18nProvider } from '@/i18n/I18nProvider';
+import { AppProviders } from '@/AppProviders';
 import { LoginPage } from '@/pages/LoginPage';
 import { Workspace } from '@/workspace/Workspace';
 
@@ -24,10 +24,10 @@ export function AppRoutes() {
 
 export function App() {
   return (
-    <I18nProvider>
+    <AppProviders>
       <BrowserRouter>
         <AppRoutes />
       </BrowserRouter>
-    </I18nProvider>
+    </AppProviders>
   );
 }

@@ -1,11 +1,13 @@
+import { useEffect, useRef } from 'react';
 import { useIntl } from 'react-intl';
 import { Icon } from '@/components/Icon';
 import { StatusPill } from '@/components/StatusPill';
 import { formatDate, formatTime } from '@/i18n/format';
 import { useLocaleStore } from '@/i18n/localeStore';
-import { MODULES } from './registry';
+import { LayoutPicker } from './LayoutPicker';
 import { ModuleMenu } from './ModuleMenu';
 import { useNow } from './useNow';
+import { dockLabel, windowIcon, windowTitle } from './windowMeta';
 import { useWindowStore } from './windowStore';
 import styles from './Dock.module.css';
 
@@ -15,10 +17,18 @@ export function Dock() {
   const locale = useLocaleStore((s) => s.locale);
   const { windows, activeId, activate, close, showHome } = useWindowStore();
   const now = useNow();
+  const tabsRef = useRef<HTMLUListElement>(null);
+
+  // With many windows the strip scrolls; keep the active tab in view.
+  useEffect(() => {
+    tabsRef.current
+      ?.querySelector('[aria-current="page"]')
+      ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [activeId, windows.length]);
 
   return (
     <nav className={styles.dock} aria-label={intl.formatMessage({ id: 'dock.label' })}>
-      <ul className={styles.tabs}>
+      <ul className={styles.tabs} ref={tabsRef}>
         <li>
           <button
             type="button"
@@ -34,15 +44,15 @@ export function Dock() {
           </button>
         </li>
         {windows.map((w) => {
-          const mod = MODULES.find((m) => m.key === w.type);
-          const title = intl.formatMessage({ id: `module.${w.type}.title` });
+          const title = windowTitle(intl, w);
+          const label = dockLabel(intl, w);
           const isActive = activeId === w.id;
           return (
             <li
               key={w.id}
               className={styles.group}
               data-active={isActive || undefined}
-              data-minimized={w.minimized || undefined}
+              data-minimized={w.mode === 'minimized' || undefined}
             >
               <button
                 type="button"
@@ -53,9 +63,9 @@ export function Dock() {
                 onClick={() => activate(w.id)}
               >
                 <span className={styles.chip}>
-                  <Icon name={mod?.icon ?? 'file'} size={16} />
+                  <Icon name={windowIcon(w.kind)} size={16} />
                 </span>
-                <span className={styles.label}>{title}</span>
+                <span className={styles.label}>{label}</span>
               </button>
               <button
                 type="button"
@@ -76,6 +86,7 @@ export function Dock() {
       />
       <div className={styles.spacer} />
       <StatusPill status="neutral">{intl.formatMessage({ id: 'dock.mode' })}</StatusPill>
+      <LayoutPicker className={styles.add} />
       <div className={styles.clock} aria-label={intl.formatMessage({ id: 'dock.clock' })}>
         <time dateTime={now.toISOString()}>{formatTime(now, locale)}</time>
         <span>{formatDate(now, locale)}</span>

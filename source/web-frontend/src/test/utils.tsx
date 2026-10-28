@@ -3,23 +3,23 @@ import { MemoryRouter } from 'react-router';
 import axe from 'axe-core';
 import { AppRoutes } from '@/App';
 import { useAuthStore } from '@/auth/authStore';
-import { I18nProvider } from '@/i18n/I18nProvider';
+import { AppProviders } from '@/AppProviders';
 import { useLocaleStore } from '@/i18n/localeStore';
 import { useWindowStore } from '@/workspace/windowStore';
 
 export function resetStores() {
   useAuthStore.setState({ user: null, notice: null });
   useWindowStore.getState().reset();
-  useLocaleStore.setState({ locale: 'id' });
+  useLocaleStore.setState({ locale: 'en' });
 }
 
 export function renderApp(route = '/login') {
   return render(
-    <I18nProvider>
+    <AppProviders>
       <MemoryRouter initialEntries={[route]}>
         <AppRoutes />
       </MemoryRouter>
-    </I18nProvider>,
+    </AppProviders>,
   );
 }
 

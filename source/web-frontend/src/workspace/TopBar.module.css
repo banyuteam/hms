@@ -103,6 +103,9 @@
   outline: 2px solid var(--hms-color-border-focus);
   outline-offset: 2px;
 }
+.avatar::before {
+  content: attr(data-initials);
+}
 .avatar {
   display: inline-grid;
   place-items: center;

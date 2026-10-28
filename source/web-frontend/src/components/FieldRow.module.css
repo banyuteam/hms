@@ -1,0 +1,24 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hms-space-12);
+  margin: 0;
+}
+.row {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: var(--hms-space-12);
+  align-items: start;
+}
+.label {
+  color: var(--hms-color-text-muted);
+  font: 400 var(--hms-text-caption-size) / var(--hms-text-body-line) var(--hms-font-base);
+}
+.value {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: 400 var(--hms-text-body-size) / var(--hms-text-body-line) var(--hms-font-base);
+  color: var(--hms-color-text-primary);
+  font-variant-numeric: tabular-nums;
+}

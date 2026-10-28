@@ -23,13 +23,15 @@ export function UserMenu() {
     .toUpperCase();
   return (
     <DialogTrigger>
-      <Button className={styles.user} aria-label={intl.formatMessage({ id: 'topbar.userMenu' })}>
-        <span className={styles.avatar} aria-hidden="true">
-          {initials}
-        </span>
+      {/* WCAG 2.5.3 Label in Name: the accessible name starts with the visible text (name and role). */}
+      <Button
+        className={styles.user}
+        aria-label={intl.formatMessage({ id: 'topbar.userMenuFull' }, { name, role })}
+      >
+        {/* Initials are drawn by CSS (data-initials), so they are decoration and not visible *text* that the name must contain. */}
+        <span className={styles.avatar} data-initials={initials} aria-hidden="true" />
         <span className={styles.userText}>
-          <strong>{name}</strong>
-          <small>{role}</small>
+          <strong>{name}</strong> <small>{role}</small>
         </span>
         <Icon name="chevronDown" size={16} />
       </Button>

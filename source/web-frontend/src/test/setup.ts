@@ -1,11 +1,19 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
-import { afterEach, vi } from 'vitest';
+import { afterEach, beforeEach, vi } from 'vitest';
+
+import { queryClient } from '@/api/queryClient';
 
 afterEach(() => {
   cleanup();
+  queryClient.clear();
   vi.unstubAllEnvs();
   window.localStorage.clear();
+});
+
+// The synthetic patient API answers immediately in tests (the app default simulates ~150 ms).
+beforeEach(() => {
+  vi.stubEnv('VITE_MOCK_LATENCY_MS', '0');
 });
 
 // jsdom lacks these browser APIs used by React Aria / the window manager.

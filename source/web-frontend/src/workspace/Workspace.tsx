@@ -1,28 +1,44 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useIntl } from 'react-intl';
+import { useNavigate } from 'react-router';
 import { endSession } from '@/auth/session';
 import { idleMinutes, useIdleLogout } from '@/auth/useIdleLogout';
 import { Dock } from './Dock';
+import { computeFrames } from './frames';
 import { Home } from './Home';
+import { ModuleMenu } from './ModuleMenu';
 import { MODULES, type WindowType } from './registry';
 import { TopBar } from './TopBar';
 import { WindowFrame } from './WindowFrame';
-import { useWindowStore } from './windowStore';
+import { windowIcon, windowTitle } from './windowMeta';
+import { useWindowStore, type WindowState } from './windowStore';
+import { PatientDetailWindow } from './windows/patient-detail/PatientDetailWindow';
 import { PatientManagementWindow } from './windows/PatientManagementWindow';
 import { PlaceholderWindow } from './windows/PlaceholderWindow';
 import styles from './Workspace.module.css';
-import { useNavigate } from 'react-router';
 
-function WindowBody({ type }: { type: WindowType }) {
-  return type === 'patients' ? <PatientManagementWindow /> : <PlaceholderWindow />;
+function WindowBody({ win }: { win: WindowState }) {
+  switch (win.kind) {
+    case 'patients':
+      return <PatientManagementWindow />;
+    case 'patient-detail':
+      return <PatientDetailWindow mrn={win.params.mrn ?? ''} />;
+    default:
+      return <PlaceholderWindow />;
+  }
 }
 
-/** Figma workspace shell: top bar · wallpaper work area with floating windows · bottom dock. */
+/** Figma workspace shell: top bar · wallpaper work area with floating/tiled windows · bottom dock. */
 export function Workspace() {
   const intl = useIntl();
   const navigate = useNavigate();
   const areaRef = useRef<HTMLDivElement>(null);
-  const { windows, activeId, setArea, open } = useWindowStore();
+  const windows = useWindowStore((s) => s.windows);
+  const activeId = useWindowStore((s) => s.activeId);
+  const layout = useWindowStore((s) => s.layout);
+  const area = useWindowStore((s) => s.area);
+  const setArea = useWindowStore((s) => s.setArea);
+  const open = useWindowStore((s) => s.open);
 
   useIdleLogout(idleMinutes(), () => {
     endSession('idle');
@@ -53,6 +69,11 @@ export function Workspace() {
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
+  const { frames, compact, emptySlots, slots } = useMemo(
+    () => computeFrames(windows, layout, area),
+    [windows, layout, area],
+  );
+
   return (
     <div className={styles.shell}>
       <a href="#main-content" className="skip-link">
@@ -63,18 +84,49 @@ export function Workspace() {
         <div className={styles.homeLayer}>
           <Home />
         </div>
+        {compact && (
+          <p className={styles.compactNote} role="status">
+            {intl.formatMessage({ id: 'layout.compact' })}
+          </p>
+        )}
         <div className={styles.windows}>
-          {windows.map((w) => (
-            <WindowFrame
-              key={w.id}
-              win={w}
-              active={activeId === w.id}
-              icon={MODULES.find((m) => m.key === w.type)?.icon ?? 'file'}
-              title={intl.formatMessage({ id: `module.${w.type}.title` })}
-            >
-              <WindowBody type={w.type} />
-            </WindowFrame>
-          ))}
+          {emptySlots.map((i) => {
+            const r = slots[i];
+            return r ? (
+              <div
+                key={`slot-${i}`}
+                className={styles.emptySlot}
+                style={{ left: r.x, top: r.y, width: r.w, height: r.h }}
+                data-slot={i + 1}
+              >
+                <ModuleMenu
+                  icon="plus"
+                  label={intl.formatMessage({ id: 'layout.emptySlot' })}
+                  text={intl.formatMessage({ id: 'layout.emptySlot' })}
+                  className={styles.emptySlotButton}
+                />
+                <span className={styles.emptySlotHint}>
+                  {intl.formatMessage({ id: 'layout.emptySlotHint' }, { n: i + 1 })}
+                </span>
+              </div>
+            ) : null;
+          })}
+          {windows.map((w) => {
+            const frame = frames.get(w.id);
+            if (!frame) return null;
+            return (
+              <WindowFrame
+                key={w.id}
+                win={w}
+                frame={frame}
+                active={activeId === w.id}
+                icon={windowIcon(w.kind)}
+                title={windowTitle(intl, w)}
+              >
+                <WindowBody win={w} />
+              </WindowFrame>
+            );
+          })}
         </div>
       </main>
       <Dock />

@@ -15,10 +15,7 @@ interface LocaleState {
 }
 
 export const useLocaleStore = create<LocaleState>((set) => ({
-  locale: detectInitialLocale(
-    safeStorage(),
-    typeof navigator === 'undefined' ? [] : navigator.languages,
-  ),
+  locale: detectInitialLocale(safeStorage()),
   setLocale: (locale) => {
     saveLocale(locale, safeStorage());
     set({ locale });

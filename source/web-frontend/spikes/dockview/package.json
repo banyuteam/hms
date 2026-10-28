@@ -1,0 +1,19 @@
+{
+  "name": "hms-spike-dockview",
+  "private": true,
+  "type": "module",
+  "description": "ADR-0003 D1 spike: dockview vs own window manager. Throwaway; not part of the app build.",
+  "scripts": {
+    "dev": "vite --port 5199 --host 127.0.0.1",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "dockview-react": "8.7.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "6.1.2",
+    "vite": "8.3.5"
+  }
+}

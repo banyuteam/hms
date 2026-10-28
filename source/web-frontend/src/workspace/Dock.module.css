@@ -14,11 +14,15 @@
   display: flex;
   gap: var(--hms-space-8);
   margin: 0;
-  padding: 0;
+  padding: var(--hms-space-4) 0;
   list-style: none;
   min-width: 0;
+  /* Many open windows: the tab strip scrolls instead of widening the whole shell. */
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 .tabs > li {
+  flex: none;
   min-width: 0;
 }
 .group {
@@ -103,10 +107,17 @@
   border-radius: var(--hms-radius-md);
   cursor: pointer;
 }
+.add[data-layout-active] {
+  background: var(--hms-color-bg-selected);
+  border-color: var(--hms-color-border-selected);
+  color: var(--hms-color-text-link);
+}
 .spacer {
   flex: 1;
 }
 .clock {
+  flex: none;
+  white-space: nowrap;
   display: flex;
   flex-direction: column;
   align-items: flex-end;

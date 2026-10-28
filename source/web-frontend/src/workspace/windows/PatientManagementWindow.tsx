@@ -4,6 +4,7 @@ import { ToggleButton, ToggleButtonGroup } from 'react-aria-components';
 import { Icon } from '@/components/Icon';
 import { StatusPill, type PillStatus } from '@/components/StatusPill';
 import { SYNTHETIC_PATIENTS, type PatientStatus } from '@/data/syntheticPatients';
+import { useWindowStore } from '../windowStore';
 import styles from './PatientManagementWindow.module.css';
 
 type Filter = 'all' | PatientStatus;
@@ -22,6 +23,8 @@ export function PatientManagementWindow() {
   const [filter, setFilter] = useState<Filter>('all');
   const [selected, setSelected] = useState<string | null>('00012346');
   const rows = useRef<Array<HTMLTableRowElement | null>>([]);
+  const open = useWindowStore((s) => s.open);
+  const openDetail = (mrn: string) => open('patient-detail', { mrn });
 
   const patients = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -45,7 +48,11 @@ export function PatientManagementWindow() {
     } else if (e.key === 'End') {
       e.preventDefault();
       rows.current[patients.length - 1]?.focus();
-    } else if (e.key === 'Enter' || e.key === ' ') {
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      setSelected(mrn);
+      openDetail(mrn);
+    } else if (e.key === ' ') {
       e.preventDefault();
       setSelected(mrn);
     }
@@ -109,6 +116,8 @@ export function PatientManagementWindow() {
                 aria-selected={selected === p.mrn}
                 data-selected={selected === p.mrn || undefined}
                 onClick={() => setSelected(p.mrn)}
+                onDoubleClick={() => openDetail(p.mrn)}
+                aria-describedby="patients-row-hint"
                 onKeyDown={(e) => onRowKey(e, i, p.mrn)}
               >
                 <td>{p.mrn}</td>
@@ -133,6 +142,9 @@ export function PatientManagementWindow() {
         )}
       </div>
 
+      <span id="patients-row-hint" className="visually-hidden">
+        {intl.formatMessage({ id: 'patients.rowHint' })}
+      </span>
       <footer className={styles.footer}>
         <span aria-live="polite">
           {intl.formatMessage(

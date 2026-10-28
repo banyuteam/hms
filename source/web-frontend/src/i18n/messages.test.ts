@@ -36,15 +36,13 @@ describe('message catalogs (id is the source of truth, en must mirror it)', () =
 
 describe('locale detection & storage', () => {
   const store = (v: string | null) => ({ getItem: () => v });
-  it('prefers a saved locale', () =>
-    expect(detectInitialLocale(store('en'), ['id-ID'])).toBe('en'));
-  it('uses English browsers, else Indonesian', () => {
-    expect(detectInitialLocale(store(null), ['en-US'])).toBe('en');
-    expect(detectInitialLocale(store(null), ['fr-FR'])).toBe('id');
-    expect(detectInitialLocale(undefined, [])).toBe('id');
+  it('prefers a saved locale', () => expect(detectInitialLocale(store('id'))).toBe('id'));
+  it('defaults to English and ignores the browser language', () => {
+    expect(detectInitialLocale(store(null))).toBe('en');
+    expect(detectInitialLocale(undefined)).toBe('en');
   });
   it('ignores garbage values and survives blocked storage', () => {
-    expect(detectInitialLocale(store('xx'), [])).toBe('id');
+    expect(detectInitialLocale(store('xx'))).toBe('en');
     const blocked = {
       getItem: () => {
         throw new Error('blocked');
@@ -53,7 +51,7 @@ describe('locale detection & storage', () => {
         throw new Error('blocked');
       },
     };
-    expect(detectInitialLocale(blocked, ['en'])).toBe('en');
+    expect(detectInitialLocale(blocked)).toBe('en');
     expect(() => saveLocale('en', blocked)).not.toThrow();
   });
 });

@@ -1,4 +1,7 @@
-export type WindowType = 'patients' | 'lab' | 'radiology' | 'billing';
+import type { WindowKind } from './windowStore';
+
+/** Module windows (one instance each). `patient-detail` is opened from a patient, not from a module tile. */
+export type WindowType = Exclude<WindowKind, 'patient-detail'>;
 export type ModuleKey = WindowType | 'records' | 'claims';
 
 export interface ModuleDef {

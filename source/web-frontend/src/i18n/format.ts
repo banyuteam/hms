@@ -52,3 +52,8 @@ export function dayPart(date: Date): 'morning' | 'afternoon' | 'evening' | 'nigh
   if (hour >= 15 && hour < 18) return 'evening';
   return 'night';
 }
+
+/** `27 Oct 2026 08:30` — date and 24 h time in Asia/Jakarta. */
+export function formatDateTime(date: Date, locale: Locale): string {
+  return `${formatDate(date, locale)} ${formatTime(date, locale)}`;
+}

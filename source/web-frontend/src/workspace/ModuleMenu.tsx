@@ -10,10 +10,13 @@ export function ModuleMenu({
   icon,
   label,
   className,
+  text,
 }: {
   icon: IconName;
   label: string;
   className?: string;
+  /** Visible text next to the icon (empty-slot placeholder); icon-only when omitted. */
+  text?: string;
 }) {
   const intl = useIntl();
   const open = useWindowStore((s) => s.open);
@@ -21,6 +24,7 @@ export function ModuleMenu({
     <MenuTrigger>
       <Button aria-label={label} className={className}>
         <Icon name={icon} />
+        {text && <span>{text}</span>}
       </Button>
       <Popover placement="bottom end" className={menu.popover}>
         <Menu

@@ -15,7 +15,7 @@ export function Home() {
   const locale = useLocaleStore((s) => s.locale);
   const user = useAuthStore((s) => s.user);
   const open = useWindowStore((s) => s.open);
-  const openCount = useWindowStore((s) => s.windows.filter((w) => !w.minimized).length);
+  const openCount = useWindowStore((s) => s.windows.filter((w) => w.mode !== 'minimized').length);
   const now = useNow(60_000);
   const name = user ? intl.formatMessage({ id: user.nameKey }) : '';
 
