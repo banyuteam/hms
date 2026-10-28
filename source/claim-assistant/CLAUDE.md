@@ -3,7 +3,7 @@
 Helps the insurance claim team reconcile patients' medical records with BPJS claim outcomes:
 explain pending/rejected claims, check diagnosis and procedure coding against INA-CBG
 (E-Klaim) grouping, and maintain the ICD-10 / ICD-9-CM catalogue. Read the root `CLAUDE.md`
-and this folder's `PRD.md` first.
+and `design/claim-assistant/PRD.md` first (plans, PRD and skills live in `design/claim-assistant/`; this folder is the code).
 
 ## Scope
 

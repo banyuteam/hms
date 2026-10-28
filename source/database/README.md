@@ -7,8 +7,8 @@ Schemas and migrations for the new services' own databases. Never the Khanza dat
 
 | | |
 |---|---|
-| Final PRD | [`PRD.md`](PRD.md) — stub (draft goes in [`docs/prd/database.md`](../../docs/prd/)) |
-| Skills | `.claude/skills/<skill-name>/SKILL.md` |
+| Final PRD & plan | [`design/database/PRD.md`](../../design/database/PRD.md) — stub |
+| Skills | [`design/database/.claude/skills/`](../../design/database/.claude/skills/) |
 | Claude instructions | [`CLAUDE.md`](CLAUDE.md) |
 
 ## How to run

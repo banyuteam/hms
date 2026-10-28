@@ -1,0 +1,90 @@
+.home {
+  width: min(960px, 100%);
+  margin: 0 auto;
+  padding: var(--hms-space-48) var(--hms-space-24);
+  display: flex;
+  flex-direction: column;
+  gap: var(--hms-space-32);
+}
+.greeting h1 {
+  margin: 0 0 var(--hms-space-4);
+  font: 600 var(--hms-text-title-lg-size) / var(--hms-text-title-lg-line) var(--hms-font-base);
+}
+.greeting p {
+  margin: 0;
+  color: var(--hms-color-text-muted);
+}
+.overline {
+  margin: 0 0 var(--hms-space-12);
+  font: 600 var(--hms-text-overline-size) / var(--hms-text-overline-line) var(--hms-font-base);
+  letter-spacing: var(--hms-text-overline-tracking);
+  text-transform: uppercase;
+  color: var(--hms-color-text-muted);
+}
+.tiles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--hms-space-24);
+}
+@media (max-width: 900px) {
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hms-space-12);
+  width: 100%;
+  height: 100%;
+  padding: var(--hms-space-20);
+  text-align: left;
+  background: var(--hms-color-bg-surface);
+  border: 1px solid var(--hms-color-border-subtle);
+  border-radius: var(--hms-radius-lg);
+  color: var(--hms-color-text-primary);
+  cursor: pointer;
+}
+.tile:not(:disabled):hover {
+  border-color: var(--hms-color-border-selected);
+}
+.tile:disabled {
+  cursor: not-allowed;
+  color: var(--hms-color-text-muted);
+}
+.tile:focus-visible {
+  outline: 2px solid var(--hms-color-border-focus);
+  outline-offset: 2px;
+}
+.tileTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.chip {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--hms-radius-md);
+  background: var(--hms-color-bg-selected);
+  color: var(--hms-color-text-link);
+}
+.chip[data-soon] {
+  background: var(--hms-color-bg-hover);
+  color: var(--hms-color-text-muted);
+}
+.shortcut {
+  font-size: var(--hms-text-caption-size);
+  color: var(--hms-color-text-muted);
+}
+.tileTitle {
+  font-weight: 600;
+}
+.tileDesc {
+  font-size: var(--hms-text-caption-size);
+  color: var(--hms-color-text-muted);
+}

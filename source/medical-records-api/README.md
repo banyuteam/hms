@@ -7,8 +7,8 @@ Secure web service that exposes medical records to authorised systems and e-sign
 
 | | |
 |---|---|
-| Final PRD | [`PRD.md`](PRD.md) — stub (draft goes in [`docs/prd/medical-records-api.md`](../../docs/prd/)) |
-| Skills | `.claude/skills/<skill-name>/SKILL.md` |
+| Final PRD & plan | [`design/medical-records-api/PRD.md`](../../design/medical-records-api/PRD.md) — stub |
+| Skills | [`design/medical-records-api/.claude/skills/`](../../design/medical-records-api/.claude/skills/) |
 | Claude instructions | [`CLAUDE.md`](CLAUDE.md) |
 
 ## How to run

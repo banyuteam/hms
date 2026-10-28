@@ -1,0 +1,176 @@
+.page {
+  position: relative;
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: var(--hms-space-48) var(--hms-space-16);
+  background: url('../../assets/brand/wallpaper-calm-hospital.jpg') center / cover no-repeat;
+}
+.page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--hms-color-bg-canvas);
+  opacity: var(--hms-focus-scrim);
+}
+.lang {
+  position: absolute;
+  top: var(--hms-space-32);
+  right: var(--hms-space-32);
+  z-index: 1;
+}
+.card {
+  position: relative;
+  z-index: 1;
+  width: min(440px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--hms-space-20);
+  padding: var(--hms-space-32);
+  background: var(--hms-glass-bg);
+  border: 1px solid var(--hms-glass-stroke);
+  border-radius: var(--hms-radius-lg);
+  box-shadow: var(--hms-shadow-window);
+  backdrop-filter: blur(var(--hms-glass-blur));
+  -webkit-backdrop-filter: blur(var(--hms-glass-blur));
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .card {
+    background: var(--hms-color-bg-surface);
+  }
+}
+.header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--hms-space-8);
+  text-align: center;
+}
+.header h1 {
+  margin: 0;
+  font: 600 var(--hms-text-title-lg-size) / var(--hms-text-title-lg-line) var(--hms-font-base);
+}
+.header p {
+  margin: 0;
+  color: var(--hms-color-text-secondary);
+}
+.demo {
+  display: flex;
+  gap: var(--hms-space-8);
+  padding: var(--hms-space-12);
+  border-radius: var(--hms-radius-md);
+  background: var(--hms-color-status-warning-bg);
+  color: var(--hms-color-status-warning-fg);
+}
+.demo svg {
+  flex: none;
+  margin-top: 2px;
+}
+.demo strong {
+  font-size: var(--hms-text-caption-strong-size);
+}
+.demo p {
+  margin: var(--hms-space-2) 0 0;
+  font-size: var(--hms-text-caption-size);
+  line-height: var(--hms-text-caption-line);
+  color: var(--hms-color-text-primary);
+}
+.notice {
+  margin: 0;
+  padding: var(--hms-space-8) var(--hms-space-12);
+  border-radius: var(--hms-radius-md);
+  background: var(--hms-color-status-info-bg);
+  color: var(--hms-color-status-info-fg);
+  font-size: var(--hms-text-caption-size);
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hms-space-16);
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hms-space-6);
+}
+.field label {
+  font: 600 var(--hms-text-caption-strong-size) / var(--hms-text-caption-strong-line)
+    var(--hms-font-base);
+  color: var(--hms-color-text-secondary);
+}
+.input {
+  width: 100%;
+  height: 40px;
+  padding: 0 var(--hms-space-12);
+  background: var(--hms-color-bg-surface);
+  border: 1px solid var(--hms-color-border-default);
+  border-radius: var(--hms-radius-md);
+  color: var(--hms-color-text-primary);
+}
+.input[data-focused] {
+  outline: 2px solid var(--hms-color-border-focus);
+  outline-offset: 2px;
+}
+.input[data-disabled] {
+  background: var(--hms-color-bg-hover);
+  color: var(--hms-color-text-disabled);
+}
+.inputRow {
+  position: relative;
+  display: flex;
+}
+.inputRow .input {
+  padding-right: 44px;
+}
+.reveal {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--hms-radius-sm);
+  color: var(--hms-color-text-muted);
+  cursor: pointer;
+}
+.reveal[data-focus-visible] {
+  outline: 2px solid var(--hms-color-border-focus);
+  outline-offset: 2px;
+}
+.error {
+  margin: 0;
+  color: var(--hms-color-status-danger-fg);
+  font-size: var(--hms-text-caption-size);
+}
+.footnote {
+  margin: 0;
+  color: var(--hms-color-text-muted);
+  font-size: var(--hms-text-caption-size);
+  line-height: var(--hms-text-caption-line);
+}
+.status {
+  position: absolute;
+  bottom: var(--hms-space-24);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--hms-space-8);
+  padding: var(--hms-space-8) var(--hms-space-12);
+  border-radius: var(--hms-radius-full);
+  background: var(--hms-glass-bg);
+  color: var(--hms-color-text-secondary);
+  font-size: var(--hms-text-caption-size);
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .status {
+    display: none;
+  }
+}

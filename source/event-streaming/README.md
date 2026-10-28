@@ -7,8 +7,8 @@ Captures every change in the Khanza database (without touching Khanza) and publi
 
 | | |
 |---|---|
-| Final PRD | [`PRD.md`](PRD.md) — stub (draft goes in [`docs/prd/event-streaming.md`](../../docs/prd/)) |
-| Skills | `.claude/skills/<skill-name>/SKILL.md` |
+| Final PRD & plan | [`design/event-streaming/PRD.md`](../../design/event-streaming/PRD.md) — stub |
+| Skills | [`design/event-streaming/.claude/skills/`](../../design/event-streaming/.claude/skills/) |
 | Claude instructions | [`CLAUDE.md`](CLAUDE.md) |
 
 ## How to run

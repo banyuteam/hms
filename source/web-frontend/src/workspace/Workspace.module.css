@@ -1,0 +1,34 @@
+.shell {
+  display: grid;
+  grid-template-rows: var(--hms-size-topbar) minmax(0, 1fr) var(--hms-size-dock);
+  height: 100%;
+  background: var(--hms-color-bg-canvas);
+}
+.area {
+  position: relative;
+  overflow: hidden;
+  background: url('../../assets/brand/wallpaper-calm-hospital.jpg') center / cover no-repeat;
+  outline: none;
+}
+/* Wallpaper scrim: bg/canvas @ 80% keeps text on the canvas AA (design-tokens skill). */
+.area::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--hms-color-bg-canvas);
+  opacity: var(--hms-wallpaper-scrim);
+  pointer-events: none;
+}
+.homeLayer {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+}
+.windows {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.windows > * {
+  pointer-events: auto;
+}

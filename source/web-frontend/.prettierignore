@@ -1,0 +1,10 @@
+.claude
+docs
+assets
+dist
+coverage
+playwright-report
+test-results
+pnpm-lock.yaml
+*.md
+src/i18n/messages/*.json

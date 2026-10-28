@@ -4,9 +4,10 @@ This repository manages the end-to-end migration of the hospital's running **SIM
 (Java Swing monolith on MariaDB 10.6.26) to a web-based, microservice architecture, plus a
 data warehouse, a medical-records web service with e-signature, and a BPJS claim assistant.
 
-These are the rules every project follows. Each project under `source/` has its own
-`CLAUDE.md` that adds to these; when you work inside a project, read its `CLAUDE.md` and
-`PRD.md` first.
+These are the rules every project follows. Each project has a *design* folder (`design/<project>/`:
+PRD, plans, design, skills) and a *source* folder (`source/<project>/`: the code). Each has its own
+`CLAUDE.md` where useful; when you work on a project, read `design/<project>/PRD.md` and the
+`CLAUDE.md` of the folder you are working in first.
 
 ## Ground rules (non-negotiable)
 
@@ -37,22 +38,36 @@ These are the rules every project follows. Each project under `source/` has its 
 
 ## Repository layout
 
+Three top-level areas with a strict separation:
+
 ```
 hms/
 ├── CLAUDE.md, README.md
-├── docs/        ← INPUTS & REFERENCES owned by the user (product side)
-│   ├── prd/          user-written PRD drafts, one per project (<project>.md)
+├── docs/        ← 1. REFERENCES owned by the user (manual inputs) — Claude reads, doesn't restructure
+│   ├── prd/          user-written PRD drafts (e.g. 001-Frontend-Workspace-HMS.md)
 │   ├── skills/       user-written skill drafts, one folder per project
-│   ├── mockups/      UI mockups (HTML, images) — visual reference, don't edit
+│   ├── mockups/      UI mockups, logos (HTML, images) — visual reference, don't edit
 │   ├── references/   khanza-schema/, regulations/, integration-specs/, code-systems/, …
 │   ├── decisions/    ADRs (architecture decision records)
 │   └── glossary.md   domain terms (Indonesian ↔ English)
-└── source/      ← EVERYTHING CLAUDE BUILDS (one folder per project)
-    ├── shared/ event-streaming/ data-warehouse/ web-frontend/
-    ├── backend-services/ database/ medical-records-api/ claim-assistant/
+├── design/      ← 2. PLAN & DESIGN of each project (final PRD, skills, design, open questions, research)
+│   └── <project>/
+│       ├── README.md   index & status of the plan/design
+│       ├── PRD.md      final PRD (source of truth for scope)
+│       ├── CLAUDE.md   how Claude works on the plan/design (when the project needs one)
+│       ├── .claude/skills/<name>/SKILL.md   final skills
+│       └── … open-questions.md, research, design notes (Figma links, tokens, wireframe specs)
+└── source/      ← 3. THE CODE: scaffolds and implementations, folder name = project name
+    └── <project>/
+        ├── README.md   purpose, how to run, status of the code
+        ├── CLAUDE.md   how Claude works on the code
+        ├── .claude/skills → ../../../design/<project>/.claude/skills   (link, see below)
+        └── … code, tests, configs, technical docs
 ```
 
-| Project (`source/…`) | Requirement | Purpose |
+Projects (same folder name under `design/` and `source/`, except `shared` which has no PRD):
+
+| Project (`design/…` + `source/…`) | Requirement | Purpose |
 |---|---|---|
 | `event-streaming/` | #2 | CDC from Khanza MariaDB → event broker; raw change topics + translation to domain events |
 | `data-warehouse/` | DWH | Ingest events into staging → modeled warehouse/marts for reporting |
@@ -64,10 +79,13 @@ hms/
 | `shared/` | all | Cross-project contracts: event schemas, OpenAPI specs, code-system references |
 
 Where things go:
-- **All code, configs, tests, generated docs and technical notes** → `source/<project>/`
-  (technical notes in `source/<project>/docs/`). Never write code under `docs/`.
-- **`docs/` is input from the user.** Read it; don't edit the user's files there. Claude may
-  add ADRs to `docs/decisions/` (status `proposed` until the user accepts) and update
+- **All code, configs, tests, generated code and technical notes about the code** → `source/<project>/`
+  (notes in `source/<project>/docs/`). Never write code under `docs/` or `design/`.
+- **Plans and design** — final PRD, final skills, open questions, research, design specs, Figma
+  links, token docs, wireframe/mockup notes → `design/<project>/`. No code there (design-token
+  reference files such as `tokens.css`/`tokens.json` are design artefacts and may live in a skill).
+- **`docs/` is input from the user.** Read it; don't edit or restructure the user's files there.
+  Claude may add ADRs to `docs/decisions/` (status `proposed` until the user accepts) and update
   `docs/glossary.md`.
 - Each project is self-contained (own build, tests, README, `.env.example`). Cross-project
   dependencies go through `source/shared/` contracts — never import another project's internal
@@ -75,23 +93,35 @@ Where things go:
 
 ## PRD and skill workflow
 
-Each project folder `source/<project>/` contains:
+Each project has two folders.
+
+`design/<project>/` (plan & design):
+
+- `README.md` — index and status of the plan/design.
+- `PRD.md` — the **final PRD**, the source of truth for scope and acceptance criteria.
+- `CLAUDE.md` — how Claude works on the plan/design (optional).
+- `.claude/skills/<skill-name>/SKILL.md` — the **final skills** for that project.
+- `open-questions.md`, research notes and other design documents.
+
+`source/<project>/` (code):
 
 - `README.md` — for humans: purpose, status, how to run.
-- `CLAUDE.md` — how Claude works in that project.
-- `PRD.md` — the **final PRD**, the source of truth for scope and acceptance criteria.
-- `.claude/skills/<skill-name>/SKILL.md` — the **final skills** for that project (Claude Code
-  only loads skills from `.claude/skills/`, so this path is fixed).
+- `CLAUDE.md` — how Claude works on the code.
+- `.claude/skills` — a **relative symlink** to `design/<project>/.claude/skills`. Claude Code only
+  loads skills from `.claude/skills/` folders next to the files it works on, so the skills have one
+  home (`design/`) and are linked into `source/` so they also load while coding. (On Windows, enable
+  symlinks (`git config core.symlinks true`, Developer Mode) or copy the folder.)
 
 Flow from draft to final:
-1. The user writes a draft in `docs/prd/<project>.md` (and skill drafts in
+1. The user writes a draft in `docs/prd/` (e.g. `001-Frontend-Workspace-HMS.md`; and skill drafts in
    `docs/skills/<project>/`), plus any references in `docs/references/` or `docs/mockups/`.
-2. When asked, Claude turns the draft into `source/<project>/PRD.md` (or a `SKILL.md`):
+2. When asked, Claude turns the draft into `design/<project>/PRD.md` (or a `SKILL.md`):
    same intent, structured to the template, with open questions listed — never inventing
    requirements. The header records the draft it came from and its date.
 3. The user reviews and sets `Status: Approved`. Until then (or while the PRD is a stub),
    Claude may scaffold and run spikes but asks before building features.
 4. If the draft changes later, update the final PRD and note what changed.
+5. Delivery loop: plan → design → design review → code (`source/<project>/`) → code review → repeat.
 
 When the PRD and a `CLAUDE.md` disagree, the PRD wins on *what* to build and `CLAUDE.md` wins
 on *how* (safety rules above always win). Point out the conflict to the user.
@@ -160,7 +190,7 @@ services consume them.
 ## Working with the user
 
 - The user is the product owner: they own everything in `docs/` (except Claude-proposed ADRs
-  and the glossary) and approve final PRDs and skills. Suggest changes instead of rewriting.
+  and the glossary) and approve the final PRDs and skills in `design/`. Suggest changes instead of rewriting.
 - Ask when a decision belongs to the hospital (regulatory interpretation, vendor choice such as
   the e-sign provider, data retention, who may see what).
-- This folder is not yet a git repository; suggest `git init` before the first real code.
+- This folder is a git repository: don't commit unless the user asks; keep commits scoped to one project (`design/<project>` and `source/<project>` together) with the project prefix.

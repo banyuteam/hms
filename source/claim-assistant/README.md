@@ -7,8 +7,8 @@ Helps the claim team explain pending/rejected BPJS claims, check ICD-10 / ICD-9-
 
 | | |
 |---|---|
-| Final PRD | [`PRD.md`](PRD.md) — stub (draft goes in [`docs/prd/claim-assistant.md`](../../docs/prd/)) |
-| Skills | `.claude/skills/<skill-name>/SKILL.md` |
+| Final PRD & plan | [`design/claim-assistant/PRD.md`](../../design/claim-assistant/PRD.md) — stub |
+| Skills | [`design/claim-assistant/.claude/skills/`](../../design/claim-assistant/.claude/skills/) |
 | Claude instructions | [`CLAUDE.md`](CLAUDE.md) |
 
 ## How to run

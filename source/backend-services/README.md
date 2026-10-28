@@ -7,8 +7,8 @@ Domain microservices (patient, encounter, orders, billing, …) and the API gate
 
 | | |
 |---|---|
-| Final PRD | [`PRD.md`](PRD.md) — stub (draft goes in [`docs/prd/backend-services.md`](../../docs/prd/)) |
-| Skills | `.claude/skills/<skill-name>/SKILL.md` |
+| Final PRD & plan | [`design/backend-services/PRD.md`](../../design/backend-services/PRD.md) — stub |
+| Skills | [`design/backend-services/.claude/skills/`](../../design/backend-services/.claude/skills/) |
 | Claude instructions | [`CLAUDE.md`](CLAUDE.md) |
 
 ## How to run

@@ -1,7 +1,7 @@
 # backend-services — Instructions
 
 Domain microservices and the API gateway / BFF for the new platform.
-Read the root `CLAUDE.md` and this folder's `PRD.md` first.
+Read the root `CLAUDE.md` and `design/backend-services/PRD.md` first (plans, PRD and skills live in `design/backend-services/`; this folder is the code).
 
 ## Scope
 

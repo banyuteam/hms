@@ -1,7 +1,7 @@
 # event-streaming — Instructions
 
 Captures changes from the Khanza MariaDB (10.6.26) and publishes them as events for every
-other subproject. Read the root `CLAUDE.md` and this folder's `PRD.md` first.
+other subproject. Read the root `CLAUDE.md` and `design/event-streaming/PRD.md` first (plans, PRD and skills live in `design/event-streaming/`; this folder is the code).
 
 ## Scope
 

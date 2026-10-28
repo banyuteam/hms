@@ -1,0 +1,6 @@
+.text {
+  margin: 0;
+  padding: var(--hms-space-24);
+  color: var(--hms-color-text-secondary);
+  max-width: 60ch;
+}

@@ -1,7 +1,7 @@
 # medical-records-api — Instructions
 
 A secured web service that exposes medical records to authorised consumers and signs
-clinical documents electronically. Read the root `CLAUDE.md` and this folder's `PRD.md` first.
+clinical documents electronically. Read the root `CLAUDE.md` and `design/medical-records-api/PRD.md` first (plans, PRD and skills live in `design/medical-records-api/`; this folder is the code).
 
 ## Scope
 

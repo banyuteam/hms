@@ -1,0 +1,36 @@
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--hms-space-4) var(--hms-space-8);
+  border: 1px solid transparent;
+  border-radius: var(--hms-radius-sm);
+  font: 600 var(--hms-text-caption-strong-size) / var(--hms-text-caption-strong-line)
+    var(--hms-font-base);
+  white-space: nowrap;
+}
+.neutral {
+  background: var(--hms-color-bg-hover);
+  color: var(--hms-color-text-secondary);
+  border-color: var(--hms-color-border-subtle);
+}
+.success {
+  background: var(--hms-color-status-success-bg);
+  color: var(--hms-color-status-success-fg);
+}
+.danger {
+  background: var(--hms-color-status-danger-bg);
+  color: var(--hms-color-status-danger-fg);
+}
+.warning {
+  background: var(--hms-color-status-warning-bg);
+  color: var(--hms-color-status-warning-fg);
+}
+.info {
+  background: var(--hms-color-status-info-bg);
+  color: var(--hms-color-status-info-fg);
+}
+.ai {
+  background: var(--hms-color-ai-bg);
+  color: var(--hms-color-ai-fg);
+  border-color: var(--hms-color-ai-border);
+}

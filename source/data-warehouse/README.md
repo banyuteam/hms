@@ -7,8 +7,8 @@ Turns the event stream into a reporting warehouse so reports no longer load the 
 
 | | |
 |---|---|
-| Final PRD | [`PRD.md`](PRD.md) — stub (draft goes in [`docs/prd/data-warehouse.md`](../../docs/prd/)) |
-| Skills | `.claude/skills/<skill-name>/SKILL.md` |
+| Final PRD & plan | [`design/data-warehouse/PRD.md`](../../design/data-warehouse/PRD.md) — stub |
+| Skills | [`design/data-warehouse/.claude/skills/`](../../design/data-warehouse/.claude/skills/) |
 | Claude instructions | [`CLAUDE.md`](CLAUDE.md) |
 
 ## How to run

@@ -29,3 +29,5 @@
 | Mode baca | Read-only mode — write actions disabled while a domain is not yet writable in the new platform (Phase 1) |
 | Clear space (zona lega) | Design rule: calm, mostly empty canvas with minimum margins between windows so users aren't overwhelmed |
 | DPJP | Dokter Penanggung Jawab Pelayanan — the attending physician responsible for the patient |
+| `id` / `en` locales | UI languages of the web-frontend: Bahasa Indonesia (default) and English; message catalogs `id.json`, `en.json` |
+| Ruang Fokus | "Focus room" — dedicated calm view of the workspace (wallpaper, clock, break timer) that hides windows and patient data; not the same as the lock screen |

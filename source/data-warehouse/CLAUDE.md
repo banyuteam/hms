@@ -1,7 +1,7 @@
 # data-warehouse — Instructions
 
 Builds the hospital data warehouse from the event streams so reporting no longer hits the
-operational Khanza database. Read the root `CLAUDE.md` and this folder's `PRD.md` first.
+operational Khanza database. Read the root `CLAUDE.md` and `design/data-warehouse/PRD.md` first (plans, PRD and skills live in `design/data-warehouse/`; this folder is the code).
 
 ## Scope
 
