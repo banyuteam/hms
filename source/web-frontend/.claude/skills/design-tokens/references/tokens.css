@@ -1,0 +1,115 @@
+/* HMS web-frontend design tokens — generated from the Figma variables. Do not hand-edit values; change Figma + tokens.json first. Light mode only. */
+:root{
+  /* Primitives (do not use in components) */
+  --hms-slate-0: #FFFFFF;
+  --hms-slate-25: #F7FBFF;
+  --hms-slate-50: #F4F9FF;
+  --hms-slate-100: #E7F1FB;
+  --hms-slate-200: #DCE8F7;
+  --hms-slate-300: #CBDFF5;
+  --hms-slate-400: #8FA3C0;
+  --hms-slate-500: #51688F;
+  --hms-slate-600: #405A7E;
+  --hms-slate-700: #2A4468;
+  --hms-slate-800: #143052;
+  --hms-slate-900: #132847;
+  --hms-slate-950: #111E2E;
+  --hms-blue-50: #E4F1FF;
+  --hms-blue-100: #CFE5FD;
+  --hms-blue-200: #B6D5F8;
+  --hms-blue-500: #0878F9;
+  --hms-blue-600: #0A62C9;
+  --hms-blue-700: #084FA3;
+  --hms-red-50: #FFE6E8;
+  --hms-red-500: #E24852;
+  --hms-red-700: #C0283A;
+  --hms-green-50: #E0F8ED;
+  --hms-green-500: #089563;
+  --hms-green-700: #067A52;
+  --hms-amber-50: #FFF1DC;
+  --hms-amber-500: #DF7C16;
+  --hms-amber-700: #9A5204;
+
+  /* Semantic color (use these) */
+  --hms-color-bg-canvas: var(--hms-slate-100);
+  --hms-color-bg-surface: var(--hms-slate-0);
+  --hms-color-bg-surface-subtle: var(--hms-slate-50);
+  --hms-color-bg-dock: var(--hms-slate-25);
+  --hms-color-bg-selected: var(--hms-blue-50);
+  --hms-color-bg-hover: var(--hms-slate-50);
+  --hms-color-bg-viewer: var(--hms-slate-950);
+  --hms-color-bg-toast: var(--hms-slate-800);
+  --hms-color-border-subtle: var(--hms-slate-200);
+  --hms-color-border-default: var(--hms-slate-300);
+  --hms-color-border-selected: var(--hms-blue-200);
+  --hms-color-border-focus: var(--hms-blue-500);
+  --hms-color-text-primary: var(--hms-slate-900);
+  --hms-color-text-secondary: var(--hms-slate-600);
+  --hms-color-text-muted: var(--hms-slate-500);
+  --hms-color-text-disabled: var(--hms-slate-400);
+  --hms-color-text-on-action: var(--hms-slate-0);
+  --hms-color-text-link: var(--hms-blue-600);
+  --hms-color-action-primary: var(--hms-blue-600);
+  --hms-color-action-primary-hover: var(--hms-blue-700);
+  --hms-color-action-accent: var(--hms-blue-500);
+  --hms-color-status-danger-bg: var(--hms-red-50);
+  --hms-color-status-danger-fg: var(--hms-red-700);
+  --hms-color-status-danger-icon: var(--hms-red-500);
+  --hms-color-status-success-bg: var(--hms-green-50);
+  --hms-color-status-success-fg: var(--hms-green-700);
+  --hms-color-status-success-icon: var(--hms-green-500);
+  --hms-color-status-warning-bg: var(--hms-amber-50);
+  --hms-color-status-warning-fg: var(--hms-amber-700);
+  --hms-color-status-warning-icon: var(--hms-amber-500);
+  --hms-color-status-info-bg: var(--hms-blue-50);
+  --hms-color-status-info-fg: var(--hms-blue-600);
+
+  /* Space */
+  --hms-space-2: 2px;
+  --hms-space-4: 4px;
+  --hms-space-6: 6px;
+  --hms-space-8: 8px;
+  --hms-space-12: 12px;
+  --hms-space-16: 16px;
+  --hms-space-20: 20px;
+  --hms-space-24: 24px;
+  --hms-space-32: 32px;
+  --hms-space-48: 48px;
+  --hms-space-64: 64px;
+
+  /* Radius */
+  --hms-radius-sm: 4px;
+  --hms-radius-md: 8px;
+  --hms-radius-lg: 12px;
+  --hms-radius-full: 999px;
+
+  /* Size */
+  --hms-size-topbar: 64px;
+  --hms-size-dock: 56px;
+  --hms-size-titlebar: 40px;
+  --hms-size-dock-tab: 40px;
+  --hms-size-control: 36px;
+  --hms-size-control-lg: 44px;
+  --hms-size-icon-sm: 16px;
+  --hms-size-icon-md: 20px;
+  --hms-size-icon-lg: 24px;
+  --hms-size-window-min-width: 360px;
+
+  /* Typography */
+  --hms-font-base: "Segoe UI", Inter, Arial, sans-serif; /* font choice is an open question (OQ-05) */
+  --hms-text-title-lg-size: 18px; --hms-text-title-lg-line: 26px; --hms-text-title-lg-weight: 600; --hms-text-title-lg-tracking: 0px;
+  --hms-text-title-md-size: 14px; --hms-text-title-md-line: 20px; --hms-text-title-md-weight: 600; --hms-text-title-md-tracking: 0px;
+  --hms-text-heading-sm-size: 13px; --hms-text-heading-sm-line: 18px; --hms-text-heading-sm-weight: 600; --hms-text-heading-sm-tracking: 0px;
+  --hms-text-body-size: 13px; --hms-text-body-line: 20px; --hms-text-body-weight: 400; --hms-text-body-tracking: 0px;
+  --hms-text-body-strong-size: 13px; --hms-text-body-strong-line: 20px; --hms-text-body-strong-weight: 600; --hms-text-body-strong-tracking: 0px;
+  --hms-text-caption-size: 12px; --hms-text-caption-line: 16px; --hms-text-caption-weight: 400; --hms-text-caption-tracking: 0px;
+  --hms-text-caption-strong-size: 12px; --hms-text-caption-strong-line: 16px; --hms-text-caption-strong-weight: 600; --hms-text-caption-strong-tracking: 0px;
+  --hms-text-overline-size: 11px; --hms-text-overline-line: 16px; --hms-text-overline-weight: 600; --hms-text-overline-tracking: 0.5px;
+  --hms-text-data-lg-size: 20px; --hms-text-data-lg-line: 28px; --hms-text-data-lg-weight: 600; --hms-text-data-lg-tracking: 0px;
+
+  /* Elevation */
+  --hms-shadow-window: 0 8px 24px rgba(36,77,122,.17);
+  --hms-shadow-popover: 0 12px 32px rgba(36,77,122,.24);
+  --hms-shadow-dock: 0 -2px 8px rgba(36,77,122,.08);
+}
+:focus-visible{ outline: 2px solid var(--hms-color-border-focus); outline-offset: 2px; }

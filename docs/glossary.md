@@ -25,3 +25,7 @@
 | Outbox pattern | A service saves an event in its own database in the same transaction as the change, then publishes it |
 | ADR | Architecture decision record — short document recording a technical decision and why |
 | Strangler-fig | Migration style: the new system takes over one area at a time while the old one keeps running |
+| Workspace / window / dock | Web-frontend UI model: floating windows on a canvas, with a bottom dock holding one tab per open window |
+| Mode baca | Read-only mode — write actions disabled while a domain is not yet writable in the new platform (Phase 1) |
+| Clear space (zona lega) | Design rule: calm, mostly empty canvas with minimum margins between windows so users aren't overwhelmed |
+| DPJP | Dokter Penanggung Jawab Pelayanan — the attending physician responsible for the patient |

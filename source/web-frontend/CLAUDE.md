@@ -14,6 +14,14 @@ Read the root `CLAUDE.md` and this folder's `PRD.md` first.
   claim-assistant screens.
 - Talks only to the API gateway / BFF in `source/backend-services/`. Never connects to a database.
 
+## Design
+
+- Figma (wireframes, mockups, components, variables): https://www.figma.com/design/yo53y0sVdqxaKNjZquWNom
+- Use the `hospital-ux-expert` skill for UX decisions/research and `design-tokens` for every
+  colour/size/spacing value. Unresolved UX/technical questions go in `docs/open-questions.md`.
+- Tokens refine the reference mockup's (AA contrast, 4-pt scale); where they differ, the
+  token skill wins on values, the mockup still wins on layout and the window/dock model.
+
 ## Rules
 
 - Framework and component library are pending an ADR — ask before choosing.
