@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ARUS · Journal Entries</title>
+<style>
+:root{--blue:#0866f5;--blue-dark:#0757d5;--ink:#172238;--muted:#66748b;--line:#dce3ec;--soft:#f4f7fb;--green:#d9f8e5;--green-ink:#08783c;--red:#ffe1e1;--red-ink:#b42318}
+*{box-sizing:border-box}body{margin:0;background:#f3f6fa;color:var(--ink);font:13px/1.4 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+button,input,select,textarea{font:inherit}button{cursor:pointer}.page{margin:28px auto;max-width:1600px;width:calc(100% - 48px);background:#fff;border:1px solid #e4eaf1;border-radius:10px;box-shadow:0 8px 30px #1b35540a;overflow:visible}
+.top{padding:12px 22px 15px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:18px;position:relative;z-index:10}
+h1{font-size:29px;line-height:1.2;margin:0 0 5px;letter-spacing:-.7px}.subtitle{font-size:14px;color:var(--muted)}
+.actions{display:flex;align-items:center;gap:10px}.btn{height:39px;padding:0 15px;border:1px solid var(--line);background:#fff;border-radius:6px;color:var(--ink);display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:600;white-space:nowrap}.btn:hover{background:#f7faff}.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}.btn.primary:hover{background:var(--blue-dark)}.split{display:flex;position:relative}.split>.btn:first-child{border-radius:6px 0 0 6px}.split>.caret{border-radius:0 6px 6px 0;border-left:1px solid #ffffff55;padding:0 11px}.split .btn{height:39px}
+.workspace{display:grid;grid-template-columns:minmax(350px,32.5%) minmax(0,1fr);min-height:800px}.list-pane{padding:20px 17px 22px;border-right:1px solid var(--line);min-width:0}.editor{padding:20px 22px 16px;min-width:0}
+.tabs{display:flex;gap:7px;border-bottom:1px solid var(--line);margin-bottom:16px}.tab{border:0;background:transparent;color:#65728a;padding:9px 15px 12px;font-weight:600;border-bottom:2px solid transparent}.tab.active{color:var(--blue);border-color:var(--blue)}
+.searchrow{display:flex;gap:8px;margin-bottom:17px}.search{height:38px;display:flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:6px;padding:0 12px;flex:1;min-width:0;color:var(--muted)}.search input{border:0;outline:0;width:100%;min-width:0;color:var(--ink)}.filter{width:39px;height:38px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.table-wrap{border:1px solid #e0e7ef;border-radius:7px;overflow:hidden}table{width:100%;border-collapse:collapse;table-layout:fixed}th{background:#f2f5f8;text-align:left;font-weight:650;color:#263247;font-size:12px;padding:11px 10px;border-bottom:1px solid var(--line)}td{padding:10px;border-bottom:1px solid #e8edf3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#344158}tbody tr{cursor:pointer}tbody tr:hover{background:#f5f9ff}tbody tr.selected{background:#e3f0ff}tbody tr:last-child td{border-bottom:0}.status{display:inline-block;padding:4px 9px;border-radius:5px;font-size:11px;font-weight:650}.posted{background:var(--green);color:var(--green-ink)}.draft{background:#e1efff;color:#075be0}.voided{background:var(--red);color:var(--red-ink)}
+.pagination{display:flex;align-items:center;justify-content:space-between;padding:12px 10px;color:var(--muted);font-size:12px}.pages{display:flex;gap:5px;align-items:center}.pages button{border:0;background:transparent;color:#596780;min-width:24px;height:27px;border-radius:4px}.pages button.current{background:var(--blue);color:#fff}
+.editor-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:21px;gap:12px}.editor-head h2{font-size:22px;margin:0;letter-spacing:-.4px}.heading-left{display:flex;align-items:center;gap:13px}.pill{background:#edf1f5;border-radius:6px;padding:5px 10px;font-size:12px;color:#38445a}
+.formgrid{display:grid;grid-template-columns:1fr 1fr 1fr 1.15fr;gap:18px 18px;margin-bottom:17px}.field{min-width:0}.field label{display:block;font-size:12px;font-weight:650;margin:0 0 6px;color:#253149}.control{height:36px;width:100%;border:1px solid #cfd8e4;border-radius:5px;background:#fff;padding:0 11px;color:#172238;outline:none;min-width:0}.control:focus{border-color:var(--blue);box-shadow:0 0 0 2px #0866f51a}.input-with{display:flex;gap:7px}.input-with .control{flex:1}.square{height:36px;width:38px;flex-shrink:0;border:1px solid #cfd8e4;border-radius:5px;background:#fff}.memo{margin-bottom:18px}
+.grid-table{border:1px solid #dce4ed;border-radius:6px;overflow:visible}.grid-table table{border-radius:6px;overflow:hidden}.grid-table th{padding:11px 9px;border-right:1px solid #dce4ed}.grid-table td{padding:0 9px;height:39px;border-right:1px solid #e0e6ee;border-bottom:1px solid #e0e6ee}.grid-table td:last-child,.grid-table th:last-child{border-right:0}.grid-table input,.grid-table select{width:100%;height:37px;border:0;outline:0;background:transparent;color:var(--ink);min-width:0}.grid-table input:focus,.grid-table select:focus{outline:1px solid var(--blue);outline-offset:-1px;background:#fafdff}.cell-select{position:relative}.cell-select input{padding-right:17px}.cell-select:after{content:"⌄";position:absolute;right:8px;top:9px;color:#3b4a62;pointer-events:none}
+.account-menu{position:absolute;left:5px;top:37px;width:276px;background:#fff;border:1px solid #dce4ed;border-radius:6px;box-shadow:0 8px 24px #20324b24;z-index:20;padding:6px}.account-search{height:35px;border:1px solid var(--blue);border-radius:5px;display:flex;align-items:center;gap:8px;padding:0 10px;margin-bottom:5px}.account-search input{border:0;outline:0;width:100%;height:30px}.account-option{padding:8px 9px;border-radius:4px;display:flex;gap:14px;cursor:pointer}.account-option:hover,.account-option:first-of-type{background:#edf5ff}.account-option span:first-child{width:65px;flex-shrink:0}.addrow{padding:7px;background:#f0f3f6;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}.addline{border:0;background:#fff;border-radius:5px;padding:6px 10px;color:#26344c}.totals{display:flex;align-items:center;justify-content:flex-end;gap:0;font-weight:650}.total-label{padding:0 22px}.total-cell{width:150px;text-align:right;padding:0 15px;border-left:1px solid #dce4ed;height:38px;display:flex;align-items:center;justify-content:flex-end}
+.bottom-tabs{margin-top:14px;border:1px solid var(--line);border-radius:6px;overflow:hidden}.bottom-tabs-head{display:flex;gap:24px;padding:0 17px;border-bottom:1px solid var(--line)}.bottom-tabs-head button{border:0;background:transparent;padding:12px 0;color:#64728a}.bottom-tabs-head button.active{color:var(--blue);font-weight:650;border-bottom:2px solid var(--blue)}.upload{margin:12px;border:1px dashed #c8d2df;border-radius:5px;min-height:84px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:#344158}.upload small{color:#8592a8}
+.dropdown{position:absolute;top:45px;right:0;width:210px;padding:5px;background:#fff;border:1px solid #e0e6ef;border-radius:7px;box-shadow:0 10px 28px #17223825;z-index:50}.dropdown.wide{width:215px}.menu-item{display:flex;gap:11px;padding:9px 9px;border-radius:5px;color:#1d2a40;cursor:pointer}.menu-item:hover,.menu-item.active{background:#edf5ff}.menu-icon{font-size:17px;width:19px;text-align:center;color:#40516a}.menu-title{font-size:12px;font-weight:600}.menu-desc{font-size:11px;color:#7a879c;margin-top:2px}.menu-sep{height:1px;background:#e8edf3;margin:5px 0}.disabled{opacity:.45;cursor:not-allowed}
+.toast{position:fixed;right:22px;bottom:22px;background:#172238;color:white;padding:12px 16px;border-radius:7px;box-shadow:0 8px 24px #0002;display:none;z-index:100}
+@media(max-width:1100px){.workspace{grid-template-columns:1fr}.list-pane{border-right:0;border-bottom:1px solid var(--line)}.formgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.editor{padding:18px}.page{width:calc(100% - 20px);margin:10px auto}.top{align-items:flex-start;flex-direction:column}.actions{align-self:flex-end}}
+@media(max-width:620px){h1{font-size:24px}.actions{align-self:stretch;flex-wrap:wrap}.workspace{min-height:0}.formgrid{grid-template-columns:1fr 1fr}.list-pane{padding:12px 8px}.editor{padding:14px 9px}.table-wrap{overflow-x:auto}.table-wrap table{min-width:500px}.editor-head{align-items:flex-start;flex-wrap:wrap}.grid-table{overflow-x:auto}.grid-table table{min-width:720px}.dropdown{right:0}.page{width:calc(100% - 12px)}}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="top">
+    <div><h1>Journal Entries</h1><div class="subtitle">Create, view, and manage accounting journal entries</div></div>
+    <div class="actions">
+      <div class="split" id="newMenuWrap">
+        <button class="btn primary" onclick="toggleMenu('newMenu')">＋ New Journal Entry</button><button class="btn primary caret" aria-label="More new journal options" onclick="toggleMenu('newMenu')">⌄</button>
+        <div class="dropdown wide" id="newMenu">
+          <div class="menu-item active" onclick="notify('Blank journal entry started')"><span class="menu-icon">＋</span><div><div class="menu-title">New Journal Entry</div><div class="menu-desc">Create a blank journal entry</div></div></div>
+          <div class="menu-item" onclick="notify('Template selector opened')"><span class="menu-icon">♧</span><div><div class="menu-title">From Template</div><div class="menu-desc">Use a predefined template</div></div></div>
+          <div class="menu-item" onclick="notify('Recurring journals opened')"><span class="menu-icon">⟳</span><div><div class="menu-title">From Recurring</div><div class="menu-desc">Create from recurring journal</div></div></div>
+          <div class="menu-item" onclick="notify('Choose an Excel file to import')"><span class="menu-icon">⇧</span><div><div class="menu-title">Import from Excel</div><div class="menu-desc">Upload journal lines from file</div></div></div>
+        </div>
+      </div>
+      <button class="btn" onclick="notify('Journal saved as draft')">▣ &nbsp;Save</button>
+      <div class="split" id="postMenuWrap">
+        <button class="btn primary" onclick="postJournal()">✓ &nbsp;Post</button><button class="btn primary caret" aria-label="More post options" onclick="toggleMenu('postMenu')">⌄</button>
+        <div class="dropdown" id="postMenu">
+          <div class="menu-item active" onclick="postJournal()"><span class="menu-icon">✓</span><div><div class="menu-title">Post</div><div class="menu-desc">Post this journal entry</div></div></div>
+          <div class="menu-item" onclick="notify('Journal posted; a new draft is ready')"><span class="menu-icon">♧</span><div><div class="menu-title">Post &amp; New</div><div class="menu-desc">Post and create another</div></div></div>
+          <div class="menu-item" onclick="notify('Journal posted and copied')"><span class="menu-icon">▢</span><div><div class="menu-title">Post &amp; Copy</div><div class="menu-desc">Post and create a copy</div></div></div>
+          <div class="menu-sep"></div>
+          <div class="menu-item disabled"><span class="menu-icon">⟳</span><div><div class="menu-title">Reverse Journal</div><div class="menu-desc">Create reversing entry</div></div></div>
+        </div>
+      </div>
+    </div>
+  </header>
+  <main class="workspace">
+    <section class="list-pane">
+      <div class="tabs" id="statusTabs">
+        <button class="tab active" data-status="All">All</button><button class="tab" data-status="Draft">Draft</button><button class="tab" data-status="Posted">Posted</button><button class="tab" data-status="Voided">Voided</button>
+      </div>
+      <div class="searchrow"><label class="search">⌕ <input id="journalSearch" placeholder="Search journal number, reference, or memo..." /></label><button class="filter" onclick="notify('Filters panel opened')" title="Filters">▽</button></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th style="width:23%">Date</th><th style="width:29%">Journal No.</th><th style="width:24%">Reference</th><th style="width:24%">Status</th></tr></thead>
+        <tbody id="journalRows"></tbody>
+      </table><div class="pagination"><div class="pages"><button>‹</button><button class="current">1</button><button>2</button><button>3</button><button>4</button><button>5</button><button>…</button><button>12</button><button>›</button></div><span>15 of 178 items</span></div></div>
+    </section>
+    <section class="editor">
+      <div class="editor-head"><div class="heading-left"><h2>Journal Entry</h2><span class="pill" id="entryStatus">☷ &nbsp;Draft</span></div></div>
+      <div class="formgrid">
+        <div class="field"><label>Journal No.</label><div class="input-with"><input class="control" value="JE-2026-10-001" id="journalNo"><button class="square" title="Journal number settings">⚙</button></div></div>
+        <div class="field"><label>Date</label><input class="control" type="text" value="28/10/2026"></div>
+        <div class="field"><label>Reference</label><input class="control" value="INV-0107"></div>
+        <div class="field"><label>Currency</label><select class="control"><option>IDR - Indonesian Rupiah</option><option>USD - US Dollar</option><option>SGD - Singapore Dollar</option></select></div>
+        <div class="field"><label>Journal Type</label><select class="control"><option>General Journal</option><option>Adjusting Journal</option><option>Opening Balance</option></select></div>
+        <div class="field"><label>Department</label><select class="control"><option>Finance</option><option>Operations</option><option>Sales</option></select></div>
+        <div class="field"><label>Project</label><select class="control"><option>E-commerce Project</option><option>General</option><option>ERP Implementation</option></select></div>
+      </div>
+      <div class="field memo"><label>Memo</label><input class="control" value="Adjustment for prepaid insurance"></div>
+      <div class="grid-table"><table>
+        <thead><tr><th style="width:5%">#</th><th style="width:16%">Account Code&nbsp; ⌕</th><th style="width:17%">Account Name</th><th style="width:23%">Description / Memo</th><th style="width:14%">Debit (IDR)</th><th style="width:14%">Credit (IDR)</th><th style="width:4%"></th></tr></thead>
+        <tbody id="lineRows">
+          <tr><td>1</td><td><input value="6120-01" aria-label="Account code"></td><td><input value="Prepaid Insurance" aria-label="Account name"></td><td><input value="Prepaid insurance for 1 year" aria-label="Description"></td><td><input class="amount debit" value="12,000,000" inputmode="decimal"></td><td><input class="amount credit" value="" inputmode="decimal"></td><td>⋯</td></tr>
+          <tr><td>2</td><td><input value="1110-02" aria-label="Account code"></td><td><input value="Bank - BCA" aria-label="Account name"></td><td><input value="Payment to insurance provider" aria-label="Description"></td><td><input class="amount debit" value="" inputmode="decimal"></td><td><input class="amount credit" value="12,000,000" inputmode="decimal"></td><td>⋯</td></tr>
+          <tr><td>3</td><td class="cell-select"><input value="6210-01" id="accountCode" aria-label="Account code" onclick="toggleMenu('accountMenu')" onfocus="toggleMenu('accountMenu')">
+            <div class="account-menu" id="accountMenu"><label class="account-search">⌕ <input id="accountSearch" placeholder="Search account..."></label>
+              <div class="account-option" data-code="6210-01" data-name="Office Supplies Expense"><span>6210-01</span><span>Office Supplies Expense</span></div>
+              <div class="account-option" data-code="6210-02" data-name="IT &amp; Software Expense"><span>6210-02</span><span>IT &amp; Software Expense</span></div>
+              <div class="account-option" data-code="6210-03" data-name="Utility Expense"><span>6210-03</span><span>Utility Expense</span></div>
+              <div class="account-option" data-code="6210-04" data-name="Travel Expense"><span>6210-04</span><span>Travel Expense</span></div>
+              <div class="account-option" data-code="6210-05" data-name="Marketing Expense"><span>6210-05</span><span>Marketing Expense</span></div>
+              <div class="account-option" data-code="6210-06" data-name="Training Expense"><span>6210-06</span><span>Training Expense</span></div>
+            </div></td><td><input id="accountName" aria-label="Account name"></td><td><input aria-label="Description"></td><td><input class="amount debit" value="" inputmode="decimal"></td><td><input class="amount credit" value="" inputmode="decimal"></td><td>⋯</td></tr>
+        </tbody>
+      </table>
+      <div class="addrow"><button class="addline" onclick="addLine()">＋ Add line <span style="color:#748199">(Ctrl + Enter)</span></button><div class="totals"><span class="total-label">Total</span><span class="total-cell" id="debitTotal">12,000,000</span><span class="total-cell" id="creditTotal">12,000,000</span></div></div></div>
+      <div class="bottom-tabs"><div class="bottom-tabs-head"><button class="active" onclick="switchBottomTab(this,'attachments')">Attachments (0)</button><button onclick="switchBottomTab(this,'remarks')">Remarks</button></div><div id="attachments" class="upload"><div style="font-size:22px">⇧</div><div>Drag and drop files here or click to upload</div><small>Supported files: PDF, Excel, Word, Image (Max 10MB)</small><input type="file" id="fileInput" hidden multiple><button class="btn" onclick="document.getElementById('fileInput').click()">Choose files</button></div><div id="remarks" style="display:none;padding:12px"><textarea class="control" style="height:70px" placeholder="Add internal remarks..."></textarea></div></div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const journals=[
+['28 Oct 2026','JE-2026-10-001','-','Draft','Adjustment for prepaid insurance'],
+['27 Oct 2026','JE-2026-10-002','ACC-0042','Posted','Monthly accrual'],
+['25 Oct 2026','JE-2026-10-001','BANK-1027','Posted','Bank transfer'],
+['20 Oct 2026','JE-2026-10-005','ADJ-093','Posted','Depreciation adjustment'],
+['15 Oct 2026','JE-2026-10-004','-','Draft','Expense accrual'],
+['10 Oct 2026','JE-2026-10-003','PAY-0187','Posted','Payroll'],
+['05 Oct 2026','JE-2026-10-002','-','Posted','Sales adjustment'],
+['30 Sep 2026','JE-2026-09-012','ADJ-091','Posted','Monthly adjustment'],
+['28 Sep 2026','JE-2026-09-011','-','Posted','Accrual'],
+['25 Sep 2026','JE-2026-09-010','BANK-0912','Voided','Bank correction'],
+['20 Sep 2026','JE-2026-09-009','-','Posted','Monthly journal'],
+['15 Sep 2026','JE-2026-09-008','ACC-0040','Posted','Supplier adjustment'],
+['10 Sep 2026','JE-2026-09-007','-','Posted','Expense allocation'],
+['05 Sep 2026','JE-2026-09-006','ADJ-089','Posted','Adjustment'],
+['31 Aug 2026','JE-2026-08-015','-','Posted','Closing entry']];
+let activeStatus='All';
+function renderRows(){const q=document.getElementById('journalSearch').value.toLowerCase();const rows=journals.filter(j=>(activeStatus==='All'||j[3]===activeStatus)&&j.join(' ').toLowerCase().includes(q));document.getElementById('journalRows').innerHTML=rows.map((j,i)=>`<tr class="${j[1]==='JE-2026-10-001'&&j[0]==='28 Oct 2026'?'selected':''}" onclick="selectJournal('${j[1]}','${j[3]}','${j[4].replace(/'/g,"\\'")}')"><td>${j[0]}</td><td>${j[1]}</td><td>${j[2]}</td><td><span class="status ${j[3].toLowerCase()}">${j[3]}</span></td></tr>`).join('')}
+document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));b.classList.add('active');activeStatus=b.dataset.status;renderRows()}));
+document.getElementById('journalSearch').addEventListener('input',renderRows);renderRows();
+function selectJournal(no,status,memo){document.getElementById('journalNo').value=no;document.getElementById('entryStatus').textContent='☷  '+status;document.querySelector('.memo input').value=memo;document.querySelectorAll('#journalRows tr').forEach(r=>r.classList.remove('selected'));event.currentTarget.classList.add('selected')}
+function toggleMenu(id){const target=document.getElementById(id);const willOpen=target.style.display!=='block';document.querySelectorAll('.dropdown,.account-menu').forEach(el=>el.style.display='none');target.style.display=willOpen?'block':'none'}
+document.addEventListener('click',e=>{if(!e.target.closest('#newMenuWrap')&&!e.target.closest('#postMenuWrap')&&!e.target.closest('#accountMenu')&&!e.target.closest('#accountCode'))document.querySelectorAll('.dropdown,.account-menu').forEach(el=>el.style.display='none')});
+function notify(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2600);document.querySelectorAll('.dropdown').forEach(el=>el.style.display='none')}
+function postJournal(){if(document.getElementById('debitTotal').textContent!==document.getElementById('creditTotal').textContent){notify('Cannot post: debit and credit totals must balance');return}document.getElementById('entryStatus').textContent='☷  Posted';notify('Journal entry posted');document.querySelectorAll('.dropdown').forEach(el=>el.style.display='none')}
+document.querySelectorAll('.account-option').forEach(opt=>opt.addEventListener('click',()=>{document.getElementById('accountCode').value=opt.dataset.code;document.getElementById('accountName').value=opt.dataset.name;document.getElementById('accountMenu').style.display='none'}));
+document.getElementById('accountSearch').addEventListener('input',e=>{const q=e.target.value.toLowerCase();document.querySelectorAll('.account-option').forEach(o=>o.style.display=o.textContent.toLowerCase().includes(q)?'flex':'none')});
+function addLine(){const body=document.getElementById('lineRows');const n=body.rows.length+1;const tr=document.createElement('tr');tr.innerHTML=`<td>${n}</td><td><input placeholder="Account code"></td><td><input placeholder="Account name"></td><td><input placeholder="Description / memo"></td><td><input class="amount debit" inputmode="decimal"></td><td><input class="amount credit" inputmode="decimal"></td><td><button style="border:0;background:none" onclick="this.closest('tr').remove();renumber()">×</button></td>`;body.appendChild(tr);tr.querySelectorAll('.amount').forEach(i=>i.addEventListener('input',calculateTotals));tr.querySelector('input').focus()}
+function renumber(){[...document.querySelectorAll('#lineRows tr')].forEach((r,i)=>r.cells[0].textContent=i+1);calculateTotals()}
+function num(v){return Number((v||'').replace(/[^\d.-]/g,''))||0}
+function fmt(n){return Math.round(n).toLocaleString('en-US')}
+function calculateTotals(){let d=0,c=0;document.querySelectorAll('.debit').forEach(i=>d+=num(i.value));document.querySelectorAll('.credit').forEach(i=>c+=num(i.value));document.getElementById('debitTotal').textContent=fmt(d);document.getElementById('creditTotal').textContent=fmt(c)}
+document.querySelectorAll('.amount').forEach(i=>i.addEventListener('input',calculateTotals));
+document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key==='Enter'){e.preventDefault();addLine()}if(e.key==='Escape')document.querySelectorAll('.dropdown,.account-menu').forEach(el=>el.style.display='none')});
+function switchBottomTab(btn,id){document.querySelectorAll('.bottom-tabs-head button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');document.getElementById('attachments').style.display=id==='attachments'?'flex':'none';document.getElementById('remarks').style.display=id==='remarks'?'block':'none'}
+document.getElementById('fileInput').addEventListener('change',e=>{const files=[...e.target.files];if(files.length){document.querySelector('.bottom-tabs-head button').textContent=`Attachments (${files.length})`;document.querySelector('.upload div:nth-child(2)').textContent=files.map(f=>f.name).join(', ');notify(`${files.length} file(s) selected`)}})
+</script>
+</body>
+</html>
