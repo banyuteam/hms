@@ -10,15 +10,15 @@ Read the root `CLAUDE.md` and this folder's `PRD.md` first.
 - `.claude/skills/hospital-ux-expert/` (UX rules + research workflow) and `.claude/skills/design-tokens/`
   (tokens + `tokens.json` / `tokens.css`).
 - Figma file: https://www.figma.com/design/yo53y0sVdqxaKNjZquWNom (Cover · Design Tokens · Components ·
-  Wireframes W1–W9 · Mockups 01–09 + EN frames · Brand). The Figma file is the visual source of truth.
+  Wireframes W1–W9 · Mockups 01–09 · Brand; all UI text in English by default, see OQ-49). The Figma file is the visual source of truth.
 - User inputs that drive the design stay in `docs/` (mockups, PRD drafts, references). Never edit them.
 
 ## Scope (what the product is)
 
 - Desktop-like workspace in the browser: top bar with global search (Ctrl+K), a work area of
   movable/resizable windows, and a bottom dock of open windows (see
-  `docs/mockups/hospital-patient-workspace.html` and `docs/mockups/hms-ai-chatbot-workspace.html`).
-- Modules as windows: Patient Management, Patient Detail (tabs: Overview, Medical Record,
+  `docs/mockups/ref_hospital-patient-workspace.html` and `docs/mockups/ref_hms_with_ai_chatbot.html`).
+- Modules as windows: Patient Management, Patient Detail (header + clinical tabs + profile sidebar, see PRD FR-18; tabs: Overview, Medical Record,
   Encounters, Orders, Results, Medications, Procedures, Billing, Documents, Care Plan,
   Referrals), Laboratory Results, Radiology Viewer, Billing & Insurance, AI Assistant, and later the
   claim-assistant screens.
@@ -34,6 +34,6 @@ Read the root `CLAUDE.md` and this folder's `PRD.md` first.
   token skill wins on values, the mockup still wins on layout and the window/dock model.
 - Build screens from Figma components (instances) bound to variables; never hard-code hex/px.
 - Mockups use synthetic data only; PHI masked by default; write actions disabled in Phase 1.
-- UI language: Bahasa Indonesia default + English (UI text only), see ADR-0003 Amendment 1.
+- UI language: English default + Bahasa Indonesia (UI text only), see ADR-0003 Amendments 1 and 3. The Figma file is English by default (OQ-49).
 - Role-based UI: hide actions the user's role can't perform, but always rely on the backend for authorization.
 - Load the Figma `figma-use` skill before any `use_figma` call.

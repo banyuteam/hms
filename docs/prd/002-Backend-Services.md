@@ -4,6 +4,6 @@
 3. External integration services: Bank, Insurance, Government, eSign log.
 4. Ready-integration for internal services: patients records privately, webhook, AI agent services (for testing purpose: Claude and OpenAI), existing monolith database records read-only, microservices-ready.
 5. Keep consistent on the enterprise endpoints rules.
-6. Endpoints documentation always
+6. Endpoints documentation always using SwaggerUI
 7. Database for workaround: PostgreSQL 18
 8. Always stick around with event-sourcing database when plan and design

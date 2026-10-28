@@ -6,7 +6,7 @@ description: HMS web-frontend design tokens (colour, type, spacing, radius, size
 # HMS design tokens
 
 Single vocabulary for the web workspace. Values are **derived from the reference mockup**
-(`docs/mockups/hospital-patient-workspace.html`) and normalised so every value is on a scale
+(`docs/mockups/ref_hospital-patient-workspace.html`) and normalised so every value is on a scale
 and every text/background pair passes WCAG 2.1 AA. The Figma file is the visual source of truth;
 `references/tokens.json` (W3C DTCG) and `references/tokens.css` are the machine-readable copies.
 
@@ -170,7 +170,7 @@ Violet marks everything produced by the AI assistant (avatar, bubbles, "Draf AI"
 
 ### Wallpaper, scrim and glass (workspace background)
 
-`assets/brand/wallpaper-calm-hospital.jpg` (1264×848, AI-generated with Figma AI on 2026-10-28; replace with a hospital photo if supplied — OQ-41).
+`assets/brand/wallpaper-calm-hospital.jpg` (2560×1706, resized from the product owner's `docs/mockups/wallpaper.jpg` on 2026-10-28; replaces the earlier Figma-AI image — licence/provenance and the visible signage on it: OQ-41).
 Layers behind the workspace: **Wallpaper** (image, fill) + **scrim** = `color/bg/canvas` at **80%** opacity (keeps text on the canvas AA and windows unchanged).
 Ruang Fokus uses a lighter scrim (`color/bg/canvas` @ **25%**) and a *glass* panel: white @ 62% fill + 1px white @ 80% stroke + background blur 24px + `shadow/window`
 (CSS: `backdrop-filter: blur(24px)`; provide a solid `color/bg/surface` fallback). Opacity-based layers are not tokens yet — implement as CSS custom properties

@@ -9,7 +9,7 @@ Role: act as a senior healthcare UX designer for **hospital staff** using a web 
 SIMRS Khanza desktop app. Optimise for **safety, speed of repeat tasks, and calm** — in that order.
 Read first: root `CLAUDE.md`, `design/web-frontend/CLAUDE.md`, `design/web-frontend/PRD.md`, `design/web-frontend/open-questions.md`
 and the **design-tokens** skill. Visual source: the Figma file linked from `design-tokens/SKILL.md`
-and `docs/mockups/hospital-patient-workspace.html` (read-only reference).
+and `docs/mockups/ref_hospital-patient-workspace.html` (read-only reference).
 
 > Evidence labels used below: **[Ref]** the reference mockup · **[Req]** the user's stated
 > preference · **[Reg]** regulation/rule in `CLAUDE.md` · **[Res]** published research (summarised in
@@ -42,8 +42,8 @@ screen inventory], Indonesian-language UI [Reg: `CLAUDE.md`].
    (numbers are [Assumption] to validate — OQ-09, OQ-21):
    - window-to-edge margin ≥ `space/24`, gap between windows ≥ `space/16`;
    - the empty workspace (*Beranda*) shows only: greeting, 6 launch tiles, 3 recent items;
-   - at most **3 windows visible side-by-side**; opening a 4th minimises the least-recently-used one
-     (with an undo toast) instead of shrinking everything;
+   - at most **4 tiled windows** (product decision 2026-10-28, OQ-46; replaces the earlier 3-window guideline); when the shell is too small to tile, show only the most recently used window
+     instead of shrinking everything (extra windows stay open in the dock);
    - windows open at a **comfortable** size, not maximised; content scrolls inside the window;
    - progressive disclosure: summary first, detail on demand; collapse rarely used cards;
    - one primary action per window; secondary actions are ghost/secondary buttons.
@@ -76,7 +76,7 @@ Window anatomy and states: see Figma pages *Wireframes → W1* and *Components �
   from within the alert. No alerting logic exists in Phase 1 — display only [Res: alert-fatigue
   literature; OQ-10].
 
-## 3b. AI assistant panel (reference: `docs/mockups/hms-ai-chatbot-workspace.html`)
+## 3b. AI assistant panel (reference: `docs/mockups/ref_hms_with_ai_chatbot.html`)
 
 The AI assistant is a normal **window** (own dock tab "Asisten AI", violet identity) that docks to the
 right of the patient window (≈ 380px; splitter to resize) — Figma Mockups 06–07, Wireframes W7–W8.
@@ -131,7 +131,7 @@ Rules (all [Assumption] pending OQ-23…OQ-28 unless marked):
   (Ringkasan, Rekam Medis, Kunjungan, Order, Hasil, Obat, Tindakan, Tagihan, Dokumen, Rencana Perawatan, Rujukan) until research says otherwise (OQ-17).
 - **States:** every window needs loading (skeleton, not spinner-only), empty (say what to do),
   error (what happened, retry, correlation id), offline/stale-data and no-permission states.
-- **Copy & languages:** Bahasa Indonesia is the default and source language; **English (`en`) is a second locale** (ADR-0003 Amendment 1). Plain wording consistent
+- **Copy & languages:** English is the default and source language (since 2026-10-28); **Bahasa Indonesia (`id`) is a fully supported second locale** (ADR-0003 Amendments 1 and 3). Plain wording consistent
   with the glossary (SEP, rawat inap, DPJP…) and an EN term per entry; verbs for buttons ("Simpan"/"Save", "Cetak"/"Print"); no exclamation marks; units after values;
   all strings via i18n message IDs (never concatenate sentences — use ICU placeholders/plurals). Language switcher in the top-bar user menu (and lock screen); preference saved per browser. English covers UI text only. EN reference frames: Figma Mockups `EN ·` (Home, Patient Detail, Detail + AI). Design every screen so text can
   grow ~30–40% (pseudo-locale test); no text baked into images/icons. Backend data (names, notes, diagnoses as stored) and legal/clinical documents are not translated (OQ-34).

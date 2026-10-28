@@ -168,7 +168,8 @@ services consume them.
 - Code systems: ICD-10 (the WHO 2010 edition used by INA-CBG) and ICD-9-CM for procedures.
   Use the editions INA-CBG/E-Klaim accept, not the newest ones. Source files go in
   `docs/references/code-systems/`.
-- UI text: Bahasa Indonesia is the primary UI language; code, identifiers, commits and docs in
+- UI text: English is the default UI language (product owner, 2026-10-28, ADR-0003 Amendment 3); Bahasa
+  Indonesia is a fully supported second locale. Code, identifiers, commits and docs in
   English. Keep Indonesian domain terms where they're the established term (SEP, rawat inap).
 
 ## Engineering conventions
