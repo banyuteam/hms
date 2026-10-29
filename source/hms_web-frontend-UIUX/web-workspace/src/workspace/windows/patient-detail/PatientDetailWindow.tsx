@@ -7,6 +7,7 @@ import { DetailTabs } from './DetailTabs';
 import { PatientHeader } from './PatientHeader';
 import { AuditLogPage } from './pages/AuditLogPage';
 import { ComingSoonTab } from './pages/ComingSoonTab';
+import { EncountersTab } from './pages/EncountersTab';
 import { MedicalRecordTab } from './pages/MedicalRecordTab';
 import { OverviewTab } from './pages/OverviewTab';
 import { ProfilePage } from './pages/ProfilePage';
@@ -48,7 +49,11 @@ export function PatientDetailWindow({ mrn }: { mrn: string }) {
           />
         );
       } else if (section.id === 'medicalRecord') {
-        content = <MedicalRecordTab patient={patient} />;
+        content = (
+          <MedicalRecordTab patient={patient} onOpenTab={(id) => setSection({ type: 'tab', id })} />
+        );
+      } else if (section.id === 'encounters') {
+        content = <EncountersTab mrn={mrn} />;
       } else if (!BUILT_TABS.includes(section.id)) {
         content = <ComingSoonTab title={panelLabel} />;
       }

@@ -133,28 +133,50 @@ describe('Patient Detail window (Figma 04, 10–14)', () => {
     expect(within(win).getByText('0301R••••••V000123')).toBeInTheDocument();
   });
 
-  it('Medical Record tab: diagnoses, history, notes, allergies; scope and search; audit on open', async () => {
+  it('Medical Record tab: seven summary sections; scope and search; audit on open', async () => {
     const user = userEvent.setup();
     const { win } = await openDetail();
     await user.click(within(win).getByRole('tab', { name: 'Medical Record' }));
     expect(
       auditEvents().some((e) => e.action === 'record.open' && e.subject === 'medical-record'),
     ).toBe(true);
-    expect(within(win).getByText('J18.9')).toBeInTheDocument();
+    expect(await within(win).findByText('J18.9')).toBeInTheDocument();
+    // the seven cards, in the order of the spec; there is no separate Allergies card
+    const titles = [
+      'Final diagnoses',
+      'Medical history',
+      'Clinical notes',
+      'Procedures & interventions',
+      'Treatment and outcomes',
+      'Discharge plan / follow-up',
+      'Digital signature and date',
+    ];
+    const headings = within(win)
+      .getAllByRole('heading', { level: 3 })
+      .map((h) => h.textContent);
+    expect(headings.slice(-titles.length)).toEqual(titles);
     expect(within(win).getAllByText('Hipertensi esensial').length).toBeGreaterThan(0); // clinical data stays as stored
     expect(
       within(win).getByText('Demam 3 hari, batuk berdahak, sesak napas saat aktivitas.'),
     ).toBeInTheDocument();
-    expect(within(win).getByText('Ruam')).toBeInTheDocument();
-    // current encounter only: the March outpatient note is not shown
-    expect(within(win).queryByText('Kontrol rutin, tanpa keluhan.')).not.toBeInTheDocument();
+    // allergy is merged into Clinical notes as a patient-level note (no reaction column in the source)
+    expect(within(win).getByText(/Penisilin · Medication · Allergy/)).toBeInTheDocument();
+    expect(within(win).queryByText('Ruam')).not.toBeInTheDocument();
+    // the open encounter has no outcome, plan or signature yet
+    expect(within(win).getAllByText('Not discharged yet').length).toBe(2);
+    expect(within(win).getByText('Not signed')).toBeInTheDocument();
+    // current encounter only: the March admission is not shown
+    expect(within(win).queryByText('R07.4')).not.toBeInTheDocument();
     await user.click(within(win).getByRole('radio', { name: 'All encounters' }));
-    expect(within(win).getByText('Kontrol rutin, tanpa keluhan.')).toBeInTheDocument();
+    expect(within(win).getByText('R07.4')).toBeInTheDocument();
+    expect(within(win).getByText(/4 encounters/)).toBeInTheDocument();
+    expect(within(win).getByText('Earlier assessments (3)')).toBeInTheDocument();
+    expect(within(win).getAllByText('Signed (verified by DPJP)').length).toBeGreaterThan(0);
     await user.type(
       within(win).getByRole('searchbox', { name: 'Search diagnoses and notes' }),
       'ceftriaxone',
     );
-    expect(within(win).queryByText('Kontrol rutin, tanpa keluhan.')).not.toBeInTheDocument();
+    expect(within(win).queryByText('R07.4')).not.toBeInTheDocument();
     expect(within(win).getByText(/Lanjutkan Ceftriaxone IV/)).toBeInTheDocument();
   });
 

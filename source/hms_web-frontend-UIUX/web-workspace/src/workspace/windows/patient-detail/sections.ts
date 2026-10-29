@@ -21,7 +21,7 @@ export type ProfileId = (typeof PROFILE_IDS)[number];
 export type Section = { type: 'tab'; id: TabId } | { type: 'profile'; id: ProfileId };
 
 /** Tabs that have content in Phase 2; the rest are "coming in Phase 3" placeholders. */
-export const BUILT_TABS: readonly TabId[] = ['overview', 'medicalRecord'];
+export const BUILT_TABS: readonly TabId[] = ['overview', 'medicalRecord', 'encounters'];
 
 /** Never show more than this many tabs; the rest go under "More ▾" (OQ-52). */
 export const MAX_VISIBLE_TABS = 8;

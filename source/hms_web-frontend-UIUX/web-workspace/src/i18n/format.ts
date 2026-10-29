@@ -53,6 +53,16 @@ export function dayPart(date: Date): 'morning' | 'afternoon' | 'evening' | 'nigh
   return 'night';
 }
 
+/** `12 Mar 09:30` — day, month and 24 h time without the year, for lists inside one encounter. */
+export function formatShortDateTime(date: Date, locale: Locale): string {
+  const day = new Intl.DateTimeFormat(INTL_TAG[locale], {
+    day: '2-digit',
+    month: 'short',
+    timeZone: DISPLAY_TIME_ZONE,
+  }).format(date);
+  return `${day} ${formatTime(date, locale)}`;
+}
+
 /** `27 Oct 2026 08:30` — date and 24 h time in Asia/Jakarta. */
 export function formatDateTime(date: Date, locale: Locale): string {
   return `${formatDate(date, locale)} ${formatTime(date, locale)}`;

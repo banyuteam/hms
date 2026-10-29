@@ -1,7 +1,7 @@
 # web-workspace
 
 **Requirement:** #3  
-**Status:** **Phase 2 scaffold running** (PRD §8.1) — window manager v2 (window states, tile layouts up to 4, compact shell) and the **Patient Detail** window (header + safety bar, tabs with **More ▾**, profile sidebar, Overview, Medical Record, four profile pages, masked fields with audited reveal), all on synthetic data behind an API interface. Phase 1 (shell, login, Patient Management) is unchanged. English is the default UI language (`id` supported). Stack: ADR-0002 + ADR-0003. PRD is a Draft (awaiting review). Window-manager spike vs dockview done: own manager stays (`spikes/dockview/`, throwaway).
+**Status:** **Phase 3 started: Encounters tab scaffolded** on top of the Phase 2 scaffold (PRD §8.1) — window manager v2 (window states, tile layouts up to 4, compact shell) and the **Patient Detail** window (header + safety bar, tabs with **More ▾**, profile sidebar, Overview, Medical Record, four profile pages, masked fields with audited reveal), all on synthetic data behind an API interface. Phase 1 (shell, login, Patient Management) is unchanged. English is the default UI language (`id` supported). Stack: ADR-0002 + ADR-0003. PRD is a Draft (awaiting review). Window-manager spike vs dockview done: own manager stays (`spikes/dockview/`, throwaway).
 
 The browser workspace that replicates the Khanza desktop screens (windows, dock, patient detail).
 
@@ -57,6 +57,8 @@ pnpm e2e            # Playwright (uses installed Google Chrome; see below)
 | Card · Field Row · masked value | `src/components/Card.tsx`, `FieldRow.tsx`, `MaskedValue.tsx` |
 | Patient data (synthetic) | `src/api/` — `types.ts`, `syntheticRecords.ts`, `patientApi.ts` (the only door to patient data), `usePatient.ts`, `queryClient.ts` (TanStack Query, cleared on logout); audit stub `src/audit/audit.ts` |
 | i18n (`en` default, `id`) | `src/i18n/` — FormatJS catalogs `messages/id.json`, `en.json` (a test checks key/placeholder parity) |
+
+**Encounters tab** (Phase 3, `pages/EncountersTab.tsx`, `api/syntheticEncounters.ts`, spec: `encounters-tab-fields.md`): list + type filter, header facts, timeline, synthetic data via `patientApi.getEncounters`.
 
 **Not built yet** (placeholders or omitted on purpose): Documents tab and the other clinical tabs ("planned for Phase 3" placeholders), specialty assessment forms, Lab/Radiology/Billing content (placeholder windows), split-handle ratios and snap-by-drag, layout persistence, Ctrl+K palette and direct shortcuts, notifications, AI assistant window, Ruang Fokus, auto-lock screen (idle → logout stands in), dark mode, real BFF/auth, and the OpenAPI contract in `source/hms_shared/` (`src/api/types.ts` stands in).
 

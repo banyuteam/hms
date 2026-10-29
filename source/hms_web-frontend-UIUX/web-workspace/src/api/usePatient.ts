@@ -5,3 +5,17 @@ import { patientApi } from './patientApi';
 export function usePatient(mrn: string) {
   return useQuery({ queryKey: ['patient', mrn], queryFn: () => patientApi.getPatient(mrn) });
 }
+
+export function usePatientMedicalRecord(mrn: string) {
+  return useQuery({
+    queryKey: ['patient', mrn, 'medical-record'],
+    queryFn: () => patientApi.getMedicalRecord(mrn),
+  });
+}
+
+export function usePatientEncounters(mrn: string) {
+  return useQuery({
+    queryKey: ['patient', mrn, 'encounters'],
+    queryFn: () => patientApi.getEncounters(mrn),
+  });
+}
