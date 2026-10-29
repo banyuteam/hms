@@ -152,7 +152,7 @@ Quality
 | M6 | Phase 2 review: your review of the build vs Figma, code review, PRD set to Approved, first commit | Next |
 | M7 | Phase 3: Documents tab (discharge summary) and the remaining clinical tabs; OQ-53 / OQ-54 remainders | Planned |
 
-### 8.1 Delivery phases of the web-frontend *(proposal 2026-10-29 — please confirm; "Phase 1/2/3" here are front-end increments, all still read-only)*
+### 8.1 Delivery phases of the web-workspace *(proposal 2026-10-29 — please confirm; "Phase 1/2/3" here are front-end increments, all still read-only)*
 
 | Phase | Scope | State |
 |---|---|---|
@@ -175,7 +175,7 @@ Quality
 | Verification | typecheck, lint, format clean · **78 unit tests** · **3 e2e** (real Chrome) · production build clean (no demo password, no source maps, no external requests) · Chrome DevTools: Figma 04/05/10–14 matched, keyboard, Indonesian, compact shell, **Lighthouse accessibility 100** |
 | Bugs found and fixed on the way | shell grew wider than the viewport with many dock tabs; user button name vs visible text (WCAG 2.5.3); missing favicon; windows touching the screen edge after a resize |
 
-**State of the repository:** everything above is **uncommitted** (≈78 changed or new paths). Suggested commits, one per project: `web-frontend` code · `design/hms_web-frontend-UIUX/web-workspace` docs · shared docs and ADR-0003 (`docs/decisions`, `docs/glossary.md`).
+**State of the repository:** everything above is **uncommitted** (≈78 changed or new paths). Suggested commits, one per project: `web-workspace` code · `design/hms_web-frontend-UIUX/web-workspace` docs · shared docs and ADR-0003 (`docs/decisions`, `docs/glossary.md`).
 
 **Open items when work resumes**
 
@@ -198,6 +198,18 @@ Questions that block features, grouped:
 - **Deferred by product owner (2026-10-28), to discuss now that the window-manager spike is done:** (1) the deferred library choices — data tables, forms and validation, charts, radiology viewer, date handling (ADR-0003 "Defer"); (2) the full check run for this checkpoint (AC-08); (3) the uncommitted `.claude/settings.json` change.
 
 ## Change log
+
+- 2026-10-29 — **Medical Record summary drawn in Figma**: wireframe W15, mockup 14 (current encounter, a discharged stay so every section has data) and mockup 16 (all encounters; per-encounter tables for procedures, treatment, discharge plan and signature) redrawn with the seven sections; allergy shown as a pinned note in Clinical notes; scrolled state 16b removed. Section icons added to the `design-tokens` skill (`icon.default.summary-section`). Fixed the scaling of the 9 new icon components (inner frame constraints = SCALE).
+
+- 2026-10-29 — **Decisions on the Medical Record summary** (product owner): seven-section structure confirmed, discharge summary stays in Documents (OQ-64); record signed by the **doctor in charge** only, from `dpjp_ranap` + `verifikasi_dpjp` (OQ-65, still open: verification date and e-signature provider); final diagnosis = `diagnosa_pasien`, lab `keterangan` = free-text result detail (OQ-66). Field doc §2a.1, §2a.2, §2a.7 updated.
+
+- 2026-10-29 — **Medical Record tab restructured into a high-level summary** (product owner): seven sections — Final diagnoses (kept) · Medical history + supporting clinical data (lab, radiology, medication therapy) · Clinical notes (SOAP first, **allergies merged in**, no separate Allergies card) · Procedures & interventions (doctor or nurse) · Treatment and outcomes · Discharge plan / follow-up · Digital signature and date. Fields mapped to the Khanza schema in `patient-medical-record-fields.md` §1 and §2a. New questions OQ-64 (supersedes the four-card decision of OQ-53; Figma W15 and mockups 14, 16, 16b to be redrawn), OQ-65 (signature sources and e-sign provider), OQ-66 (content rules). Also corrected a table name in `encounters-tab-fields.md` (`rujuk`, not `rujuk_keluar`).
+
+- 2026-10-29 — **Medical Record tab, scope "All encounters" designed** (Figma mockup 16 + scrolled state 16b, row "Clinical tabs"; see `patient-medical-record-fields.md` §1a): diagnoses table across encounters, medical history = latest assessment + link, clinical notes grouped by encounter, allergies marked patient-level. New question OQ-63 (earlier assessments, long histories).
+
+- 2026-10-29 — **Default icon per feature** added to the `design-tokens` skill (`tokens.json` → `icon`, SKILL.md → *Icons*): 67 features (windows, clinical tabs, profile sidebar, encounter timeline events, actions, status) mapped to one Lucide icon each. Nine icons added to Figma Components and `Icon.tsx` (layout-dashboard, stethoscope, list-checks, clipboard-check, syringe, route, forward, scissors, phone); mockups updated (Contact → phone, Guarantor & Insurance → shield, doctor visit → stethoscope). Still to sync: 8 icons Figma-only and 4 code-only (listed in SKILL.md).
+
+- 2026-10-29 — **Encounters tab designed** (Figma mockup 15, row "Clinical tabs"; fields and sources in [`encounters-tab-fields.md`](encounters-tab-fields.md)): list of encounters ordered by date (newest first, type filter) beside a detail pane with a registration → discharge timeline of services, each showing unit and doctor. Fields verified against the Khanza schema (`reg_periksa`, `kamar_inap`, `rawat_jl_dr`, `rawat_inap_dr`, `periksa_lab`, `periksa_radiologi`, `resep_obat`, `operasi`). New questions OQ-59…62. Wireframe W16 and the empty/loading/error/open-encounter states are still to draw.
 
 - 2026-10-29 — **Checkpoint recorded (§8.2) and work paused**: milestones M5 (Phase 2 scaffold, done), M6 (Phase 2 review and PRD approval, next) and M7 (Phase 3) added; M3/M4 states updated; margin-aware window re-fit added after the product owner's 1280×800 screen was measured (OQ-56).
 - 2026-10-29 — **Phase 2 scaffold built** in `source/hms_web-frontend-UIUX/web-workspace/` (window manager v2 per `window-states.md`; Patient Detail window with Overview, Medical Record, four profile pages, More ▾ tabs, masked fields with audited reveal; layout picker with up to 4 tiles, empty-slot placeholder, compact shell; synthetic patient API with TanStack Query). Verified in Chrome DevTools against Figma 04/05/10–14. Findings: see OQ-56, OQ-57.

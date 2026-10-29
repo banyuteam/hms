@@ -1,5 +1,5 @@
 // ADR-0003 D1 spike probe — run: node probe.mjs (needs `pnpm exec vite preview --port 5199` running).
-import { chromium } from '/Users/erfanhuda/Documents/Shared Projects/hms/source/web-frontend/node_modules/@playwright/test/index.mjs';
+import { chromium } from '/Users/erfanhuda/Documents/Shared Projects/hms/source/hms_web-frontend-UIUX/web-workspace/node_modules/@playwright/test/index.mjs';
 const out = {};
 const browser = await chromium.launch({ channel: 'chrome' });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });

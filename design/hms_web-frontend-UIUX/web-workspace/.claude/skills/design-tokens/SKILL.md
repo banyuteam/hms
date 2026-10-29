@@ -1,6 +1,6 @@
 ---
 name: design-tokens
-description: HMS web-frontend design tokens (colour, type, spacing, radius, size, elevation) and the rules for using them. Use whenever you write or review UI code, CSS, a component, a Figma frame, or a mockup for source/hms_web-frontend-UIUX/web-workspace, or when a colour/size/spacing value is about to be hard-coded or a new token is proposed.
+description: HMS web-workspace design tokens (colour, type, spacing, radius, size, elevation) and the rules for using them. Use whenever you write or review UI code, CSS, a component, a Figma frame, or a mockup for source/hms_web-frontend-UIUX/web-workspace, or when a colour/size/spacing value is about to be hard-coded or a new token is proposed.
 ---
 
 # HMS design tokens
@@ -179,8 +179,8 @@ Ruang Fokus uses a lighter scrim (`color/bg/canvas` @ **25%**) and a *glass* pan
 
 ### Logo (brand asset, not a token)
 
-`Logo` component (Figma page *Brand*): `Type=Mark` (`assets/brand/logo-mark.jpg`, white background, 40px in the top bar)
-and `Type=App icon` (`assets/brand/logo-app-icon.jpg`, green background, radius/md). Min size 24px, never recolour/stretch,
+`Logo` component (Figma page *Brand*): `Type=Mark` (`assets/brand/logo-mark.png`, blue background, 40px in the top bar)
+and `Type=App icon` (`assets/brand/logo-app-icon.png`, blue background, radius/md). Min size 24px, never recolour/stretch,
 put it on a white box when the canvas is coloured. The logo is dark green — **do not use brand green as a UI colour token**
 (green is reserved for `status/success-*`; OQ-31). Files are low-res JPGs pending vectors (OQ-32).
 
@@ -265,13 +265,139 @@ Numerals: use tabular figures (`font-variant-numeric: tabular-nums`) in tables, 
 `canvas 0 · window 10–199 (focus bumps to top) · dock 300 · popover 400 · palette/scrim 500 · toast 600`.
 Windows never overlap the top bar or the dock.
 
+## Icons (default per feature)
+
+One feature = one icon, everywhere (tab, window title bar, dock tab, nav item, timeline, card header). Use the default below before choosing anything else; do not reuse an icon for an unrelated feature. A feature that is not listed gets a new row here (and in `tokens.json` → `icon.default`) in the same change.
+
+- **Library:** Lucide (ISC), 24px master grid, 2px stroke; one component per icon in Figma (`icon/<name>`), one named import per icon in code (`Icon.tsx`).
+- **Size:** `size/icon-sm` 16 (inline, title bar), `size/icon-md` 20 (nav, button, input, tab), `size/icon-lg` 24 (grid master).
+- **Colour:** `color/text/secondary` by default, `color/text/link` when the item is active, `*-fg` for status text, `*-icon` only for non-text marks (e.g. the timeline dot). Never hard-code.
+- **Accessibility:** icons are decorative (`aria-hidden`); the feature name is always visible text next to them. An icon-only button needs an accessible name and tooltip.
+- **Sync status** (`set` in `tokens.json`): `both` = in Figma and `Icon.tsx`; `figma-only` / `code-only` = add to the other side; `proposed` ⁺ = in neither yet, add to Figma first, then code.
+
+### Windows / modules
+
+| Feature | Icon | Figma component | Status |
+| :-- | :-- | :-- | :-- |
+| Home | `home` (House) | `icon/home` | both |
+| Patient Management | `users` (Users) | `icon/users` | both |
+| Patient Detail | `user` (User) | `icon/user` | both |
+| Laboratory | `flask` (FlaskConical) | `icon/flask` | both |
+| Radiology | `image` (Image) | `icon/image` | both |
+| Billing & Insurance | `receipt` (Receipt) | `icon/receipt` | both |
+| AI Assistant | `sparkles` (Sparkles) | `icon/sparkles` | figma-only |
+| Documents | `file` (FileText) | `icon/file` | both |
+| Pharmacy | `pill` (Pill) | `icon/pill` | both |
+| Inpatient / ward | `bed` (Bed) | `icon/bed` | both |
+| Emergency unit | `cross` (Cross) | `icon/cross` | figma-only |
+
+### Patient Detail clinical tabs
+
+| Feature | Icon | Figma component | Status |
+| :-- | :-- | :-- | :-- |
+| Overview | `layout-dashboard` (LayoutDashboard) | `icon/layout-dashboard` | both |
+| Medical Record | `clipboard` (ClipboardList) | `icon/clipboard` | both |
+| Encounters | `stethoscope` (Stethoscope) | `icon/stethoscope` | both |
+| Orders | `list-checks` (ListChecks) | `icon/list-checks` | both |
+| Results | `clipboard-check` (ClipboardCheck) | `icon/clipboard-check` | both |
+| Medications | `pill` (Pill) | `icon/pill` | both |
+| Procedures | `syringe` (Syringe) | `icon/syringe` | both |
+| Billing | `receipt` (Receipt) | `icon/receipt` | both |
+| Documents | `file` (FileText) | `icon/file` | both |
+| Care Plan | `route` (Route) | `icon/route` | both |
+| Referrals | `forward` (Forward) | `icon/forward` | both |
+| More (overflow) | `chevron-down` (ChevronDown) | `icon/chevron-down` | both |
+
+### Patient Detail sidebar
+
+| Feature | Icon | Figma component | Status |
+| :-- | :-- | :-- | :-- |
+| Personal Information | `user` (User) | `icon/user` | both |
+| Contact | `phone` (Phone) | `icon/phone` | both |
+| Guarantor & Insurance | `shield` (ShieldCheck) | `icon/shield` | both |
+| Family & Emergency | `heart` (Heart) | `icon/heart` | both |
+| Audit Log | `eye` (Eye) | `icon/eye` | both |
+
+### Encounter timeline events
+
+| Feature | Icon | Figma component | Status |
+| :-- | :-- | :-- | :-- |
+| Registration | `clipboard` (ClipboardList) | `icon/clipboard` | both |
+| Procedure / treatment | `syringe` (Syringe) | `icon/syringe` | both |
+| Diagnostic test (ECG, …) | `activity` (Activity) | `icon/activity` | both |
+| Laboratory | `flask` (FlaskConical) | `icon/flask` | both |
+| Radiology | `image` (Image) | `icon/image` | both |
+| Prescription | `pill` (Pill) | `icon/pill` | both |
+| Admission / room | `bed` (Bed) | `icon/bed` | both |
+| Doctor visit | `stethoscope` (Stethoscope) | `icon/stethoscope` | both |
+| Surgery | `scissors` (Scissors) | `icon/scissors` | both |
+| Discharge | `home` (House) | `icon/home` | both |
+
+### Actions and controls
+
+| Feature | Icon | Figma component | Status |
+| :-- | :-- | :-- | :-- |
+| Edit | `pencil` (Pencil) | `icon/pencil` | figma-only |
+| Print | `printer` (Printer) | `icon/printer` | both |
+| Search | `search` (Search) | `icon/search` | both |
+| Add / new | `plus` (Plus) | `icon/plus` | both |
+| Close | `x` (X) | `icon/x` | both |
+| Minimize | `minus` (Minus) | `icon/minus` | both |
+| Maximize | `maximize` (Maximize2) | `icon/square` | both |
+| Restore | `restore` (Minimize2) | — | code-only |
+| Reveal masked value | `eye` (Eye) | `icon/eye` | both |
+| Hide value | `eye-off` (EyeOff) | — | code-only |
+| Lock / protected | `lock` (Lock) | `icon/lock` | both |
+| Filter | `filter` (Filter) | `icon/filter` | figma-only |
+| Send | `send` (Send) | `icon/send` | figma-only |
+| Attach | `paperclip` (Paperclip) | `icon/paperclip` | figma-only |
+| Voice input | `mic` (Mic) | `icon/mic` | figma-only |
+| Notifications | `bell` (Bell) | `icon/bell` | both |
+| App launcher | `grid` (LayoutGrid) | `icon/grid` | both |
+| Window layout | `layout` (PanelsTopLeft) | `icon/layout` | both |
+| Expand | `chevron-down` (ChevronDown) | `icon/chevron-down` | both |
+| Go / open | `chevron-right` (ChevronRight) | `icon/chevron-right` | figma-only |
+| Confirm | `check` (Check) | — | code-only |
+| Sign out | `log-out` (LogOut) | — | code-only |
+| Date | `calendar` (Calendar) | `icon/calendar` | both |
+| Time | `clock` (Clock) | `icon/clock` | both |
+
+### Medical Record summary sections
+
+| Feature | Icon | Figma component | Status |
+| :-- | :-- | :-- | :-- |
+| Final diagnoses | `clipboard` (ClipboardList) | `icon/clipboard` | both |
+| Medical history | `file` (FileText) | `icon/file` | both |
+| Clinical notes | `activity` (Activity) | `icon/activity` | both |
+| Procedures & interventions | `syringe` (Syringe) | `icon/syringe` | both |
+| Treatment and outcomes | `heart` (Heart) | `icon/heart` | both |
+| Discharge plan / follow-up | `calendar` (Calendar) | `icon/calendar` | both |
+| Digital signature and date | `shield` (ShieldCheck) | `icon/shield` | both |
+
+### Status and safety
+
+| Feature | Icon | Figma component | Status |
+| :-- | :-- | :-- | :-- |
+| Allergy | `alert` (TriangleAlert) | `icon/alert` | both |
+| Warning | `alert` (TriangleAlert) | `icon/alert` | both |
+| AI-generated | `sparkles` (Sparkles) | `icon/sparkles` | figma-only |
+| Privacy / protected | `shield` (ShieldCheck) | `icon/shield` | both |
+| Vital signs | `activity` (Activity) | `icon/activity` | both |
+
+### To add (sync)
+
+- **Add to `Icon.tsx` (in Figma only):** chevron-right, cross, filter, mic, paperclip, pencil, send, sparkles.
+- **Add to Figma Components (in code only):** check, eye-off, log-out, restore.
+- **Added 2026-10-29 (approved):** layout-dashboard, stethoscope, list-checks, clipboard-check, syringe, route, forward, scissors, phone — now in both Figma and `Icon.tsx`. When adding an icon to Figma, give the inner `vector` frame **SCALE** constraints (as the original icons have), otherwise instances do not scale when resized.
+- `maximize` is `icon/square` in Figma and `Maximize2` in code; align the name when one side is touched.
+
 ## Components that consume tokens
 
 `Button` (Primary/Secondary/Ghost × Default/Disabled), `Status Pill` (Neutral/Success/Danger/Warning/Info/AI),
 `Dock Tab` (Home|Module × Default|Active), `Window Titlebar` (Focused|Unfocused), `Nav Item`,
 `Tab`, `Card Header`, `Field Row` (Masked), `Vital Tile` (Normal/High/Warning), `Search Field`,
 `Action Chip` (AI/Neutral/Disabled), `AI Message Bubble` (User/Assistant), `Status Pill` variant `AI`,
-`icon/*` (36 icons, 24px grid). See the Figma "Components" page. Build the code design system in the
+`icon/*` (45 in Figma, defaults per feature in **Icons** above). See the Figma "Components" page. Build the code design system in the
 same order named in `CLAUDE.md` ("tokens, window, dock tab, card, field grid, table, pill, tab bar").
 
 ## Changing tokens

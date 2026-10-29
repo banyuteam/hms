@@ -29,7 +29,7 @@
 | Mode baca | Read-only mode — write actions disabled while a domain is not yet writable in the new platform (Phase 1) |
 | Clear space (zona lega) | Design rule: calm, mostly empty canvas with minimum margins between windows so users aren't overwhelmed |
 | DPJP | Dokter Penanggung Jawab Pelayanan — the attending physician responsible for the patient |
-| `id` / `en` locales | UI languages of the web-frontend: English (default) and Bahasa Indonesia; message catalogs `en.json` (source), `id.json` |
+| `id` / `en` locales | UI languages of the web-workspace: English (default) and Bahasa Indonesia; message catalogs `en.json` (source), `id.json` |
 | Ruang Fokus | "Focus room" — dedicated calm view of the workspace (wallpaper, clock, break timer) that hides windows and patient data; not the same as the lock screen |
 | Tile layout / *tata letak ubin* *(proposed wording)* | Windows arranged in non-overlapping slots (up to 4) from a layout picker; see `design/hms_web-frontend-UIUX/web-workspace/window-states.md` |
 | Window states *(proposed Indonesian labels)* | `floating` *melayang* (smaller, visible, stays on top of tiles) · `tiled` *tersusun* (in a tile slot) · `minimized` *diminimalkan* (hidden in the dock) · `maximized` *layar penuh* (fills the work area) |
