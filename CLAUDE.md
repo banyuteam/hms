@@ -4,7 +4,7 @@ This repository manages the end-to-end migration of the hospital's running **SIM
 (Java Swing monolith on MariaDB 10.6.26) to a web-based, microservice architecture, plus a
 data warehouse, a medical-records web service with e-signature, and a BPJS claim assistant.
 
-These are the rules every project follows. Each project has a *design* folder (`design/<project>/`:
+These are the rules every project follows. In the paths below `<project>` means `<group>/<project>` (e.g. `hms_services/sso`; `hms_database` and `hms_shared` have no sub-level). Each project has a *design* folder (`design/<project>/`:
 PRD, plans, design, skills) and a *source* folder (`source/<project>/`: the code). Each has its own
 `CLAUDE.md` where useful; when you work on a project, read `design/<project>/PRD.md` and the
 `CLAUDE.md` of the folder you are working in first.
@@ -15,7 +15,7 @@ PRD, plans, design, skills) and a *source* folder (`source/<project>/`: the code
    operational system of record.
    - Never run DDL (`CREATE/ALTER/DROP`), triggers, stored procedures, or writes against the
      Khanza database. Never propose changes to Khanza's Java code as a dependency of our work.
-   - Access Khanza data only through: (a) the CDC stream from `source/event-streaming/`, or
+   - Access Khanza data only through: (a) the CDC stream from `source/hms_services/event-streaming/`, or
      (b) a read-only DB user, preferably on a replica. Never against the primary for heavy queries.
    - Any future write-back to Khanza (e.g. a migrated domain must sync back) requires an ADR
      in `docs/decisions/` approved by the user before any code is written.
@@ -30,7 +30,7 @@ PRD, plans, design, skills) and a *source* folder (`source/<project>/`: the code
      environment/secret store only. Never commit them; use `.env.example` with placeholders.
 3. **Strangler-fig migration.** The new platform grows beside Khanza, domain by domain.
    Phase 1 is read-side (projections from CDC). A domain becomes writable in the new
-   platform only when its PRD and ADR say so.
+   platform only when its PRD and ADR say so. The goal is to migrate from the monolith to microservices architecture.
 4. **Don't decide architecture silently.** Choosing or changing a language, framework,
    broker, database engine, or integration approach needs an ADR
    (`docs/decisions/NNNN-title.md`, from `0000-adr-template.md`). If a choice isn't recorded
@@ -61,22 +61,28 @@ hms/
     └── <project>/
         ├── README.md   purpose, how to run, status of the code
         ├── CLAUDE.md   how Claude works on the code
-        ├── .claude/skills → ../../../design/<project>/.claude/skills   (link, see below)
+        ├── .claude/skills → ../../../../design/<group>/<project>/.claude/skills   (link, see below)
         └── … code, tests, configs, technical docs
 ```
 
-Projects (same folder name under `design/` and `source/`, except `shared` which has no PRD):
+Projects live in four groups, identically under `design/` and `source/` (group folders carry the `hms_` prefix;
+`hms_shared` has no PRD):
 
-| Project (`design/…` + `source/…`) | Requirement | Purpose |
-|---|---|---|
-| `event-streaming/` | #2 | CDC from Khanza MariaDB → event broker; raw change topics + translation to domain events |
-| `data-warehouse/` | DWH | Ingest events into staging → modeled warehouse/marts for reporting |
-| `web-frontend/` | #3 | Web workspace that replicates the Khanza desktop UX |
-| `backend-services/` | #3 | Domain microservices (patient, encounter, orders, billing, …) + API gateway |
-| `database/` | #3 | Schemas & migrations for the new services' own databases (database-per-service) |
-| `medical-records-api/` | #4 | Secured medical-record web service + e-signature |
-| `claim-assistant/` | #5 | BPJS / INA-CBG claim mitigation, ICD-10 & ICD-9-CM catalogue |
-| `shared/` | all | Cross-project contracts: event schemas, OpenAPI specs, code-system references |
+| Project (`design/…` + `source/…`) | Purpose |
+| :-- | :-- |
+| `hms_web-frontend-UIUX/web-workspace/` | Web workspace that replicates the Khanza desktop UX |
+| `hms_web-frontend-UIUX/web-datatooling/` | For backend developers, DBAs, data engineers: report management, ETL tool (events → staging → warehouse/marts), developer documentation |
+| `hms_services/event-streaming/` | CDC query polling from Khanza MariaDB → event broker; raw change topics + translation to domain events |
+| `hms_services/api-gateway/` | Audit log, webhooks, document log; secured medical-record web service + e-signature |
+| `hms_services/domain-services/` | Domain microservices (patient, encounter, orders, billing, …) + APIs |
+| `hms_services/ai-claim-assistant/` | AI chatbot agent for BPJS / insurance claims (medical records, diagnoses, procedures, INA-CBG mitigation) |
+| `hms_services/sso/` | Single sign-on for doctors, employees and patients |
+| `hms_database/` | PostgreSQL 18: databases for domain microservices, ICD-10 & ICD-9-CM catalogue |
+| `hms_shared/` | Cross-project contracts: event schemas, OpenAPI specs, code-system references |
+
+Earlier names → current: `web-frontend`→`web-workspace`, `data-warehouse`→`web-datatooling`,
+`medical-records-api`→`api-gateway`, `backend-services`→`domain-services`,
+`claim-assistant`→`ai-claim-assistant`, `database`→`hms_database`, `shared`→`hms_shared`.
 
 Where things go:
 - **All code, configs, tests, generated code and technical notes about the code** → `source/<project>/`
@@ -88,7 +94,7 @@ Where things go:
   Claude may add ADRs to `docs/decisions/` (status `proposed` until the user accepts) and update
   `docs/glossary.md`.
 - Each project is self-contained (own build, tests, README, `.env.example`). Cross-project
-  dependencies go through `source/shared/` contracts — never import another project's internal
+  dependencies go through `source/hms_shared/` contracts — never import another project's internal
   code or read another service's database.
 
 ## PRD and skill workflow
@@ -130,30 +136,31 @@ on *how* (safety rules above always win). Point out the conflict to the user.
 
 ```
 Khanza (Java Swing) ──writes──> MariaDB (Khanza, unchanged)
-                                   │ binlog (ROW)
+                                   │ read-only SELECT polling (replica)
                                    ▼
-                     event-streaming: CDC connector ──> raw topics  khanza.<table>
+                     event-streaming: CDC polling ──> raw topics  khanza.<table>
                                    │ translators (anti-corruption layer)
                                    ▼
                               domain events  <domain>.<entity>.<event>.v<N>
                      ┌─────────────┼───────────────┬─────────────────┐
                      ▼             ▼               ▼                 ▼
-              backend-services  medical-records  claim-assistant  data-warehouse
-              (own DBs)         -api (+e-sign)    (BPJS/INA-CBG)   (staging→marts)
-                     └──── API gateway / BFF ──── web-frontend (browser workspace)
+              domain-services   api-gateway      ai-claim-assistant  web-datatooling
+              (PostgreSQL 18)   (+e-sign,audit) (BPJS/INA-CBG)    (staging→marts)
+                     └──── API gateway / BFF ──── web-workspace (browser); sso for login
 ```
 
 New services publish their own events via the **transactional outbox** pattern.
 
 ### Event capture approach (requirement #2)
 
-Recommended: **log-based CDC** (e.g. Debezium MySQL/MariaDB connector reading the binlog)
-for Khanza, because it captures inserts/updates/deletes with no change to Khanza's code or
-schema. Outbox needs Khanza to write to an outbox table (code change — not allowed); query
-polling misses deletes and needs reliable `updated_at` columns, which Khanza tables often lack;
-managed cloud CDC adds cost and sends PHI off-premise. **Status: pending ADR-0001 — confirm
-with the user.** CDC rows are *change events*, not domain events; translate them before other
-services consume them.
+Chosen by the product owner (2026-10-29): **CDC query polling** of allowlisted tables on a read-only replica,
+recorded as proposed `docs/decisions/0001-khanza-cdc-query-polling.md` (not accepted yet). Trade-offs: polling
+cannot see deletes by itself and needs a change marker per table (Khanza tables often lack `updated_at`), so each
+table records its marker and a delete-reconciliation strategy. Log-based CDC (binlog) stays the fallback; outbox
+and triggers need writes to Khanza and are not allowed. Polled rows are *change events*, not domain events;
+translate them before other services consume them.
+
+The new services' databases use PostgreSQL 18 (proposed `docs/decisions/0004-postgresql-18-for-new-services.md`).
 
 ## Domain notes
 
@@ -174,7 +181,7 @@ services consume them.
 
 ## Engineering conventions
 
-- Contracts first: define/update the event schema or OpenAPI spec in `source/shared/` before
+- Contracts first: define/update the event schema or OpenAPI spec in `source/hms_shared/` before
   the implementation, and version them (`.v1`, `/v1`). Breaking changes get a new version.
 - Every service: health endpoint, structured JSON logs (PHI-masked), correlation id passed
   through HTTP headers and event metadata, idempotent event consumers (dedupe by event id).
@@ -185,7 +192,7 @@ services consume them.
   (who, what, when, why). Required by Permenkes 24/2022.
 - Time: store UTC, display Asia/Jakarta. Money: integer Rupiah (no floats).
 - Keep commits scoped to one project where possible; prefix the message with it,
-  e.g. `event-streaming: add reg_periksa connector config`.
+  e.g. `event-streaming: add reg_periksa polling config`.
 - Keep each project's `README.md` status line current when its phase changes.
 
 ## Working with the user

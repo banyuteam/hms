@@ -6,15 +6,18 @@ daily operations; the new platform reads its data through a change stream and gr
 
 ## What we're building
 
-| # | Goal | Project |
-|---|---|---|
-| 1 | Keep Khanza and its MariaDB running unchanged | — (rule for every project) |
-| 2 | Capture every database change as an event | [`source/event-streaming`](source/event-streaming/) · [`design/event-streaming`](design/event-streaming/) |
-| — | Reporting data warehouse | [`source/data-warehouse`](source/data-warehouse/) |
-| 3 | Web app that replicates the Khanza desktop screens | [`source/web-frontend`](source/web-frontend/), [`source/backend-services`](source/backend-services/), [`source/database`](source/database/) |
-| 4 | Secure medical-records web service with e-signature | [`source/medical-records-api`](source/medical-records-api/) |
-| 5 | BPJS claim assistant + ICD-10 / ICD-9-CM catalogue | [`source/claim-assistant`](source/claim-assistant/) |
-| — | Contracts shared between projects | [`source/shared`](source/shared/) |
+| Goal | Project |
+|---|---|
+| Keep Khanza and its MariaDB running unchanged | — (rule for every project) |
+| Capture every database change as an event (CDC query polling) | [`hms_services/event-streaming`](source/hms_services/event-streaming/) |
+| Web app that replicates the Khanza desktop screens | [`hms_web-frontend-UIUX/web-workspace`](source/hms_web-frontend-UIUX/web-workspace/) |
+| Tooling for developers, DBAs, data engineers (reports, ETL, developer docs) | [`hms_web-frontend-UIUX/web-datatooling`](source/hms_web-frontend-UIUX/web-datatooling/) |
+| API gateway, audit log, webhooks, secure medical records with e-signature | [`hms_services/api-gateway`](source/hms_services/api-gateway/) |
+| Domain microservices | [`hms_services/domain-services`](source/hms_services/domain-services/) |
+| AI claim assistant (BPJS / INA-CBG) | [`hms_services/ai-claim-assistant`](source/hms_services/ai-claim-assistant/) |
+| Single sign-on for doctors, employees, patients | [`hms_services/sso`](source/hms_services/sso/) |
+| PostgreSQL 18 databases + ICD-10 / ICD-9-CM catalogue | [`hms_database`](source/hms_database/) |
+| Contracts shared between projects | [`hms_shared`](source/hms_shared/) |
 
 Each project's `README.md` shows its current status.
 
@@ -34,17 +37,17 @@ hms/
 │   ├── decisions/       architecture decisions (ADRs)
 │   └── glossary.md      domain terms
 ├── design/            ← 2. PLAN & DESIGN of each project
-│   └── <project>/
+│   └── <group>/<project>/   (hms_database, hms_shared: no sub-level)
 │       ├── README.md      index & status of the plan/design
 │       ├── PRD.md         final PRD (approved requirements)
 │       ├── CLAUDE.md      how Claude works on the plan/design (when needed)
 │       ├── .claude/skills/<name>/SKILL.md   final skills
 │       └── … open questions, research, design notes (Figma, tokens, wireframes)
-└── source/            ← 3. THE CODE (one folder per project, same name as in design/)
-    └── <project>/
+└── source/            ← 3. THE CODE (same group/project names as in design/)
+    └── <group>/<project>/
         ├── README.md      purpose, status, how to run
         ├── CLAUDE.md      how Claude works on the code
-        ├── .claude/skills → ../../../design/<project>/.claude/skills   (symlink)
+        ├── .claude/skills → ../../../../design/<group>/<project>/.claude/skills   (symlink)
         └── … code, tests, configs, technical docs
 ```
 
@@ -70,7 +73,8 @@ so Claude Code also loads them while coding; on Windows enable git symlinks or c
 
 | Topic | Status |
 |---|---|
-| Event capture from Khanza | Recommended: log-based CDC (reads MariaDB binlog, no Khanza change). Pending ADR-0001 |
+| Event capture from Khanza | CDC query polling on a read-only replica (product owner, 2026-10-29). ADR-0001 proposed |
+| New services' database | PostgreSQL 18. ADR-0004 proposed |
 | Tech stack per project | Not decided — one ADR per choice |
 | E-signature provider | Hospital to choose a certified provider (PSrE) |
 

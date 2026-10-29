@@ -3,7 +3,7 @@
 - Status: **accepted** 2026-10-28 — product owner approved the recommended bundle (D1 starts with an own thin window manager, gated by a 2-day spike vs dockview)
 - Date: 2026-10-28
 - Deciders: Product owner (user)
-- Builds on: ADR-0002 (React + TypeScript + Vite SPA). Closes open question OQ-01 in `design/web-frontend/open-questions.md`.
+- Builds on: ADR-0002 (React + TypeScript + Vite SPA). Closes open question OQ-01 in `design/hms_web-frontend-UIUX/web-workspace/open-questions.md`.
 
 ## Context
 
@@ -63,7 +63,7 @@ ownership/maintenance concerns — verify). **Recommendation:** **A with React A
 ### D4. Server state / API client
 | Option | Notes |
 |---|---|
-| **A. TanStack Query + typed client generated from `source/shared/` OpenAPI (`openapi-typescript` + `openapi-fetch`)** | Caching, retries, abort, devtools; types come from the contract-first specs. **Must** set short `gcTime`, never persist the cache (no `persistQueryClient`), and `queryClient.clear()` on logout/idle lock (PHI) |
+| **A. TanStack Query + typed client generated from `source/hms_shared/` OpenAPI (`openapi-typescript` + `openapi-fetch`)** | Caching, retries, abort, devtools; types come from the contract-first specs. **Must** set short `gcTime`, never persist the cache (no `persistQueryClient`), and `queryClient.clear()` on logout/idle lock (PHI) |
 | B. SWR | Lighter, fewer features |
 | C. RTK Query | Good if Redux is chosen anyway |
 | D. Plain `fetch` + hooks | No dependency; re-invents caching/cancellation |
@@ -147,7 +147,7 @@ Approved: **the recommended bundle, unchanged.** Window manager: start from the 
 | D1 Window manager | Own thin manager (pointer events + store). **Gate:** 2-day spike vs `dockview` on keyboard operation, tokens/styling, tile layouts, PHI-free serialisation, a11y semantics; switch only if the spike clearly favours dockview (then amend this ADR) | 2026-10-28 |
 | D2 Component foundation | React Aria Components (headless) styled with our CSS; fallback Base UI | 2026-10-28 |
 | D3 Styling | CSS Modules + `tokens.css` custom properties | 2026-10-28 |
-| D4 Server state / API client | TanStack Query + `openapi-typescript`/`openapi-fetch` from `source/shared/`; short `gcTime`, no persistence, clear on logout/lock | 2026-10-28 |
+| D4 Server state / API client | TanStack Query + `openapi-typescript`/`openapi-fetch` from `source/hms_shared/`; short `gcTime`, no persistence, clear on logout/lock | 2026-10-28 |
 | D5 Client state | Zustand (no PHI in persisted state) | 2026-10-28 |
 | D6 Routing | React Router, top-level routes only; windows are not routes, no patient ids in URLs | 2026-10-28 |
 | D7 i18n | FormatJS / `react-intl` (ICU). Locales: **`en` (default since Amendment 3) and `id`** — see Amendments 1 and 3 | 2026-10-28 |
@@ -176,13 +176,13 @@ The product owner asked to add English as a second UI language. Bahasa Indonesia
 
 ## Amendment 2 — scaffold findings (2026-10-28)
 
-Recorded while creating the first Vite project (`source/web-frontend/`); versions are what `npm` resolved that day and are pinned exactly in `package.json` / `pnpm-lock.yaml`:
+Recorded while creating the first Vite project (`source/hms_web-frontend-UIUX/web-workspace/`); versions are what `npm` resolved that day and are pinned exactly in `package.json` / `pnpm-lock.yaml`:
 React 19.3.1, Vite 8.3.5, react-router 8.5.0, react-aria-components 1.22.1, zustand 5.0.16, react-intl 12.1.5, Vitest 5.0.5, Playwright 1.64, ESLint 10.13, pnpm 12.15 (via corepack), Node 24 LTS.
 
 - **TypeScript is pinned to 6.0.3, not 7.0.x.** `typescript-eslint` 8.72 refuses to run on TypeScript 7 ("does not support TS 7.0"); until it supports ≥ 7.1 we stay on 6.x so ESLint (incl. `jsx-a11y`) keeps working. Re-evaluate when typescript-eslint supports TS 7.
 - **Playwright's bundled Chromium is unavailable on macOS 12**; e2e runs with the installed Google Chrome (`channel: 'chrome'`); CI should install Chromium.
 - `eslint-plugin-formatjs` (no literal strings in JSX) is **not installed yet** (ESLint 10 compatibility unchecked); catalog parity is enforced by a unit test instead.
-- Demo authentication is a stand-in only (static account behind `VITE_DEMO_AUTH`), see `source/web-frontend/README.md`.
+- Demo authentication is a stand-in only (static account behind `VITE_DEMO_AUTH`), see `source/hms_web-frontend-UIUX/web-workspace/README.md`.
 
 ## Amendment 3 — English is the default UI language (product owner, 2026-10-28)
 
@@ -199,7 +199,7 @@ The product owner decided that **English is the default UI language of the app**
 Recorded while scaffolding Phase 2 (PRD §8.1). No decision above changed.
 
 - **TanStack Query 5.105.0 added** (already approved in D4). `queryClient`: `gcTime` 5 min, `retry: false`, no persistence; `endSession()` clears it together with the in-memory audit stub. MSW and `openapi-fetch` are *not* added yet — there is no BFF/OpenAPI contract (OQ-57); `src/api/patientApi.ts` is the only door to patient data and is replaced when the contract exists.
-- **Own window manager (D1) confirmed in use:** states `floating · tiled · maximized · minimized`, up to 4 tiles, compact shell, stacking tiers inside the token band (z-index 10–199 via re-numbered ranks), as specified in `design/web-frontend/window-states.md`. `dockview` stays out.
+- **Own window manager (D1) confirmed in use:** states `floating · tiled · maximized · minimized`, up to 4 tiles, compact shell, stacking tiers inside the token band (z-index 10–199 via re-numbered ranks), as specified in `design/hms_web-frontend-UIUX/web-workspace/window-states.md`. `dockview` stays out.
 - **Layout bug found in Phase 1 code:** the workspace grid column grew with the dock's content (many open windows made the whole shell wider than the viewport). Fixed with `grid-template-columns: minmax(0, 1fr)` and a scrolling tab strip.
 - **Accessibility:** Lighthouse (Chrome DevTools) accessibility 100 after fixing *label in name* on the user button (WCAG 2.5.3).
 - `eslint-plugin-formatjs` is still not installed; key parity is enforced by `messages.test.ts` (now ~310 keys).
@@ -208,7 +208,7 @@ Recorded while scaffolding Phase 2 (PRD §8.1). No decision above changed.
 
 The D1 gate spike against `dockview-react` 8.7.1 was run (time-boxed to hours, see the report). Result: it does **not** clearly favour dockview
 (floating windows are not keyboard-movable/resizable, no minimise for our dock model, +394 kB JS, titles serialised verbatim), so **D1 stays: own thin
-manager**. No change to the decision above. Report: `design/web-frontend/research/window-manager-spike.md`; code: `source/web-frontend/spikes/dockview/`.
+manager**. No change to the decision above. Report: `design/hms_web-frontend-UIUX/web-workspace/research/window-manager-spike.md`; code: `source/hms_web-frontend-UIUX/web-workspace/spikes/dockview/`.
 
 ## Sources (unverified secondary results — check primary docs)
 - Headless libraries overview: <https://www.greatfrontend.com/blog/top-headless-ui-libraries-for-react-in-2026> · <https://designrevision.com/alternatives/radix-ui> · <https://www.pkgpulse.com/guides/react-aria-vs-radix-primitives-2026>

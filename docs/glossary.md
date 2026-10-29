@@ -31,7 +31,7 @@
 | DPJP | Dokter Penanggung Jawab Pelayanan — the attending physician responsible for the patient |
 | `id` / `en` locales | UI languages of the web-frontend: English (default) and Bahasa Indonesia; message catalogs `en.json` (source), `id.json` |
 | Ruang Fokus | "Focus room" — dedicated calm view of the workspace (wallpaper, clock, break timer) that hides windows and patient data; not the same as the lock screen |
-| Tile layout / *tata letak ubin* *(proposed wording)* | Windows arranged in non-overlapping slots (up to 4) from a layout picker; see `design/web-frontend/window-states.md` |
+| Tile layout / *tata letak ubin* *(proposed wording)* | Windows arranged in non-overlapping slots (up to 4) from a layout picker; see `design/hms_web-frontend-UIUX/web-workspace/window-states.md` |
 | Window states *(proposed Indonesian labels)* | `floating` *melayang* (smaller, visible, stays on top of tiles) · `tiled` *tersusun* (in a tile slot) · `minimized` *diminimalkan* (hidden in the dock) · `maximized` *layar penuh* (fills the work area) |
 | Shell window | The browser/installed-app window holding the top bar, work area and dock; *compact* when too small to tile |
 | Penjab / `penjab` | *Penanggung jawab (biaya)* — the payer/guarantor of a visit (BPJS Kesehatan, company insurance, self-pay); `pasien.kd_pj` is the default, `reg_periksa.kd_pj` the one used for a visit |
