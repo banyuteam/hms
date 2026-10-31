@@ -21,7 +21,8 @@
 | SATUSEHAT | Kemenkes national health data platform (FHIR R4) |
 | PSrE | Certified electronic-signature provider in Indonesia (required for legally binding e-sign) |
 | PHI | Protected health information — any data identifying a patient or their health |
-| CDC | Change data capture — reading database changes (here: from the MariaDB binlog) |
+| CDC | Change data capture — reading database changes (here: query polling of a read-only Khanza replica, ADR-0001) |
+| Range digest | Row count + XOR of row-hash prefixes for one primary-key range; cdc-polling compares it to skip unchanged ranges (ADR-0005) |
 | Outbox pattern | A service saves an event in its own database in the same transaction as the change, then publishes it |
 | ADR | Architecture decision record — short document recording a technical decision and why |
 | Strangler-fig | Migration style: the new system takes over one area at a time while the old one keeps running |

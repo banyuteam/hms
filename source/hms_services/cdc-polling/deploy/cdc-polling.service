@@ -1,0 +1,28 @@
+# Example systemd unit for Ubuntu 22.04. Copy to /etc/systemd/system/, adjust paths and user, then:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now cdc-polling
+# Credentials: /etc/cdc-polling/cdc-polling.env (chmod 600, owned by root), same keys as .env.example.
+[Unit]
+Description=cdc-polling: Khanza MariaDB -> PostgreSQL 18 change capture
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cdc-polling
+Group=cdc-polling
+WorkingDirectory=/opt/cdc-polling
+EnvironmentFile=/etc/cdc-polling/cdc-polling.env
+Environment=CDC_MAPPINGS_DIR=/opt/cdc-polling/mappings
+ExecStart=/opt/cdc-polling/.venv/bin/cdc-polling run
+Restart=on-failure
+RestartSec=10
+# SIGTERM lets the engine finish the range in flight
+KillSignal=SIGTERM
+TimeoutStopSec=120
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

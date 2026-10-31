@@ -1,0 +1,24 @@
+# Khanza `diagnosa_pasien` — diagnoses per visit.
+# Composite key (no_rawat, kd_penyakit, status): keyset ranges with lexicographic boundaries.
+# Mirror DDL: 0004_mirror_diagnosa_pasien.sql
+table: diagnosa_pasien
+domain: clinical
+enabled: true
+key:
+  columns: [no_rawat, kd_penyakit, status]
+  enum_columns: [status]   # MariaDB ENUM: compared and ordered as text (see sqlgen.key_exprs)
+  strategy: keyset
+range:
+  size: 5000
+  page_size: 1000
+scan:
+  hot_interval_s: 60
+  cold_interval_s: 3600
+columns:
+  - {name: no_rawat,        type: varchar(17), phi: true}
+  - {name: kd_penyakit,     type: varchar(10), phi: true}
+  - {name: status,          type: text}
+  - {name: prioritas,       type: smallint}
+  - {name: status_penyakit, type: text}
+target:
+  table: khanza_mirror.diagnosa_pasien

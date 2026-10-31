@@ -72,7 +72,8 @@ Projects live in four groups, identically under `design/` and `source/` (group f
 | :-- | :-- |
 | `hms_web-frontend-UIUX/web-workspace/` | Web workspace that replicates the Khanza desktop UX |
 | `hms_web-frontend-UIUX/web-datatooling/` | For backend developers, DBAs, data engineers: report management, ETL tool (events → staging → warehouse/marts), developer documentation |
-| `hms_services/event-streaming/` | CDC query polling from Khanza MariaDB → event broker; raw change topics + translation to domain events |
+| `hms_services/cdc-polling/` | Python CDC capture: hash-based PK-range polling of the Khanza replica → PostgreSQL 18 mirror + `cdc.change_event` outbox (ADR-0005) |
+| `hms_services/event-streaming/` | Relays captured changes to the event broker; raw change topics + translation to domain events |
 | `hms_services/api-gateway/` | Audit log, webhooks, document log; secured medical-record web service + e-signature |
 | `hms_services/domain-services/` | Domain microservices (patient, encounter, orders, billing, …) + APIs |
 | `hms_services/ai-claim-assistant/` | AI chatbot agent for BPJS / insurance claims (medical records, diagnoses, procedures, INA-CBG mitigation) |
@@ -138,7 +139,10 @@ on *how* (safety rules above always win). Point out the conflict to the user.
 Khanza (Java Swing) ──writes──> MariaDB (Khanza, unchanged)
                                    │ read-only SELECT polling (replica)
                                    ▼
-                     event-streaming: CDC polling ──> raw topics  khanza.<table>
+                     cdc-polling: hash-range polling ──> PostgreSQL mirror + cdc.change_event
+                                   │ relay (event-streaming)
+                                   ▼
+                     raw topics  khanza.<table>
                                    │ translators (anti-corruption layer)
                                    ▼
                               domain events  <domain>.<entity>.<event>.v<N>
@@ -154,7 +158,9 @@ New services publish their own events via the **transactional outbox** pattern.
 ### Event capture approach (requirement #2)
 
 Chosen by the product owner (2026-10-29): **CDC query polling** of allowlisted tables on a read-only replica,
-recorded as proposed `docs/decisions/0001-khanza-cdc-query-polling.md` (not accepted yet). Trade-offs: polling
+recorded as proposed `docs/decisions/0001-khanza-cdc-query-polling.md` (not accepted yet). Without `updated_at`,
+changes are detected by hash-based reconciliation over fixed-size primary-key ranges with independent scan
+checkpoints (`source/hms_services/cdc-polling/`, proposed ADR-0005, Python per proposed ADR-0006). Trade-offs: polling
 cannot see deletes by itself and needs a change marker per table (Khanza tables often lack `updated_at`), so each
 table records its marker and a delete-reconciliation strategy. Log-based CDC (binlog) stays the fallback; outbox
 and triggers need writes to Khanza and are not allowed. Polled rows are *change events*, not domain events;

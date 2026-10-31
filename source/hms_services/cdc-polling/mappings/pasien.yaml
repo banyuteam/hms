@@ -1,0 +1,38 @@
+# Khanza `pasien` — patient master. Verified against docs/references/khanza-schema/rsb221022021.sql.
+# Key: no_rkm_medis varchar(15) (single varchar key -> keyset ranges).
+# Only the columns below are copied and hashed (data minimisation). Mirror DDL:
+# source/hms_database/cdc-polling/migrations/0002_mirror_pasien.sql
+table: pasien
+domain: patient
+enabled: true
+key:
+  columns: [no_rkm_medis]
+  strategy: keyset
+range:
+  size: 5000        # rows per range when planned; split when a range exceeds 2 x size
+  page_size: 1000   # keyset page size inside a range
+scan:
+  hot_interval_s: 60
+  cold_interval_s: 3600
+columns:
+  - {name: no_rkm_medis, type: varchar(15), phi: true}
+  - {name: nm_pasien,    type: varchar(100), phi: true}
+  - {name: no_ktp,       type: varchar(20), phi: true}
+  - {name: jk,           type: text}
+  - {name: tmp_lahir,    type: varchar(15), phi: true}
+  - {name: tgl_lahir,    type: date, phi: true}
+  - {name: nm_ibu,       type: varchar(40), phi: true}
+  - {name: alamat,       type: varchar(200), phi: true}
+  - {name: gol_darah,    type: text}
+  - {name: stts_nikah,   type: text}
+  - {name: agama,        type: varchar(12)}
+  - {name: tgl_daftar,   type: date}
+  - {name: no_tlp,       type: varchar(40), phi: true}
+  - {name: kd_pj,        type: char(3)}
+  - {name: no_peserta,   type: varchar(25), phi: true}
+  - {name: kd_kel,       type: integer}
+  - {name: kd_kec,       type: integer}
+  - {name: kd_kab,       type: integer}
+  - {name: kd_prop,      type: integer}
+target:
+  table: khanza_mirror.pasien
