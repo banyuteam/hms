@@ -1,0 +1,23 @@
+# LOCAL DEVELOPMENT ONLY — synthetic, empty databases. Works with Docker Desktop on Windows and Docker on Ubuntu.
+#   docker compose -f docker-compose.dev.yml up -d
+# MariaDB gets the synthetic Khanza table structures (no data) and a SELECT-only user `cdc_reader`;
+# PostgreSQL gets the hms_database/cdc-polling migrations. Passwords below are throwaway dev values.
+services:
+  khanza-synthetic:
+    image: mariadb:10.6.26
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DEV_MARIADB_ROOT_PASSWORD:-dev-root-only}
+      MARIADB_DATABASE: khanza_synthetic
+    ports: ["3306:3306"]
+    volumes:
+      - ./tests/fixtures/khanza_synthetic_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./tests/fixtures/dev-init/02_reader_user.sql:/docker-entrypoint-initdb.d/02_reader_user.sql:ro
+
+  hms-postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_PASSWORD: ${DEV_POSTGRES_PASSWORD:-dev-postgres-only}
+      POSTGRES_DB: hms_cdc
+    ports: ["5432:5432"]
+    volumes:
+      - ../../hms_database/cdc-polling/migrations:/docker-entrypoint-initdb.d:ro

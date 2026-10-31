@@ -1,0 +1,35 @@
+# Khanza `reg_periksa` — visit / encounter registration.
+# Key: no_rawat varchar(17), formatted YYYY/MM/DD/NNNNNN, so new visits land in the tail range,
+# which is always scanned at the hot interval. Mirror DDL: 0003_mirror_reg_periksa.sql
+# Not copied (minimisation): p_jawab, almt_pj, hubunganpj (responsible person's name/address).
+table: reg_periksa
+domain: encounter
+enabled: true
+key:
+  columns: [no_rawat]
+  strategy: keyset
+range:
+  size: 5000
+  page_size: 1000
+scan:
+  hot_interval_s: 30
+  cold_interval_s: 3600
+columns:
+  - {name: no_rawat,       type: varchar(17), phi: true}
+  - {name: no_reg,         type: varchar(8)}
+  - {name: tgl_registrasi, type: date}
+  - {name: jam_reg,        type: time}
+  - {name: kd_dokter,      type: varchar(20)}
+  - {name: no_rkm_medis,   type: varchar(15), phi: true}
+  - {name: kd_poli,        type: char(5)}
+  - {name: biaya_reg,      type: numeric}
+  - {name: stts,           type: text}
+  - {name: stts_daftar,    type: text}
+  - {name: status_lanjut,  type: text}
+  - {name: kd_pj,          type: char(3)}
+  - {name: umurdaftar,     type: integer}
+  - {name: sttsumur,       type: text}
+  - {name: status_bayar,   type: text}
+  - {name: status_poli,    type: text}
+target:
+  table: khanza_mirror.reg_periksa
