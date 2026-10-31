@@ -1,7 +1,7 @@
 # database
 
 **Requirement:** #3  
-**Status:** Not started — waiting for PRD
+**Status:** In progress — `cdc-polling/` schema (draft); other services waiting for PRD
 
 Schemas and migrations for the new services' own databases. Never the Khanza database.
 
@@ -11,6 +11,12 @@ Schemas and migrations for the new services' own databases. Never the Khanza dat
 | Skills | [`design/hms_database/.claude/skills/`](../../design/hms_database/.claude/skills/) |
 | Claude instructions | [`CLAUDE.md`](CLAUDE.md) |
 
+## Contents
+
+| Folder | For | Status |
+|---|---|---|
+| [`cdc-polling/`](cdc-polling/) | `hms_services/cdc-polling`: control schema `cdc` + `khanza_mirror` tables | Draft (ADR-0004/0005 proposed) |
+
 ## How to run
 
-_Filled in once the tech stack is decided (see `docs/decisions/`)._
+Per folder; see each folder's README. The migration tool is not decided yet.
