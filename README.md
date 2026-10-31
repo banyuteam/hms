@@ -9,7 +9,8 @@ daily operations; the new platform reads its data through a change stream and gr
 | Goal | Project |
 |---|---|
 | Keep Khanza and its MariaDB running unchanged | — (rule for every project) |
-| Capture every database change as an event (CDC query polling) | [`hms_services/event-streaming`](source/hms_services/event-streaming/) |
+| Capture every Khanza change into PostgreSQL by hash-based range polling | [`hms_services/cdc-polling`](source/hms_services/cdc-polling/) |
+| Publish captured changes as events (broker, translators) | [`hms_services/event-streaming`](source/hms_services/event-streaming/) |
 | Web app that replicates the Khanza desktop screens | [`hms_web-frontend-UIUX/web-workspace`](source/hms_web-frontend-UIUX/web-workspace/) |
 | Tooling for developers, DBAs, data engineers (reports, ETL, developer docs) | [`hms_web-frontend-UIUX/web-datatooling`](source/hms_web-frontend-UIUX/web-datatooling/) |
 | API gateway, audit log, webhooks, secure medical records with e-signature | [`hms_services/api-gateway`](source/hms_services/api-gateway/) |
@@ -74,8 +75,10 @@ so Claude Code also loads them while coding; on Windows enable git symlinks or c
 | Topic | Status |
 |---|---|
 | Event capture from Khanza | CDC query polling on a read-only replica (product owner, 2026-10-29). ADR-0001 proposed |
+| Change detection without `updated_at` | Hash-based reconciliation over fixed-size primary-key ranges, `cdc-polling` (2026-10-30). ADR-0005 proposed |
+| cdc-polling stack | Python 3.10+, PyMySQL, psycopg 3. ADR-0006 proposed |
 | New services' database | PostgreSQL 18. ADR-0004 proposed |
-| Tech stack per project | Not decided — one ADR per choice |
+| Tech stack per other project | Not decided — one ADR per choice |
 | E-signature provider | Hospital to choose a certified provider (PSrE) |
 
 ## Data protection

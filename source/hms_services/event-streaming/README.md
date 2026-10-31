@@ -3,7 +3,7 @@
 **Requirement:** #2  
 **Status:** Not started — waiting for PRD
 
-Captures every change (CDC query polling, ADR-0001 proposed) in the Khanza database (without touching Khanza) and publishes it as events for the other projects.
+Publishes the changes captured by [`cdc-polling`](../../../source/hms_services/cdc-polling/) (its `cdc.change_event` outbox) as events for the other projects, and translates them to domain events.
 
 | | |
 |---|---|

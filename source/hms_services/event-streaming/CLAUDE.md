@@ -5,8 +5,9 @@ other subproject. Read the root `CLAUDE.md` and `design/hms_services/event-strea
 
 ## Scope
 
-- CDC query-polling jobs for Khanza tables (table allowlist — never "all tables"). Absorbs the former
-  separate "CDC query polling" service.
+- Capture itself (polling Khanza) now lives in `source/hms_services/cdc-polling/` (product owner,
+  2026-10-30, proposed ADR-0005). This project relays its outbox `cdc.change_event` (PostgreSQL 18) to the
+  broker; it does not poll Khanza itself.
 - Raw change topics: `khanza.<table>` (one topic per table, key = table primary key).
 - Translators (anti-corruption layer) that turn raw changes into domain events
   `<domain>.<entity>.<event>.v<N>` (e.g. `encounter.visit.registered.v1`), with schemas in

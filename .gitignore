@@ -1,0 +1,5 @@
+# Secrets never get committed; each project ships a .env.example instead
+.env
+.env.*
+!.env.example
+__pycache__/
