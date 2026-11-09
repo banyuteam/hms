@@ -1,6 +1,6 @@
 # ADR-SVC-008: Assistant feedback and learning loop — structured feedback on claim findings first
 
-- Status: Accepted 2026-11-09 (owner decisions L-1 to L-10 below); L-11 (telemetry retention) open. Not implemented.
+- Status: Accepted 2026-11-09 (owner decisions L-1 to L-11 below). Not implemented.
 - Date: 2026-11-09
 - Owners: hms_services (API, ingestion, analysis); hms_database (schema, roles, retention); hms_workspace/web (feedback UI)
 - Affected projects: hms_services, hms_database, hms_workspace/web
@@ -75,7 +75,8 @@ Phase A has data.
    - `assistant.interaction_events` (append-only, deduplicated by `event_id`).
    - A reporting view with aggregates only, readable through `hms_report_read`; no reporting access to comments.
 5. **Retention and handling (L-5).** Receipts 30 days unless feedback references them; feedback choices 12 months;
-   comments 90 days, then deleted while the choice stays; interaction events: L-11. A purge job in hms_services deletes
+   comments 90 days, then deleted while the choice stays; interaction events 90 days, with monthly aggregates (counts
+   per event type, topic, input and fallback kind; no user ids) kept 12 months (L-11). A purge job in hms_services deletes
    expired rows in bounded batches; never a trigger. Audit events follow the audit policy and are not purged here.
    Comments never appear in logs, traces, metrics, audit details or summaries.
 6. **Interaction telemetry (L-10).** A small, versioned event set, recorded only for the assistant panel:
@@ -140,9 +141,7 @@ Phase A has data.
 - L-8: claim/coding feedback to the casemix/coding owner; wording feedback to the workspace/product owner.
 - L-9: Phase A UI in the assistant panel only.
 - L-10: interaction telemetry in Phase A, limited to the event set of Decision 6.
-
-## Open
-- L-11: retention of `interaction_events` (proposal: 90 days, with monthly aggregates kept 12 months).
+- L-11: interaction events kept 90 days; monthly aggregates kept 12 months.
 
 ## Migration and rollout
 1. hms_database: bootstrap adds `hms_assistant_rw`; migration 0006 creates the schema, tables, view and grants; SQL tests
@@ -155,8 +154,7 @@ Phase A has data.
    and expire by retention.
 
 ## Acceptance criteria
-- [x] Owner decisions L-1 to L-10 recorded.
-- [ ] L-11 decided.
+- [x] Owner decisions L-1 to L-11 recorded.
 - [ ] assistant-v1 1.1.0 contract reviewed by the hms_workspace owner.
 - [ ] Feedback for another user's evaluation, another facility, an unknown or expired evaluation, or a rule not in it is
       rejected and audited; nothing reveals whether the evaluation exists.
@@ -168,4 +166,5 @@ Phase A has data.
 - [ ] Comment reads require `assistant.feedback.comments.read` and are audited.
 - [ ] No code path changes a rule, label or evaluation result from feedback or events (tested).
 - [ ] Telemetry failures never block or slow the panel (tested).
-- [ ] Retention purge removes expired receipts, comments, feedback and events, and keeps audit events.
+- [ ] Retention purge removes expired receipts, comments, feedback and events, and keeps audit events; monthly event
+      aggregates are built before raw events expire.
