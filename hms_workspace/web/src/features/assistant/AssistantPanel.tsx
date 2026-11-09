@@ -217,6 +217,7 @@ export function AssistantPanel() {
     <div className="flex flex-none">
       <RecordSearch
         scrollResults={mode === 'docked'}
+        clearOnPick
         label={t('emr.ai.tagSearch')}
         onPick={(pick) =>
           pick.type === 'encounter' && tagEncounter(pick.item.no_rawat, pick.item.no_rkm_medis)

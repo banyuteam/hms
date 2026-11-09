@@ -481,6 +481,23 @@ describe('AssistantPanel', () => {
       expect(within(panel).getByRole('list', { name: 'Tagged context' })).toBeInTheDocument();
     });
 
+    it('picking a visit tags it, empties the box and closes the list, and keeps the focus in the box', async () => {
+      const { panel, results } = await searchInPanel();
+      const picked = within(results).getAllByRole('button')[0]!;
+      const norawat = picked.textContent?.match(/\d{4}\/\d{2}\/\d{2}\/\d{6}/)?.[0];
+      await userEvent.click(picked);
+      const box = within(panel).getByRole('searchbox', { name: 'Tag a visit (no_rawat)' });
+      expect(box).toHaveValue('');
+      expect(box).toHaveFocus();
+      expect(within(panel).queryByRole('list', { name: /result/i })).toBeNull();
+      expect(within(panel).getByRole('list', { name: 'Tagged context' })).toHaveTextContent(
+        norawat!,
+      );
+      // The next search starts from an empty box.
+      await userEvent.type(box, '2026/');
+      expect(box).toHaveValue('2026/');
+    });
+
     it('maximized: the search pane scrolls as a whole, the list keeps its full height', async () => {
       const { panel } = await searchInPanel();
       await userEvent.click(within(panel).getByRole('button', { name: /maximi/i }));

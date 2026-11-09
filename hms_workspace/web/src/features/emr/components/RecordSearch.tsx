@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useI18n } from '@/locales/I18nProvider';
 import { Button } from '@/components/Button';
 import { Icon } from '@/components/Icon';
@@ -108,6 +108,8 @@ function PatientVisits({ hit, onPick }: { hit: PatientHit; onPick: (pick: Search
  * a visit can be opened without going through the profile. Results are buttons (Enter opens).
  * `scrollResults`: where the space below the box is short (the docked assistant panel), the result list keeps a fixed
  * maximum height and scrolls inside itself instead of pushing the controls below it out of view.
+ * `clearOnPick`: where the box stays on screen after a pick (the assistant's tag picker), picking empties it, which
+ * closes the list, and puts the focus back in the box for the next search.
  * Nothing typed here is stored or put in a URL.
  */
 export function RecordSearch({
@@ -115,27 +117,40 @@ export function RecordSearch({
   patients = false,
   patientVisits = false,
   scrollResults = false,
+  clearOnPick = false,
   label,
 }: {
   onPick: (pick: SearchPick) => void;
   patients?: boolean;
   patientVisits?: boolean;
   scrollResults?: boolean;
+  clearOnPick?: boolean;
   label?: string;
 }) {
   const { t } = useI18n();
   const listId = useId();
   const inputId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
+  const pick = (p: SearchPick) => {
+    onPick(p);
+    if (clearOnPick) {
+      setQuery('');
+      // The clicked result disappears with the list: keep the focus in the box rather than lose it to the page.
+      inputRef.current?.focus();
+    }
+  };
   // The box updates instantly; the requests follow once typing pauses.
   const debounced = useDebouncedValue(query);
   const encounters = useEncounterSearch(debounced);
   const byPatient = patients || patientVisits;
   const patientSearch = usePatientSearch(byPatient ? debounced : '');
-  const allPeople = patientSearch.data ?? [];
-  const people = patientVisits ? allPeople.slice(0, MAX_PATIENT_SNIPPETS) : allPeople;
   const q = query.trim();
   const canSearch = q.length >= 3 || (byPatient && q.length >= 2);
+  // Results follow the box: once it is emptied or too short (a pick, Escape, deleting), the previous search's results
+  // disappear at once instead of lingering until the debounce catches up.
+  const allPeople = canSearch ? (patientSearch.data ?? []) : [];
+  const people = patientVisits ? allPeople.slice(0, MAX_PATIENT_SNIPPETS) : allPeople;
   const searching =
     canSearch && (q !== debounced.trim() || encounters.isFetching || patientSearch.isFetching);
   // A failed search is never reported as "no results": results from the search that worked still show.
@@ -158,7 +173,7 @@ export function RecordSearch({
     : patients
       ? 'emr.search.placeholderAny'
       : 'emr.search.placeholderEncounter';
-  const encounterHits = encounters.data ?? [];
+  const encounterHits = canSearch ? (encounters.data ?? []) : [];
   const total = encounterHits.length + people.length;
 
   return (
@@ -170,6 +185,7 @@ export function RecordSearch({
         <div className="flex h-control-lg items-center gap-8 rounded-md border border-line bg-surface px-12 text-ink-muted focus-within:border-line-focus focus-within:outline focus-within:outline-2 focus-within:outline-offset-0 focus-within:outline-line-focus">
           <Icon name="search" size={16} />
           <input
+            ref={inputRef}
             id={inputId}
             type="search"
             value={query}
@@ -222,18 +238,18 @@ export function RecordSearch({
           >
             {encounterHits.map((e) => (
               <li key={`e-${e.no_rawat}`}>
-                <EncounterHit e={e} showMrn onPick={onPick} />
+                <EncounterHit e={e} showMrn onPick={pick} />
               </li>
             ))}
             {people.map((p) =>
               patientVisits ? (
-                <PatientVisits key={`p-${p.mrn}`} hit={p} onPick={onPick} />
+                <PatientVisits key={`p-${p.mrn}`} hit={p} onPick={pick} />
               ) : (
                 <li key={`p-${p.mrn}`}>
                   <button
                     type="button"
                     className={hit}
-                    onClick={() => onPick({ type: 'patient', hit: p })}
+                    onClick={() => pick({ type: 'patient', hit: p })}
                   >
                     <Icon name="user" size={16} />
                     <span className={hitMain}>{p.name}</span>
