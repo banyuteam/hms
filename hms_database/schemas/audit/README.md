@@ -1,5 +1,8 @@
 # Schema `audit`
 
+`0019_privacy_and_audit_anchoring.sql` adds `chain_anchors`, `chain_head()`, `check_anchor()` and
+`verify_anchors()` (see External anchoring below).
+
 - Migration: `0002_audit_events.sql`
 - Writer: `hms_services` audit integration (`hms_audit_append`: INSERT of descriptive columns, SELECT of `event_id`)
 - Readers: audit reviewers (`hms_audit_read`: SELECT, `verify_chain`)
@@ -31,8 +34,18 @@ SELECT * FROM audit.verify_chain(10000, 20000); -- a range, anchored on row 9999
 ```
 Detects edited rows, removed rows inside the chain and broken links. It cannot detect removal of the newest rows or a
 rebuilt chain by someone with owner/superuser rights: that needs the latest `(seq, hash)` exported periodically to
-storage outside this database (not built yet).
+storage outside this database (anchoring, below; the export job itself runs in hms_services/ops).
 
 ## Not decided yet
-Retention period (legal/compliance input required), partitioning by `recorded_at`, external anchoring, and export to
-the security monitoring stack.
+Retention period (legal/compliance input required), partitioning by `recorded_at`, the anchoring job's schedule and
+external target, and export to the security monitoring stack.
+
+## External anchoring (0019)
+1. The anchoring job (`hms_audit_append`) calls `audit.chain_head()` (SECURITY DEFINER, since it cannot read the
+   trail).
+2. It stores `(seq, hash)` outside the database: object-lock/WORM storage, an RFC 3161 time-stamp authority, or an
+   off-site log.
+3. It inserts a row into `audit.chain_anchors`. The insert is refused unless `(seq, hash)` matches the chain.
+
+`SELECT * FROM audit.verify_anchors();` (auditor) lists anchors that no longer match: an anchored row was rewritten or
+removed. Together with `verify_chain()` and the external copy, this detects truncation of the newest rows as well.

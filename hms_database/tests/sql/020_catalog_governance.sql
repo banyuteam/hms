@@ -4,7 +4,9 @@ BEGIN;
 DO $$
 DECLARE
     p        text := current_setting('hms.role_prefix');
-    schemas  text[] := ARRAY['hms_meta', 'platform', 'audit', 'eventing', 'integration', 'iam'];
+    schemas  text[] := ARRAY['hms_meta', 'platform', 'audit', 'eventing', 'integration', 'iam', 'terminology',
+                             'workforce', 'patient', 'clinical', 'knowledge', 'imaging', 'readmodel', 'privacy',
+                             'analytics'];
     offender text;
 BEGIN
     SELECT string_agg(n.nspname || '.' || c.relname, ', ') INTO offender
@@ -64,6 +66,78 @@ BEGIN
                           AND NOT has_table_privilege(p || '_runtime', 'audit.audit_events', 'DELETE')
                           AND NOT has_table_privilege(p || '_runtime', 'audit.audit_events', 'TRUNCATE'),
                           'runtime cannot change or remove audit rows');
+END
+$$;
+
+-- Clinical record governance (ADR-DB-004/005).
+DO $$
+DECLARE
+    p        text := current_setting('hms.role_prefix');
+    record_schemas text[] := ARRAY['patient', 'workforce', 'clinical', 'imaging', 'privacy', 'readmodel'];
+    offender text;
+BEGIN
+    -- Every tenant-scoped table in the record schemas (and new integration state) has tenant row-level security.
+    SELECT string_agg(n.nspname || '.' || c.relname, ', ') INTO offender
+    FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE c.relkind IN ('r', 'p')
+      AND (n.nspname = ANY (record_schemas)
+           OR (n.nspname = 'integration' AND c.relname IN ('legacy_record_links', 'external_resource_ids',
+                                                           'outbound_submissions', 'validation_results')))
+      AND EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attname = 'organization_id' AND NOT a.attisdropped)
+      AND NOT (c.relrowsecurity AND EXISTS (SELECT 1 FROM pg_policy pol WHERE pol.polrelid = c.oid AND pol.polname = 'tenant_isolation'));
+    PERFORM pg_temp.ok(offender IS NULL, 'tenant tables without row-level security: ' || coalesce(offender, ''));
+
+    -- No login role can delete or truncate clinical record rows or their history.
+    SELECT string_agg(n.nspname || '.' || c.relname, ', ') INTO offender
+    FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname IN ('patient', 'workforce', 'clinical', 'imaging', 'privacy') AND c.relkind IN ('r', 'p')
+      AND (has_table_privilege(p || '_runtime', c.oid, 'DELETE') OR has_table_privilege(p || '_runtime', c.oid, 'TRUNCATE'));
+    PERFORM pg_temp.ok(offender IS NULL, 'record tables the runtime may delete from: ' || coalesce(offender, ''));
+
+    -- Every table with a version column is versioned by trigger and refuses DELETE even for the owner.
+    SELECT string_agg(n.nspname || '.' || c.relname, ', ') INTO offender
+    FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE c.relkind = 'r' AND c.relname <> 'resource_versions'
+      AND EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attname = 'last_xact_id' AND NOT a.attisdropped)
+      AND NOT (EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid = c.oid AND t.tgfoid = 'hms_meta.version_row'::regproc)
+               AND EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid = c.oid AND t.tgfoid = 'hms_meta.capture_version'::regproc)
+               AND EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid = c.oid AND t.tgfoid = 'hms_meta.refuse_change'::regproc));
+    PERFORM pg_temp.ok(offender IS NULL, 'versioned tables missing version/capture/no-delete triggers: ' || coalesce(offender, ''));
+
+    -- History is written only by the capture trigger.
+    SELECT string_agg(n.nspname || '.resource_versions', ', ') INTO offender
+    FROM pg_namespace n
+    WHERE to_regclass(n.nspname || '.resource_versions') IS NOT NULL
+      AND (has_table_privilege(p || '_runtime', n.nspname || '.resource_versions', 'INSERT')
+           OR has_table_privilege(p || '_runtime', n.nspname || '.resource_versions', 'UPDATE'));
+    PERFORM pg_temp.ok(offender IS NULL, 'version history writable by the runtime: ' || coalesce(offender, ''));
+
+    -- Readers: reporting sees terminology, knowledge and pseudonymized analytics only; auditors no clinical content.
+    PERFORM pg_temp.ok(has_table_privilege(p || '_reporting', 'analytics.encounter_facts', 'SELECT'), 'reporting reads analytics');
+    PERFORM pg_temp.ok(has_table_privilege(p || '_reporting', 'terminology.code_systems', 'SELECT'), 'reporting reads terminology');
+    PERFORM pg_temp.ok(NOT has_table_privilege(p || '_reporting', 'analytics.patient_pseudonyms', 'SELECT')
+                          AND NOT has_table_privilege(p || '_runtime', 'analytics.patient_pseudonyms', 'SELECT'),
+                          'nobody but the owner reads the pseudonym keys');
+    SELECT string_agg(n.nspname || '.' || c.relname, ', ') INTO offender
+    FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname IN ('patient', 'workforce', 'clinical', 'imaging', 'readmodel', 'privacy', 'integration')
+      AND c.relkind IN ('r', 'p', 'v', 'm')
+      AND has_table_privilege(p || '_reporting', c.oid, 'SELECT');
+    PERFORM pg_temp.ok(offender IS NULL, 'reporting can read identifiable tables: ' || coalesce(offender, ''));
+    SELECT string_agg(n.nspname || '.' || c.relname, ', ') INTO offender
+    FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname IN ('patient', 'clinical', 'imaging', 'readmodel', 'integration') AND c.relkind IN ('r', 'p', 'v', 'm')
+      AND has_table_privilege(p || '_auditor', c.oid, 'SELECT');
+    PERFORM pg_temp.ok(offender IS NULL, 'auditor can read clinical content: ' || coalesce(offender, ''));
+    PERFORM pg_temp.ok(has_table_privilege(p || '_auditor', 'privacy.disclosures', 'SELECT'), 'auditor reads disclosures');
+
+    -- Analytics views expose no direct identifiers.
+    SELECT string_agg(c.relname || '.' || a.attname, ', ') INTO offender
+    FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'analytics' AND c.relkind = 'v' AND a.attnum > 0
+      AND (a.attname IN ('patient_id', 'encounter_id', 'id', 'birth_date', 'name', 'text', 'value', 'note', 'value_string')
+           OR a.attname LIKE '%name%' OR a.attname LIKE '%identifier%' OR a.attname LIKE '%address%');
+    PERFORM pg_temp.ok(offender IS NULL, 'analytics view columns that identify: ' || coalesce(offender, ''));
 END
 $$;
 

@@ -54,6 +54,12 @@ For material changes provide DDL/migration, constraints, indexes, sample queries
   `documentation/DATA-DICTIONARY.md` and, for new schemas, `documentation/DOMAIN-OWNERSHIP.md`.
 - Verify with `scripts/migrate.* --plan`, `scripts/migrate.*` and `scripts/test.*` against a disposable or development
   database. Never run tests against production.
+- Clinical record tables (ADR-DB-004/005):
+  - Use `hms_meta.enable_versioned_record` (versioning, history, no delete, tenant RLS) or `hms_meta.enable_tenant_rls`.
+  - Reference patients/encounters with composite `(id, patient_id)` / `(id, organization_id)` keys.
+  - Coded values are `(system, code, display)`, and the system must be registered in `terminology.code_systems`.
+  - Never hard-code national code lists in migrations; load them as approved terminology releases.
+  - Keep `standards/healthcare/clinical-data-standards.md` and `documentation/standards-traceability.md` current.
 
 ## Runtime policy and UI metadata
 - Own migrations and persistence contracts for versioned runtime policy and `ui_platform`.

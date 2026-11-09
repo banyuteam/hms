@@ -19,8 +19,14 @@ Not CI-, staging- or production-ready yet; see [Open items](#open-items).
 | `schemas/<schema>/README.md` | Per-schema owner, classification, tables and usage patterns |
 | `documentation/` | Domain ownership, data dictionary, ADRs, operations runbook |
 
-Schemas created so far: `hms_meta` (ledger), `platform`, `audit`, `eventing`, `integration`, `iam`. Clinical and patient
-domains are not modeled yet: they need clinical-owner input first.
+Schemas created so far:
+- **Platform:** `hms_meta` (ledger), `platform`, `audit`, `eventing`, `integration`, `iam`.
+- **Native clinical record** (ADR-DB-004, ADR-DB-005):
+  - `terminology`, `workforce`, `patient`, `clinical`, `knowledge`, `imaging`, `readmodel`, `privacy` and
+    `analytics`;
+  - separate from the legacy Khanza database and following `standards/healthcare/clinical-data-standards.md`.
+- **Not yet production content:** code lists, templates and the processing register still need clinical-governance
+  and DPO approval.
 
 ## Quick start (local PostgreSQL 18)
 
@@ -57,7 +63,7 @@ Resulting roles (prefix `hms_meta` by default; a second database on the same ser
 
 ## Writing a migration
 
-1. Next free number: `migrations/0006_short_name.sql` (lowercase snake case).
+1. Next free number: `migrations/0021_short_name.sql` (lowercase snake case).
 2. Header comment: purpose, owner/writer, classification, online-safety, rollback/fix-forward.
 3. Schema-qualify every object; name constraints (`pk_`, `fk_`, `uq_`, `ck_`, `idx_`, `trg_`); `timestamptz` for
    instants; `uuidv7()` defaults for externally referenced ids.
@@ -65,16 +71,29 @@ Resulting roles (prefix `hms_meta` by default; a second database on the same ser
    New group roles are added to `bootstrap/bootstrap.psql` first.
 5. No `BEGIN`/`COMMIT` and no `SET ROLE`: the runner wraps each file in a transaction as the owner.
 6. Add tests in `tests/sql/`, update `schemas/<schema>/README.md` and `documentation/DATA-DICTIONARY.md`.
+   Clinical record tables use `hms_meta.enable_versioned_record(...)` (versioning, history, no delete, tenant RLS) and
+   carry `organization_id`, `version`, `created_at`, `updated_at` and `last_xact_id` (ADR-DB-005).
 7. Never edit a migration once it has been applied anywhere shared: the runner rejects changed checksums. Fix forward.
 
 ## Open items
 
 - CI pipeline (`.github/workflows/ci.yml`, ephemeral PostgreSQL 18 service: bootstrap -> migrate --plan -> migrate ->
   migrate --plan must show nothing pending -> tests) is written but has not had its first run. The same sequence passed
-  locally on 2026-11-09 against a fresh PostgreSQL 18.6 cluster (5 migrations, all 8 test files).
+  locally on 2026-11-09 against a fresh PostgreSQL 18.6 cluster (20 migrations, all 12 test files).
 - Root `deployment/compose.yaml` now runs bootstrap (superuser) and migrations (`hms_meta_migrator`) as one-shot jobs
   and `hms-services` as `hms_meta_runtime`; passwords are mounted secret files. Not yet run with Docker.
 - `hms_services` sign-in (ADR-SVC-001) connects as `hms_meta_runtime` and uses `iam`, `audit` and `platform`; it
   still needs permission registration and real Khanza verification (ADR-DB-003).
 - IAM role catalog and the first IAM administrator are owner decisions; nothing is seeded.
-- External anchoring of the audit hash chain, retention/partitioning jobs and production backup/PITR are not built.
+- The audit anchor table and verification exist (0019). Not built yet:
+  - the anchoring job;
+  - retention/partitioning jobs;
+  - production backup/PITR (RUNBOOK, Disaster recovery).
+- Clinical record: `hms_services` must set the transaction context (ADR-DB-005) before its first write. Its legacy
+  import, SATUSEHAT exchange and read-through cutover each need their own ADR (ADR-DB-004 rollout).
+- Open owner decisions (ADR-DB-004 open questions):
+  - identifier encryption;
+  - the IHS-number URI;
+  - break-glass access;
+  - departments and orders;
+  - retention execution.
