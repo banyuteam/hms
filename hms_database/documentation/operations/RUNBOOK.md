@@ -46,6 +46,62 @@ psql -U hms_meta_auditor -d hms -c "SELECT * FROM audit.verify_chain()"
   name (or pass a new `-RolePrefix`).
 - Production needs physical backups with point-in-time recovery and restore drills; `pg_dump` is not a substitute.
 
+## Clinical record data (ADR-DB-004, ADR-DB-005)
+**Manual queries.** Tenant tables in `patient`, `workforce`, `clinical`, `imaging`, `privacy`, `readmodel` and the
+0016 `integration` tables have row-level security:
+- As a login role you see nothing until you set the tenant.
+- A write also needs an actor. A correction of a finalized record also needs a reason.
+
+```sql
+BEGIN;
+SELECT set_config('hms.organization_id', '<organization uuid>', true),
+       set_config('hms.actor_user_id', '<your iam.users id>', true),          -- or hms.actor_service
+       set_config('hms.change_reason', '<ticket and reason>', true);          -- only for corrections
+-- ... statements ...
+COMMIT;
+```
+- Never fix clinical data by disabling triggers; use a reviewed, attributed correction.
+- Records are never deleted: mark them `entered-in-error` with a reason.
+
+**Integrity checks** (auditor role):
+```sql
+SELECT * FROM audit.verify_chain();     -- first_invalid_seq IS NULL
+SELECT * FROM audit.verify_anchors();   -- no rows
+```
+
+**Retention.**
+- Medical records are retained for at least 25 years from the patient's last visit (Permenkes 24/2022 Pasal 39).
+  No delete path exists.
+- Expect `*.resource_versions` to grow with every change. Monitor sizes with
+  `SELECT relname, pg_size_pretty(pg_total_relation_size(oid)) FROM pg_class WHERE relname = 'resource_versions';`.
+- Plan partitioning and archiving before tables reach a size that slows vacuum or backup. Not built yet; needs
+  measurements.
+
+## Disaster recovery (requirements; production procedure not verified yet)
+Permenkes 24/2022 requires:
+- a backup system that is periodic, at a different location from the facility, and described in an SOP
+  (Pasal 20(4)-(5));
+- in-country storage when storage is outsourced (Pasal 22(1)).
+
+Requirements for the production design (targets are proposals for the owner to confirm):
+1. Physical base backups plus continuous WAL archiving (e.g. pgBackRest or the managed service's PITR) to encrypted
+   storage in a second site in Indonesia. `pg_dump` alone is not a disaster-recovery backup.
+2. Proposed targets [owner to confirm]:
+   - RPO 15 minutes or better (WAL archive timeout);
+   - RTO 4 hours for a full restore;
+   - a warm standby (streaming replica) if the RTO must be shorter.
+3. A restore drill at least quarterly into an isolated environment:
+   1. Restore to a point in time.
+   2. Run `scripts/test.*` against the restored copy (it uses rolled-back transactions only).
+   3. As auditor, check `audit.verify_chain()` and `audit.verify_anchors()`.
+   4. Compare row counts of `patient.patients`, `clinical.encounters` and `*.resource_versions` with the source.
+   5. Record the drill result and the time taken.
+4. Keep the external audit anchors and the backup catalog outside the primary site. Backups contain PHI: encrypt them
+   at rest and restrict who can read them.
+5. Promotion between environments with logical dumps keeps versions and history. The record triggers use
+   transaction id *and* time, so repeated transaction ids in the new cluster cannot merge versions (tested in
+   `090_patient_record.sql`).
+
 ## Reset a development database
 ```sh
 psql -U postgres -d postgres -c "DROP DATABASE hms"

@@ -66,3 +66,10 @@ New. On an existing cluster: run the bootstrap with a superuser; it creates only
 - [ ] Legacy MySQL credentials remain separate (outside this database; owned by hms_services/ops).
 
 **Amendment 2026-11-09:** references to the previous implementation outside this workspace removed; decisions unchanged.
+
+**Amendment 2026-11-09 (ADR-DB-004):**
+- Six capability group roles are added for the clinical record: `hms_terminology_rw`, `hms_workforce_rw`,
+  `hms_patient_rw`, `hms_clinical_rw`, `hms_readmodel_rw` and `hms_privacy_rw`. All six are granted to
+  `<p>_runtime`.
+- Re-run the bootstrap before migration 0006.
+- Alternative 4 (row-level security) is now decided for tenant-scoped clinical tables (ADR-DB-005).
