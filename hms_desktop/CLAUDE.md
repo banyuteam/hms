@@ -4,7 +4,7 @@
 `hms_desktop` is the native workstation runtime and desktop client for the Hospital Management System. It complements `hms_workspace`; it does not replace it.
 
 ## Top-level workspace
-This repository is located inside the `hms/` engineering workspace alongside:
+This project lives in the `hms/` workspace repository (ADR-ROOT-001) alongside:
 - `hms_workspace/` — React/TypeScript web, Android and iOS clients; canonical design system.
 - `hms_services/` — Go backend and authoritative business workflows.
 - `hms_database/` — PostgreSQL schemas, migrations and data governance.

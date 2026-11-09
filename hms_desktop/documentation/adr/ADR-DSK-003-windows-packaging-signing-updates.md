@@ -24,7 +24,7 @@ machine until this is decided. Facts established on 2026-11-09:
   alone can write it; nothing enforces that yet.
 - Tooling on the build workstation: WiX Toolset 7.0.0 (requires accepting its EULA via `wix eula`), .NET SDK,
   Windows SDK 10.0.26100 (`signtool`). No CI pipeline exists in the workspace, and `hms_desktop` is not under source
-  control.
+  control. (Superseded the same day: `hms_desktop` now lives in the workspace repository, ADR-ROOT-001.)
 - Hospital workstations are expected to be managed by IT; the actual management tool (Intune, Configuration
   Manager, Group Policy, manual) is not yet known.
 
@@ -87,7 +87,8 @@ machine until this is decided. Facts established on 2026-11-09:
 - **D2 Distribution channel**: Intune, Configuration Manager, Group Policy software installation, or manual
   `msiexec` by IT. Affects §2 (how configuration is pushed) and §5 (rollout rings).
 - **D3 Source control and CI**: `hms_desktop` must be in a repository with a Windows runner able to reach the signing
-  service before §4 and §8 can be met.
+  service before §4 and §8 can be met. Source control decided 2026-11-09: the workspace repository (ADR-ROOT-001).
+  The Windows CI runner is still open.
 - **D4 WiX licence — decided 2026-11-09**: the owner confirmed the organisation accepts the WiX 7 Open Source
   Maintenance Fee (OSMF) EULA. Builds accept it per invocation (`build-msi.ps1 -AcceptWixEula` →
   `wix build --acceptEula wix7`); no acceptance file is stored. Meeting any fee obligation under the OSMF terms remains

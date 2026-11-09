@@ -1,7 +1,8 @@
 # HMS Desktop — Windows packaging (ADR-DSK-003)
 
 **Development builds only.** `build-msi.ps1` produces an unsigned MSI for test machines. Signed releases need owner
-decisions D1–D4 (signing identity, distribution channel, source control/CI, WiX licence) and the release pipeline.
+decisions D1–D3 (signing identity, distribution channel, CI runner) and the release pipeline. D4 (WiX licence) is
+decided; source control is settled by ADR-ROOT-001.
 
 ## Build a dev MSI
 Prerequisites: Rust toolchain (`rust-toolchain.toml`) and the WiX Toolset CLI on `PATH` (7.0.0 tested). WiX 7 needs

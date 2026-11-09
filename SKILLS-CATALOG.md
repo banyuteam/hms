@@ -1,6 +1,6 @@
 # Skills Catalog — hms
 
-**Total: 55 focused Claude Skills** (11 shared, 9 database, 20 services, 15 workspace).
+**Total: 65 focused Claude Skills** (11 shared, 9 database, 20 services, 15 workspace, 10 desktop).
 
 ## Shared workspace skills
 - `deployment-observability-backup`
@@ -64,6 +64,18 @@
 - `signature-experience`
 - `ui-dsl-design-system-integration`
 - `workflow-instance-engineering`
+
+## hms_desktop skills
+- `hms-desktop-architecture`
+- `hms-desktop-background-agents`
+- `hms-desktop-cross-platform`
+- `hms-desktop-design-system-integration`
+- `hms-desktop-device-integration`
+- `hms-desktop-native-bridge-security`
+- `hms-desktop-native-shell`
+- `hms-desktop-packaging-release`
+- `hms-desktop-testing`
+- `hms-desktop-webview-integration`
 
 ## How to use
 - Keep root `CLAUDE.md` as the workspace-wide source of truth.

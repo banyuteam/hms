@@ -6,6 +6,7 @@
 - `hms_database/` — data architecture and persistence.
 - `hms_services/` — backend runtime and integration services.
 - `hms_workspace/` — web and native mobile experiences.
+- `hms_desktop/` — Rust workstation shell that hosts the web workspace and adds native capabilities through a typed bridge (development-ready only; see `standards/architecture/adr/ADR-ROOT-001-hms-desktop-project.md`).
 - `standards/` — cross-project governance and contracts.
 - `deployment/` — workspace-level Docker Compose templates, environment guidance and release readiness.
 

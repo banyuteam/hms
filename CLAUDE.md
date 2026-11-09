@@ -1,10 +1,11 @@
 # hms — Root Instructions
 
 ## 1. Mission and architecture
-This workspace contains three independently owned engineering projects:
+This workspace contains four independently owned engineering projects:
 - `hms_database`: persistence, canonical data model, schemas, migrations, data integrity and database-level governance.
 - `hms_services`: backend execution, APIs, business workflows, authorization enforcement, integrations, event processing and AI orchestration.
 - `hms_workspace`: user-facing experiences: web, native Android and native iOS.
+- `hms_desktop`: native workstation runtime (Rust) that hosts the `hms_workspace` web app in a WebView and adds native capabilities through a typed bridge (ADR-ROOT-001).
 
 The projects form one healthcare platform. They MUST remain consistent through versioned contracts, shared terminology, architecture decisions and this root instruction set. They are not one codebase and must not acquire overlapping ownership.
 
@@ -80,6 +81,19 @@ Does NOT own:
 - A second implementation of backend domain logic.
 - The complete web interface replicated wholesale into native mobile clients.
 
+### `hms_desktop`
+Owns:
+- Rust desktop runtime: windows, WebView hosting, lifecycle and OS integration.
+- WebView navigation policy and the typed, allowlisted native bridge and its versioned contract.
+- Local device access, background-agent lifecycle and workstation configuration.
+- Desktop packaging, signing, distribution and updates (ADR-DSK-003).
+
+Does NOT own:
+- HMS screens, the design system or design tokens (owned by `hms_workspace`; reused, not forked).
+- Authentication, authorization, business rules or authoritative workflow state (owned by `hms_services`).
+- Any database connection, to PostgreSQL or the legacy MySQL.
+- Unrestricted shell, filesystem, SQL or dynamic native invocation from WebView content.
+
 ## 5. Cross-project contracts
 All cross-project communication MUST use documented, versioned contracts:
 - API contracts: `hms_services/contracts/api/`.
@@ -88,6 +102,7 @@ All cross-project communication MUST use documented, versioned contracts:
 - Shared platform and domain contracts: `hms_workspace/contracts/` or the agreed central contract location.
 - Assistant context-reference contract: shared contract, enforced by `hms_services`.
 - Mobile capability registry: authored/maintained by `hms_workspace`, validated by backend policy.
+- Desktop bridge contract: `hms_desktop/contracts/bridge/`, authored by `hms_desktop`, consumed by `hms_workspace`. The bridge grants native capabilities only, never business authorization.
 
 A consumer MUST NOT infer undocumented database structure or depend on another project's internal implementation.
 
@@ -162,6 +177,7 @@ Every deployable web/backend component MUST have a documented, reproducible cont
 - `hms_workspace/web` owns its web build/runtime Dockerfile and static-serving configuration.
 - `hms_database` owns database schema/migration artifacts and database operational guidance; it does not own application container orchestration.
 - Android/iOS remain native deliverables. Docker may provide reproducible CI build tooling where supported, but Apple signing, provisioning, Android signing and store release remain platform-specific workflows.
+- `hms_desktop` is a native deliverable, not a container. Its installer, code signing, distribution and updates follow ADR-DSK-003; signing keys never enter the repository.
 
 ### Required environments
 Maintain separate, explicit configurations for:
@@ -222,7 +238,7 @@ Do not claim production readiness without inspecting the actual deployment targe
 - A shared PostgreSQL cluster is an infrastructure capability, not unrestricted shared table access.
 - Start with a modular Go backend and one PostgreSQL cluster/database with multiple schemas where practical. Split databases/services only with an ADR and operational justification.
 - Maintain least-privilege schema-scoped credentials. Separate runtime, migration, reporting and legacy identities.
-- Never let web, Android or iOS connect directly to PostgreSQL.
+- Never let web, Android, iOS or desktop connect directly to PostgreSQL.
 
 ## 15. Runtime configuration and secrets
 - Separate deployment bootstrap settings, secret material, runtime policies and observability settings.
@@ -259,6 +275,6 @@ Before completing a cross-project feature, verify:
 3. Database migrations and runtime access roles are coordinated.
 4. Authorization, tenant/facility scope, audit and privacy are defined.
 5. Failure, retry, idempotency and rollback behavior are defined.
-6. Web/mobile compatibility is explicit; no automatic mobile parity assumption.
+6. Web/mobile/desktop compatibility is explicit; no automatic mobile parity assumption; desktop bridge capabilities are versioned and feature-detected.
 7. Tests cover contract, security, migration and end-to-end behavior.
 8. Root and project instructions, architecture docs and Skills Catalog are updated where needed.

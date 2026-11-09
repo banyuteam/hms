@@ -1,6 +1,6 @@
 # hms — Target Project Structure
 
-This is the target organization for three separately owned projects coordinated by one workspace. It is a guide, not a mandate to move every existing file immediately. Inspect actual repositories and migrate incrementally.
+This is the target organization for four separately owned projects coordinated by one workspace. It is a guide, not a mandate to move every existing file immediately. Inspect actual repositories and migrate incrementally.
 
 ```text
 hms/
@@ -19,7 +19,8 @@ hms/
 │   │   ├── declarative-ui-engine.md
 │   │   ├── web-shell-and-workflow-model.md
 │   │   ├── existing-ui-preservation-and-integration.md
-│   │   └── adr-template.md
+│   │   ├── adr-template.md
+│   │   └── adr/                                # root ADRs (ADR-ROOT-NNN)
 │   └── contracts/
 │       ├── assistant-context-reference-contract.md
 │       ├── mobile-capability-registry.md
@@ -90,30 +91,41 @@ hms/
 │   ├── infrastructure/
 │   └── tests/
 │
-└── hms_workspace/
+├── hms_workspace/
+│   ├── CLAUDE.md
+│   ├── .claude/skills/
+│   ├── web/
+│   │   ├── src/
+│   │   │   ├── app/
+│   │   │   ├── shell/
+│   │   │   ├── workflow-engine/
+│   │   │   ├── assistant/
+│   │   │   ├── engine/ui-ir/
+│   │   │   │   ├── renderer/
+│   │   │   │   ├── registry/
+│   │   │   │   ├── forms/
+│   │   │   │   └── actions/
+│   │   │   ├── modules/
+│   │   │   ├── design-system/
+│   │   │   ├── api/
+│   │   │   └── auth/
+│   │   └── tests/
+│   ├── android/                             # native Kotlin, selected capabilities
+│   ├── ios/                                 # native Swift, selected capabilities
+│   ├── contracts/
+│   ├── shared/
+│   └── documentation/
+│
+└── hms_desktop/                             # Rust workstation shell (tao + wry)
     ├── CLAUDE.md
     ├── .claude/skills/
-    ├── web/
-    │   ├── src/
-    │   │   ├── app/
-    │   │   ├── shell/
-    │   │   ├── workflow-engine/
-    │   │   ├── assistant/
-    │   │   ├── engine/ui-ir/
-    │   │   │   ├── renderer/
-    │   │   │   ├── registry/
-    │   │   │   ├── forms/
-    │   │   │   └── actions/
-    │   │   ├── modules/
-    │   │   ├── design-system/
-    │   │   ├── api/
-    │   │   └── auth/
-    │   └── tests/
-    ├── android/                             # native Kotlin, selected capabilities
-    ├── ios/                                 # native Swift, selected capabilities
-    ├── contracts/
-    ├── shared/
-    └── documentation/
+    ├── Cargo.toml / rust-toolchain.toml
+    ├── src/                                 # shell, navigation policy, bridge, config protection
+    ├── startup/                             # packaged startup page
+    ├── contracts/bridge/                    # versioned desktop bridge contract
+    ├── config/                              # example workstation configuration
+    ├── packaging/windows/                   # WiX MSI source and IT runbook
+    └── documentation/adr/                   # ADR-DSK-NNN
 ```
 
 ## Architectural interpretation
@@ -121,6 +133,7 @@ hms/
 - `hms_database` owns schema definitions, migrations, constraints, data dictionary, ERDs and database governance.
 - `hms_services` owns Go runtime behavior, authorization, workflows, integrations, security enforcement, Python DSL compilation, UI IR validation and action execution.
 - `hms_workspace` owns web/mobile presentation, workflow instances, React UI IR renderer, design system and explicit assistant context selection.
+- `hms_desktop` owns the Rust workstation shell, WebView navigation policy, the typed native bridge, device access and desktop packaging. It hosts the web app and never connects to a database.
 - PostgreSQL may be provisioned at workspace scope, but access remains least-privilege and service-owned.
 - Legacy MySQL remains external and strictly read-only.
 - Existing Banyumanik 2 web UI is preserved and integrated incrementally.
