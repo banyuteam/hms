@@ -57,7 +57,7 @@ Resulting roles (prefix `hms_meta` by default; a second database on the same ser
 
 ## Writing a migration
 
-1. Next free number: `migrations/0007_short_name.sql` (lowercase snake case).
+1. Next free number: `migrations/0008_short_name.sql` (lowercase snake case).
 2. Header comment: purpose, owner/writer, classification, online-safety, rollback/fix-forward.
 3. Schema-qualify every object; name constraints (`pk_`, `fk_`, `uq_`, `ck_`, `idx_`, `trg_`); `timestamptz` for
    instants; `uuidv7()` defaults for externally referenced ids.

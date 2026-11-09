@@ -31,6 +31,10 @@ definitions with `\d+ schema.table` in psql.
 | `assistant.monthly_counts` | 0006 | month × facility × metric × dimensions | `id`; dimensions unique | no user ids; 12 months |
 | `assistant.feedback_summary_monthly` (view) | 0006 | aggregate | - | groups below 5 suppressed; reporting |
 | `assistant.usage_summary_monthly` (view) | 0006 | aggregate | - | groups below 5 suppressed; reporting |
+| `assistant.documents` | 0007 | one stored upload (metadata) | `id` (UUIDv7), `storage_key` unique | file on the volume; no file name; file purged after 7 days, metadata 12 months |
+| `assistant.document_readings` | 0007 | one AI reading | `id`, `request_id` unique | outcome, model, tokens; no question or answer; 12 months |
+| `assistant.document_reading_files` | 0007 | document used by a reading | (`reading_id`, `document_id`) | |
+| `assistant.document_usage_monthly` (view) | 0007 | aggregate | - | readings and tokens per month/facility/outcome/model; reporting |
 
 Details: [platform](../schemas/platform/README.md), [audit](../schemas/audit/README.md),
 [eventing](../schemas/eventing/README.md), [integration](../schemas/integration/README.md), [iam](../schemas/iam/README.md),
