@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HMS</title>
+    <link rel="stylesheet" href="/tokens.css" />
+    <link rel="stylesheet" href="/startup.css" />
+    <script src="/startup.js" defer></script>
+  </head>
+  <body>
+    <main class="card">
+      <p class="product">HMS Desktop</p>
+
+      <section data-state="connecting" role="status" aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
+        <h1>Menghubungkan ke HMS…</h1>
+        <p class="en" lang="en">Connecting to HMS…</p>
+      </section>
+
+      <section data-state="unreachable" class="notice warning" role="alert" hidden>
+        <h1>Server HMS tidak dapat dihubungi</h1>
+        <p>Periksa koneksi jaringan komputer ini. Jika masalah berlanjut, hubungi tim IT.</p>
+        <p class="en" lang="en">The HMS server cannot be reached. Check this computer's network connection.</p>
+        <button type="button" data-action="retry">Coba lagi</button>
+      </section>
+
+      <section data-state="server-error" class="notice warning" role="alert" hidden>
+        <h1>Server HMS sedang bermasalah</h1>
+        <p>Server menjawab, tetapi belum siap. Coba lagi beberapa saat lagi atau hubungi tim IT.</p>
+        <p class="en" lang="en">The HMS server answered but is not ready yet.</p>
+        <button type="button" data-action="retry">Coba lagi</button>
+      </section>
+
+      <section data-state="config-missing" class="notice danger" role="alert" hidden>
+        <h1>Komputer ini belum diatur untuk HMS</h1>
+        <p>File konfigurasi HMS Desktop belum dipasang. Hubungi tim IT.</p>
+        <p class="en" lang="en">HMS Desktop is not configured on this computer. Contact IT.</p>
+      </section>
+
+      <section data-state="config-invalid" class="notice danger" role="alert" hidden>
+        <h1>Konfigurasi HMS tidak valid</h1>
+        <p>File konfigurasi HMS Desktop di komputer ini tidak dapat digunakan. Hubungi tim IT.</p>
+        <p class="en" lang="en">The HMS Desktop configuration on this computer is invalid. Contact IT.</p>
+      </section>
+    </main>
+  </body>
+</html>

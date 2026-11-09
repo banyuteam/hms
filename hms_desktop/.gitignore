@@ -1,0 +1,3 @@
+/target
+# Local workstation configuration; the committed example lives in config/.
+/hms-desktop.toml
