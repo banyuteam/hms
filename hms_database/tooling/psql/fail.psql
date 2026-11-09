@@ -1,0 +1,5 @@
+-- Aborts the psql session with the message held in the psql variable hms_error.
+-- psql has no "exit with error" command: the message is handed to a DO block through a session setting, and the
+-- raised exception stops the run because every caller sets ON_ERROR_STOP.
+SELECT set_config('hms.error', :'hms_error', false) AS hms_ignored \gset
+DO $$ BEGIN RAISE EXCEPTION '%', current_setting('hms.error'); END $$;

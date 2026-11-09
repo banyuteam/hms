@@ -1,0 +1,143 @@
+/*
+ * Tailwind CSS 3.4 entry. tokens.css (copy of the Figma variables) is the single source of truth for values;
+ * tailwind.config.ts maps those tokens to theme keys. Preflight is off (see tailwind.config.ts); the small reset is below.
+ */
+@import './tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    /* Per-element (not inherited) border style for the border width utilities — see tailwind.config.ts. */
+    --tw-border-style: solid;
+  }
+  /* Preflight's default for `before:`/`after:` utilities (they emit content: var(--tw-content)); without it the wallpaper
+     scrim and other pseudo-element layers never render. */
+  ::before,
+  ::after {
+    --tw-content: '';
+  }
+  /* Emphasis uses the token weight (600, text/body-strong), not the browser's bold 700. */
+  b,
+  strong {
+    font-weight: 600;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+  body {
+    font-family: var(--hms-font-base);
+    font-size: var(--hms-text-body-size);
+    line-height: var(--hms-text-body-line);
+    font-weight: var(--hms-text-body-weight);
+    color: var(--hms-color-text-primary);
+    background: var(--hms-color-bg-canvas);
+    -webkit-font-smoothing: antialiased;
+  }
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+  [hidden] {
+    display: none !important;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Typography roles (tokens.css `--hms-text-*`): size + line + weight + tracking together, like a Figma text style. */
+  .type-title-lg {
+    font-size: var(--hms-text-title-lg-size);
+    line-height: var(--hms-text-title-lg-line);
+    font-weight: var(--hms-text-title-lg-weight);
+    letter-spacing: var(--hms-text-title-lg-tracking);
+  }
+  .type-title-md {
+    font-size: var(--hms-text-title-md-size);
+    line-height: var(--hms-text-title-md-line);
+    font-weight: var(--hms-text-title-md-weight);
+    letter-spacing: var(--hms-text-title-md-tracking);
+  }
+  .type-heading-sm {
+    font-size: var(--hms-text-heading-sm-size);
+    line-height: var(--hms-text-heading-sm-line);
+    font-weight: var(--hms-text-heading-sm-weight);
+    letter-spacing: var(--hms-text-heading-sm-tracking);
+  }
+  .type-body {
+    font-size: var(--hms-text-body-size);
+    line-height: var(--hms-text-body-line);
+    font-weight: var(--hms-text-body-weight);
+    letter-spacing: var(--hms-text-body-tracking);
+  }
+  .type-body-strong {
+    font-size: var(--hms-text-body-strong-size);
+    line-height: var(--hms-text-body-strong-line);
+    font-weight: var(--hms-text-body-strong-weight);
+    letter-spacing: var(--hms-text-body-strong-tracking);
+  }
+  .type-caption {
+    font-size: var(--hms-text-caption-size);
+    line-height: var(--hms-text-caption-line);
+    font-weight: var(--hms-text-caption-weight);
+    letter-spacing: var(--hms-text-caption-tracking);
+  }
+  .type-caption-strong {
+    font-size: var(--hms-text-caption-strong-size);
+    line-height: var(--hms-text-caption-strong-line);
+    font-weight: var(--hms-text-caption-strong-weight);
+    letter-spacing: var(--hms-text-caption-strong-tracking);
+  }
+  .type-overline {
+    font-size: var(--hms-text-overline-size);
+    line-height: var(--hms-text-overline-line);
+    font-weight: var(--hms-text-overline-weight);
+    letter-spacing: var(--hms-text-overline-tracking);
+  }
+  .type-data-lg {
+    font-size: var(--hms-text-data-lg-size);
+    line-height: var(--hms-text-data-lg-line);
+    font-weight: var(--hms-text-data-lg-weight);
+    letter-spacing: var(--hms-text-data-lg-tracking);
+  }
+  .type-display {
+    font-size: var(--hms-text-display-size);
+    line-height: var(--hms-text-display-line);
+    font-weight: var(--hms-text-display-weight);
+    letter-spacing: var(--hms-text-display-tracking);
+  }
+
+  /* Shared focus ring (2px border/focus + 2px offset). Use as `focus-visible:focus-ring`. */
+  .focus-ring {
+    outline: 2px solid var(--hms-color-border-focus);
+    outline-offset: 2px;
+  }
+
+  /* Work-area wallpaper (the scrim is the `before:` layer in Workspace). */
+  .bg-wallpaper {
+    background: url('../assets/brand/wallpaper-calm-hospital.jpg') center / cover no-repeat;
+  }
+
+  /* Size container for the `cq-compact:` variant (tailwind.config.ts). */
+  .\@container {
+    container-type: inline-size;
+  }
+}

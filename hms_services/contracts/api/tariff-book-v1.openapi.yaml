@@ -1,0 +1,132 @@
+openapi: 3.1.0
+info:
+  title: HMS Tariff Book API
+  version: 1.0.0
+  description: |
+    The tariff book: today's prices from the legacy HMS master tables, read-only (ADR-SVC-005). Session (auth-v1) and
+    permission `tariff.read` at the session facility required. Item lists and laboratory items are audited
+    (`tariff.search`, `tariff.read`; data access) and nothing is returned when the audit event cannot be written.
+    Errors use the auth-v1 envelope (400 invalid_request, 401, 403 forbidden, 404 not_found, 503 service_unavailable).
+    Prices are decimal strings (IDR, 2 decimals) as stored; "" means not recorded. Each legacy tariff code is already
+    one price for one payer and class (and ward or clinic where the kind has one). Drug purchase and base prices are not
+    part of the book.
+servers:
+  - url: /api/v1
+paths:
+  /tariffs:
+    get:
+      summary: The tariff kinds, their filters, component names and price bases (static, not audited)
+      responses:
+        '200':
+          description: Kinds
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  kinds:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        kind: { $ref: '#/components/schemas/Kind' }
+                        place: { type: [string, 'null'], enum: [clinic, ward, null] }
+                        filters: { type: array, items: { type: string, enum: [payer, class, place] } }
+                        components: { type: array, items: { type: string } }
+                        prices: { type: array, items: { type: string } }
+  /tariffs/{kind}:
+    parameters:
+      - { name: kind, in: path, required: true, schema: { $ref: '#/components/schemas/Kind' } }
+      - { name: q, in: query, description: 'part of the name or code, up to 64 characters', schema: { type: string } }
+      - { name: payer, in: query, description: payer code (kinds with the payer filter), schema: { type: string } }
+      - name: class
+        in: query
+        description: class (kinds with the class filter)
+        schema: { type: string, enum: ['-', Rawat Jalan, Kelas 1, Kelas 2, Kelas 3, Kelas Utama, Kelas VIP, Kelas VVIP, ICU] }
+      - { name: place, in: query, description: clinic or ward code (kinds with the place filter), schema: { type: string } }
+      - { name: status, in: query, schema: { type: string, enum: [active, inactive, all], default: active } }
+      - { name: after, in: query, description: next_after of the previous page, schema: { type: string } }
+      - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+    get:
+      summary: One page of a tariff kind, ordered by code
+      responses:
+        '200':
+          description: Items (next_after present when a further page may exist)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  kind: { $ref: '#/components/schemas/Kind' }
+                  items: { type: array, items: { $ref: '#/components/schemas/Item' } }
+                  next_after: { type: string }
+        '400': { description: 'invalid_request (including a filter the kind does not have)' }
+        '404': { description: unknown kind }
+  /tariffs/laboratory/{code}/items:
+    parameters: [{ name: code, in: path, required: true, schema: { type: string } }]
+    get:
+      summary: Result items of one laboratory test with their own prices (template_laboratorium)
+      responses:
+        '200':
+          description: Items in report order
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string }
+                  truncated: { type: boolean }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        template_id: { type: integer }
+                        name: { type: [string, 'null'] }
+                        unit: { type: [string, 'null'] }
+                        components: { type: array, items: { $ref: '#/components/schemas/Amount' } }
+                        price: { type: string }
+components:
+  schemas:
+    Kind:
+      type: string
+      enum: [outpatient_procedure, inpatient_procedure, surgery, drug, laboratory, radiology]
+      description: |
+        outpatient_procedure = jns_perawatan, inpatient_procedure = jns_perawatan_inap, surgery = paket_operasi,
+        drug = databarang, laboratory = jns_perawatan_lab, radiology = jns_perawatan_radiologi
+    Amount:
+      type: object
+      properties: { name: { type: string }, amount: { type: string } }
+    Item:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: [string, 'null'] }
+        category:
+          type: [object, 'null']
+          description: procedure category, surgery kind (Kebidanan/Operasi), drug type or laboratory section (PK/PA/MB)
+          properties: { code: { type: string }, name: { type: [string, 'null'] } }
+        payer: { type: [object, 'null'], properties: { code: { type: string }, name: { type: [string, 'null'] } } }
+        place:
+          type: [object, 'null']
+          properties:
+            type: { type: string, enum: [clinic, ward] }
+            code: { type: string }
+            name: { type: [string, 'null'] }
+        class: { type: [string, 'null'] }
+        unit: { type: [string, 'null'], description: drugs only }
+        active: { type: boolean }
+        components:
+          type: array
+          description: |
+            Fee parts as stored. Procedures: material, bhp, doctor_fee, nurse_fee, kso, management. Laboratory and
+            radiology: hospital_share, bhp, referrer_fee, doctor_fee, staff_fee, kso, management. Surgery: the 28 fee
+            columns of the package. Drugs: none.
+          items: { $ref: '#/components/schemas/Amount' }
+        prices:
+          type: array
+          description: |
+            Procedures: doctor, nurse, doctor_and_nurse (who performs it). Surgery: package (sum of the fees).
+            Laboratory and radiology: total. Drugs: ralan, kelas1, kelas2, kelas3, utama, vip, vvip, beliluar,
+            jualbebas, karyawan.
+          items: { $ref: '#/components/schemas/Amount' }

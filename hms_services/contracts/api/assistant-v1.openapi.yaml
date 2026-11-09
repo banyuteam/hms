@@ -1,0 +1,209 @@
+openapi: 3.1.0
+info:
+  title: HMS Assistant API
+  version: 1.0.0
+  description: |
+    Implemented in hms_services (package assistant, ADR-SVC-006); used by hms_workspace/web (src/api/claimApi.ts). Deterministic rule evaluation for the assistant: no language model, no
+    generated text. Session (auth-v1) and permission `assistant.rules.evaluate` at the session facility required. The
+    data permission a rule set reads with is checked for each reference before any lookup. Every evaluation is audited
+    (`assistant.rules.evaluate`; data access, codes and counts only) and nothing is returned when the audit event cannot
+    be written. Errors use the auth-v1 envelope {"error": {"code", "message"}}; codes are listed per response.
+    Active rule set: claim-readiness version 3 (SEP checks of a BPJS visit from legacy `bridging_sep`, ADR-SVC-007);
+    versions 1 and 2 are retired and answered with unsupported_rule_set.
+    A result is a snapshot of the legacy record at `evaluated_at`. Findings are codes for the client to localize; they
+    carry no record values. A complete checklist is an internal readiness check, not insurer acceptance.
+servers:
+  - url: /api/v1
+paths:
+  /assistant/rule-sets:
+    get:
+      summary: Rule sets this service evaluates (static, no PHI, not audited)
+      responses:
+        '200':
+          description: Rule sets
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rule_sets]
+                properties:
+                  rule_sets: { type: array, items: { $ref: '#/components/schemas/RuleSetInfo' } }
+        '401': { description: unauthenticated }
+        '403': { description: forbidden }
+  /assistant/rules/evaluate:
+    post:
+      summary: Evaluate one rule set against explicit, user-selected context references (side-effect free)
+      description: |
+        Same-origin JSON only (403 origin_not_allowed, 415 unsupported_media_type). Body at most 4 KiB; unknown fields
+        are rejected. Limited per user (429 too_many_requests with Retry-After).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EvaluateRequest' }
+      responses:
+        '200':
+          description: Evaluation result (also when status is partial or not_applicable)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Evaluation' }
+        '400': { description: 'invalid_request (shape, unknown field, body over 4 KiB, reference count or id pattern); unsupported_rule_set' }
+        '401': { description: unauthenticated }
+        '403': { description: 'forbidden (route permission); reference_forbidden (data permission, checked before lookup); origin_not_allowed' }
+        '404': { description: reference_not_found }
+        '415': { description: unsupported_media_type }
+        '429': { description: too_many_requests }
+        '503': { description: 'service_unavailable (legacy read failed or timed out, audit write failed)' }
+components:
+  schemas:
+    RuleSetInfo:
+      type: object
+      required: [id, version, resource_types, max_references, rules]
+      properties:
+        id: { type: string, examples: [claim-readiness] }
+        version: { type: integer, minimum: 1, description: immutable; any change in behaviour is a new version }
+        resource_types: { type: array, items: { $ref: '#/components/schemas/ResourceType' } }
+        max_references: { type: integer, minimum: 1 }
+        rules: { type: array, items: { type: string }, description: rule ids in evaluation order }
+    ResourceType:
+      type: string
+      enum: [encounter]
+    ContextReference:
+      type: object
+      additionalProperties: false
+      required: [resource_type, resource_id]
+      properties:
+        resource_type: { $ref: '#/components/schemas/ResourceType' }
+        resource_id:
+          type: string
+          pattern: '^[0-9/]{1,17}$'
+          description: encounter number (no_rawat) as shown to the user; an identifier, not proof of access
+    EvaluateRequest:
+      type: object
+      additionalProperties: false
+      required: [rule_set, context]
+      properties:
+        rule_set:
+          type: object
+          additionalProperties: false
+          required: [id]
+          properties:
+            id: { type: string, pattern: '^[a-z][a-z0-9-]{1,63}$' }
+            version:
+              type: integer
+              minimum: 1
+              description: optional; when given it must equal the active version, else 400 unsupported_rule_set
+        context:
+          type: object
+          additionalProperties: false
+          required: [references]
+          properties:
+            references:
+              type: array
+              minItems: 1
+              maxItems: 1
+              description: selected explicitly by the user (HMS-CRC); never inferred from the active window or patient
+              items: { $ref: '#/components/schemas/ContextReference' }
+      examples:
+        - rule_set: { id: claim-readiness }
+          context: { references: [{ resource_type: encounter, resource_id: 2026/10/26/000123 }] }
+    Evaluation:
+      type: object
+      required: [evaluation_id, status, evaluated_at, rule_set, reference, applicability, findings, summary, data_completeness]
+      properties:
+        evaluation_id: { type: string, format: uuid, description: also in the audit event; not retrievable later in 1.0.0 }
+        status:
+          type: string
+          enum: [complete, partial, not_applicable]
+          description: |
+            complete: every rule passed, failed or did not apply. partial: at least one finding is not_evaluated.
+            not_applicable: the rule set does not apply to this resource (see applicability); findings is empty.
+        evaluated_at: { type: string, format: date-time }
+        rule_set:
+          type: object
+          required: [id, version]
+          properties: { id: { type: string }, version: { type: integer } }
+        reference: { $ref: '#/components/schemas/ContextReference' }
+        applicability:
+          type: object
+          required: [applies]
+          properties:
+            applies: { type: boolean }
+            reason: { type: [string, 'null'], enum: [payer_not_claimable, null] }
+        findings: { type: array, items: { $ref: '#/components/schemas/Finding' } }
+        summary:
+          type: object
+          required: [passed, failed_error, failed_warning, not_applicable, not_evaluated]
+          properties:
+            passed: { type: integer }
+            failed_error: { type: integer }
+            failed_warning: { type: integer }
+            not_applicable: { type: integer }
+            not_evaluated: { type: integer }
+        data_completeness:
+          type: object
+          required: [complete, sources_not_connected, truncated]
+          properties:
+            complete: { type: boolean, description: false when a source is not connected or a section was truncated }
+            sources_not_connected: { type: array, items: { type: string, enum: [sep] } }
+            truncated: { type: array, items: { type: string }, description: clinical-timeline-v1 truncated section names }
+      examples:
+        - evaluation_id: 0b6f1c1e-3d2a-4d8e-9a51-5c0f7f1b2a90
+          status: complete
+          evaluated_at: '2026-11-09T10:15:00+07:00'
+          rule_set: { id: claim-readiness, version: 3 }
+          reference: { resource_type: encounter, resource_id: 2026/10/26/000123 }
+          applicability: { applies: true, reason: null }
+          findings:
+            - { rule_id: sep_present, result: passed, severity: error, reason: null, fields: [summary.sep], human_review: false }
+            - rule_id: sep_service_type_matches
+              result: passed
+              severity: warning
+              reason: null
+              fields: [summary.sep.service_type, summary.care_setting]
+              human_review: false
+            - rule_id: sep_discharge_date_recorded
+              result: passed
+              severity: error
+              reason: null
+              fields: [summary.sep.discharged_at]
+              human_review: false
+            - { rule_id: primary_diagnosis_coded, result: passed, severity: error, reason: null, fields: [summary.diagnoses], human_review: false }
+            - { rule_id: discharge_summary_present, result: passed, severity: error, reason: null, fields: [summary.discharge_summary], human_review: false }
+            - rule_id: primary_diagnosis_matches_summary
+              result: failed
+              severity: warning
+              reason: mismatch
+              fields: [summary.discharge_summary.main_diagnosis.code, summary.diagnoses]
+              human_review: true
+            - { rule_id: doctor_procedures_coded, result: passed, severity: warning, reason: null, fields: [summary.coded_procedures], human_review: false }
+            - { rule_id: length_of_stay_recorded, result: passed, severity: error, reason: null, fields: [entries.room_stay.length_of_stay], human_review: false }
+            - { rule_id: discharge_status_recorded, result: passed, severity: error, reason: null, fields: [entries.room_stay.discharge_status], human_review: false }
+          summary: { passed: 8, failed_error: 0, failed_warning: 1, not_applicable: 0, not_evaluated: 0 }
+          data_completeness: { complete: true, sources_not_connected: [], truncated: [] }
+    Finding:
+      type: object
+      required: [rule_id, result, severity, reason, fields, human_review]
+      properties:
+        rule_id:
+          type: string
+          description: |
+            claim-readiness v3: sep_present, sep_service_type_matches, sep_discharge_date_recorded (these three for BPJS
+            visits only), primary_diagnosis_coded, discharge_summary_present,
+            primary_diagnosis_matches_summary, doctor_procedures_coded, length_of_stay_recorded,
+            discharge_status_recorded. Clients show an unknown rule id as "unknown check", never as passed.
+        result: { type: string, enum: [passed, failed, not_applicable, not_evaluated] }
+        severity:
+          type: string
+          enum: [error, warning, info]
+          description: the weight of the rule if it fails; meaningful only when result is failed
+        reason:
+          type: [string, 'null']
+          enum: [missing, mismatch, outpatient, no_doctor_procedures, care_setting_unknown, prerequisite_failed,
+                 section_truncated, source_not_connected, null]
+          description: null when passed
+        fields:
+          type: array
+          items: { type: string }
+          description: paths into the clinical-timeline-v1 Timeline response the rule looked at (no values)
+        human_review: { type: boolean, description: true for every failed and not_evaluated finding }

@@ -1,0 +1,187 @@
+openapi: 3.1.0
+info:
+  title: HMS Clinical Read API — patients and encounters
+  version: 1.1.0
+  description: |
+    Read-through from the legacy HMS (ADR-SVC-003). Requires a session (auth-v1) and the listed permission at the session
+    facility. Every request is audited; when the audit event cannot be written the answer is 503 and no data is returned.
+    Errors use the auth-v1 envelope; codes: invalid_request (400), unauthenticated (401), forbidden (403), not_found (404),
+    service_unavailable (503).
+    Text fields are trimmed; a value the legacy HMS did not record is "" (or null where noted), never "-".
+    Masked values: {"masked": "3273••••••••0002"}; "" means not recorded (nothing to reveal).
+servers:
+  - url: /api/v1
+paths:
+  /patients:
+    get:
+      summary: Search patients by name and/or MRN (patient.read)
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: 2–64 characters, at most 5 words; every word must appear in the name or the MRN
+          schema: { type: string }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 25, default: 25 } }
+      responses:
+        '200':
+          description: Matches, exact MRN first, then by name
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  patients: { type: array, items: { $ref: '#/components/schemas/PatientHit' } }
+  /patients/{mrn}:
+    parameters: [{ $ref: '#/components/parameters/Mrn' }]
+    get:
+      summary: Patient profile with masked identifiers (patient.read)
+      responses:
+        '200': { description: Patient, content: { application/json: { schema: { $ref: '#/components/schemas/Patient' } } } }
+        '404': { description: not_found }
+  /patients/{mrn}/identifiers/{kind}:
+    parameters:
+      - { $ref: '#/components/parameters/Mrn' }
+      - name: kind
+        in: path
+        required: true
+        schema: { type: string, enum: [nik, phone, email, address, membership_number, responsible_address] }
+    get:
+      summary: Reveal one identifier (patient.identifiers.reveal); audited before the value is returned
+      responses:
+        '200':
+          description: The value
+          content: { application/json: { schema: { type: object, properties: { value: { type: string } } } } }
+        '404': { description: not_found (no such patient, or the value is not recorded) }
+  /patients/{mrn}/encounters:
+    parameters: [{ $ref: '#/components/parameters/Mrn' }]
+    get:
+      summary: A patient's encounters, newest first (encounter.read)
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 100 } }
+        - { name: before, in: query, description: encounter_number of the last item of the previous page, schema: { type: string } }
+      responses:
+        '200':
+          description: Encounters; next_before is present when another page may follow
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  encounters: { type: array, items: { $ref: '#/components/schemas/Encounter' } }
+                  next_before: { type: string }
+  /patients/{mrn}/payers:
+    parameters: [{ $ref: '#/components/parameters/Mrn' }]
+    get:
+      summary: Payers used on the patient's visits, each with its visits (encounter.read). Added in 1.1.0.
+      description: |
+        Every visit of the patient (`reg_periksa`) with its payer code and the payer's name (`penjab.png_jawab`), grouped
+        by payer code. Payers are ordered by their latest visit, visits latest registration first. At most 500 visits
+        are read; beyond that `truncated` is true and older visits are missing. Cancelled visits are included (status as
+        recorded). An unknown patient gives an empty list, as for the encounter list.
+      responses:
+        '200': { description: Payer history, content: { application/json: { schema: { $ref: '#/components/schemas/PayerHistory' } } } }
+  /encounters:
+    get:
+      summary: Find encounters by the start of the encounter number (encounter.read)
+      parameters:
+        - { name: q, in: query, required: true, description: '3–17 characters, e.g. 2026/10 or 2026/10/26/0001', schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 25, default: 25 } }
+      responses:
+        '200':
+          description: Newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  encounters: { type: array, items: { $ref: '#/components/schemas/Encounter' } }
+  /encounters/{number}:
+    parameters:
+      - name: number
+        in: path
+        required: true
+        description: Encounter number, URL-encoded (2026%2F10%2F26%2F000123)
+        schema: { type: string }
+    get:
+      summary: One encounter (encounter.read)
+      responses:
+        '200': { description: Encounter, content: { application/json: { schema: { $ref: '#/components/schemas/Encounter' } } } }
+        '404': { description: not_found }
+components:
+  parameters:
+    Mrn: { name: mrn, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9.-]{1,15}$' } }
+  schemas:
+    Masked:
+      type: object
+      required: [masked]
+      properties: { masked: { type: string } }
+    PatientHit:
+      type: object
+      properties:
+        mrn: { type: string }
+        name: { type: string }
+        sex: { type: string, enum: [male, female, unknown] }
+        birth_date: { type: [string, 'null'], format: date }
+    Patient:
+      type: object
+      properties:
+        mrn: { type: string }
+        name: { type: string }
+        sex: { type: string, enum: [male, female, unknown] }
+        birth_date: { type: [string, 'null'], format: date }
+        birth_place: { type: string }
+        mother_name: { type: string }
+        blood_type: { type: string, enum: [A, B, O, AB, unknown] }
+        marital_status: { type: [string, 'null'], enum: [single, married, widowed_divorced, null] }
+        religion: { type: string }
+        education: { type: string, description: 'TS, TK, SD, SMP, SMA, SLTA, D1–D4, S1–S3, or none' }
+        occupation: { type: string }
+        first_registered_on: { type: [string, 'null'], format: date }
+        nik: { $ref: '#/components/schemas/Masked' }
+        phone: { $ref: '#/components/schemas/Masked' }
+        email: { $ref: '#/components/schemas/Masked' }
+        address: { $ref: '#/components/schemas/Masked' }
+        guarantor:
+          type: object
+          properties:
+            payer_code: { type: string, description: legacy payer code (penjab.kd_pj) }
+            membership_number: { $ref: '#/components/schemas/Masked' }
+            employer: { type: [string, 'null'] }
+        responsible_person:
+          type: object
+          properties:
+            name: { type: string }
+            relationship: { type: string, enum: [father, mother, wife, husband, sibling, child, unknown] }
+            occupation: { type: string }
+            address: { $ref: '#/components/schemas/Masked' }
+    Encounter:
+      type: object
+      properties:
+        encounter_number: { type: string }
+        queue_number: { type: [string, 'null'] }
+        patient_mrn: { type: [string, 'null'] }
+        registered_at: { type: [string, 'null'], format: date-time, description: hospital local time with the facility offset }
+        care_setting: { type: string, enum: [outpatient, inpatient, unknown] }
+        status:
+          type: object
+          description: As recorded in the legacy HMS (not normalized)
+          properties:
+            code: { type: [string, 'null'] }
+            system: { type: string, const: 'legacy-hms:reg_periksa.stts' }
+        payer_code: { type: [string, 'null'] }
+    PayerHistory:
+      type: object
+      required: [payers, truncated]
+      properties:
+        payers:
+          type: array
+          items:
+            type: object
+            required: [code, name, last_visit_at, visit_count, encounters]
+            properties:
+              code: { type: string, description: legacy payer code (reg_periksa.kd_pj); "" = not recorded on those visits }
+              name: { type: [string, 'null'], description: 'penjab.png_jawab; null when the code has no penjab row' }
+              last_visit_at: { type: [string, 'null'], format: date-time, description: latest dated visit with this payer }
+              visit_count: { type: integer, minimum: 1 }
+              encounters: { type: array, items: { $ref: '#/components/schemas/Encounter' }, description: latest first }
+        truncated: { type: boolean, description: true when more than 500 visits exist; the oldest are not included }

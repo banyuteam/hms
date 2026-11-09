@@ -1,0 +1,7 @@
+-- Migration session epilogue: release the runner lock and show the ledger.
+SELECT pg_advisory_unlock(hashtext('hms_database.migrate')) AS hms_unlocked \gset
+\if :hms_ledger_exists
+  SELECT version, name, applied_at, applied_by, duration_ms
+  FROM hms_meta.schema_migrations ORDER BY version;
+\endif
+RESET ROLE;

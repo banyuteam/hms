@@ -1,0 +1,46 @@
+-- Applies, verifies or reports one migration (ADR-DB-001).
+-- Inputs (psql variables): m_version, m_name, m_checksum, m_file, plus the hms_* state from migrate_begin.psql.
+\if :hms_ledger_exists
+  SELECT count(*) > 0 AS m_applied, coalesce(max(checksum), '') AS m_applied_checksum
+  FROM hms_meta.schema_migrations WHERE version = :'m_version' \gset
+\else
+  \set m_applied false
+\endif
+
+\if :m_applied
+  -- Applied migrations are immutable: a changed file means someone edited history.
+  SELECT :'m_applied_checksum' = :'m_checksum' AS m_checksum_ok \gset
+  \if :m_checksum_ok
+    \echo '  applied  ' :m_version :m_name
+  \else
+    SELECT format('checksum mismatch for applied migration %s_%s: fix forward with a new migration, never edit an applied one',
+                  :'m_version', :'m_name') AS hms_error \gset
+    \ir fail.psql
+  \endif
+\else
+  SELECT :'m_version' < :'hms_max_applied' AS m_out_of_order \gset
+  \if :m_out_of_order
+    SELECT format('migration %s_%s is older than the latest applied version %s: renumber it after %s',
+                  :'m_version', :'m_name', :'hms_max_applied', :'hms_max_applied') AS hms_error \gset
+    \ir fail.psql
+  \endif
+  \if :hms_plan
+    \echo '  pending  ' :m_version :m_name
+  \else
+    \echo '  applying ' :m_version :m_name
+    BEGIN;
+    SELECT clock_timestamp() AS m_started \gset
+    \i :m_file
+    SELECT current_user = :'hms_db_owner' AS m_role_ok \gset
+    \if :m_role_ok
+    \else
+      SELECT format('migration %s_%s changed the current role; migrations must not use SET ROLE', :'m_version', :'m_name') AS hms_error \gset
+      \ir fail.psql
+    \endif
+    INSERT INTO hms_meta.schema_migrations (version, name, checksum, duration_ms)
+    VALUES (:'m_version', :'m_name', :'m_checksum',
+            (extract(epoch FROM clock_timestamp() - :'m_started'::timestamptz) * 1000)::integer);
+    COMMIT;
+    \set hms_max_applied :m_version
+  \endif
+\endif

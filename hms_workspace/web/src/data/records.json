@@ -1,0 +1,418 @@
+[
+  {
+    "mrn": "00012346",
+    "name": "Siti Nurhaliza",
+    "sex": "female",
+    "birthDate": "1985-10-02",
+    "ageYears": 40,
+    "nik": {
+      "value": "3273010210850002",
+      "masked": "3273••••••••0002"
+    },
+    "motherName": "Sri Wahyuni",
+    "birthPlace": "Semarang",
+    "bloodType": "O",
+    "maritalStatus": "married",
+    "religion": "Islam",
+    "education": "S1",
+    "occupation": "Guru",
+    "firstRegistered": "2019-03-12",
+    "address": {
+      "line": {
+        "value": "Jl. Melati No. 12, RT 03 RW 05",
+        "masked": "Jl. Melati •••, RT •• RW ••"
+      },
+      "village": "Pudakpayung",
+      "district": "Banyumanik",
+      "city": "Semarang",
+      "province": "Jawa Tengah"
+    },
+    "phone": {
+      "value": "081234563344",
+      "masked": "0812••••3344"
+    },
+    "email": {
+      "value": "siti.n@example.com",
+      "masked": "si••••@example.com"
+    },
+    "responsiblePerson": {
+      "name": "Ahmad Fauzi",
+      "relationship": "husband",
+      "occupation": "Wiraswasta",
+      "address": {
+        "line": {
+          "value": "Jl. Melati No. 12, RT 03 RW 05",
+          "masked": "Jl. Melati •••"
+        },
+        "village": "Pudakpayung",
+        "district": "Banyumanik",
+        "city": "Semarang",
+        "province": "Jawa Tengah"
+      }
+    }
+  },
+  {
+    "mrn": "00012345",
+    "name": "Budi Santoso",
+    "sex": "male",
+    "birthDate": "1969-06-15",
+    "ageYears": 57,
+    "nik": {
+      "value": "3273010000000011",
+      "masked": "3273••••••••0011"
+    },
+    "motherName": "Ibu Contoh",
+    "birthPlace": "Semarang",
+    "bloodType": "B",
+    "maritalStatus": "married",
+    "religion": "Islam",
+    "education": "SMA",
+    "occupation": "Wiraswasta",
+    "firstRegistered": "2022-01-10",
+    "address": {
+      "line": {
+        "value": "Jl. Contoh No. 11, RT 02 RW 02",
+        "masked": "Jl. Contoh •••, RT •• RW ••"
+      },
+      "village": "Contoh",
+      "district": "Banyumanik",
+      "city": "Semarang",
+      "province": "Jawa Tengah"
+    },
+    "phone": {
+      "value": "081200001001",
+      "masked": "0812••••1001"
+    },
+    "email": {
+      "value": "pasien1@example.com",
+      "masked": "pa••••@example.com"
+    },
+    "responsiblePerson": {
+      "name": "Keluarga Contoh",
+      "relationship": "wife",
+      "occupation": "Wiraswasta",
+      "address": {
+        "line": {
+          "value": "Jl. Contoh No. 11, RT 02 RW 02",
+          "masked": "Jl. Contoh •••, RT •• RW ••"
+        },
+        "village": "Contoh",
+        "district": "Banyumanik",
+        "city": "Semarang",
+        "province": "Jawa Tengah"
+      }
+    }
+  },
+  {
+    "mrn": "00012344",
+    "name": "Ratna Dewi",
+    "sex": "female",
+    "birthDate": "1997-06-15",
+    "ageYears": 29,
+    "nik": {
+      "value": "3273010000000012",
+      "masked": "3273••••••••0012"
+    },
+    "motherName": "Ibu Contoh",
+    "birthPlace": "Semarang",
+    "bloodType": "O",
+    "maritalStatus": "married",
+    "religion": "Islam",
+    "education": "SMA",
+    "occupation": "Wiraswasta",
+    "firstRegistered": "2022-01-10",
+    "address": {
+      "line": {
+        "value": "Jl. Contoh No. 12, RT 03 RW 03",
+        "masked": "Jl. Contoh •••, RT •• RW ••"
+      },
+      "village": "Contoh",
+      "district": "Banyumanik",
+      "city": "Semarang",
+      "province": "Jawa Tengah"
+    },
+    "phone": {
+      "value": "081200001002",
+      "masked": "0812••••1002"
+    },
+    "email": {
+      "value": "pasien2@example.com",
+      "masked": "pa••••@example.com"
+    },
+    "responsiblePerson": {
+      "name": "Keluarga Contoh",
+      "relationship": "husband",
+      "occupation": "Wiraswasta",
+      "address": {
+        "line": {
+          "value": "Jl. Contoh No. 12, RT 03 RW 03",
+          "masked": "Jl. Contoh •••, RT •• RW ••"
+        },
+        "village": "Contoh",
+        "district": "Banyumanik",
+        "city": "Semarang",
+        "province": "Jawa Tengah"
+      }
+    }
+  },
+  {
+    "mrn": "00012343",
+    "name": "Agus Prasetyo",
+    "sex": "male",
+    "birthDate": "1960-06-15",
+    "ageYears": 66,
+    "nik": {
+      "value": "3273010000000013",
+      "masked": "3273••••••••0013"
+    },
+    "motherName": "Ibu Contoh",
+    "birthPlace": "Semarang",
+    "bloodType": "AB",
+    "maritalStatus": "married",
+    "religion": "Islam",
+    "education": "SMA",
+    "occupation": "Wiraswasta",
+    "firstRegistered": "2022-01-10",
+    "address": {
+      "line": {
+        "value": "Jl. Contoh No. 13, RT 04 RW 04",
+        "masked": "Jl. Contoh •••, RT •• RW ••"
+      },
+      "village": "Contoh",
+      "district": "Banyumanik",
+      "city": "Semarang",
+      "province": "Jawa Tengah"
+    },
+    "phone": {
+      "value": "081200001003",
+      "masked": "0812••••1003"
+    },
+    "email": {
+      "value": "pasien3@example.com",
+      "masked": "pa••••@example.com"
+    },
+    "responsiblePerson": {
+      "name": "Keluarga Contoh",
+      "relationship": "wife",
+      "occupation": "Wiraswasta",
+      "address": {
+        "line": {
+          "value": "Jl. Contoh No. 13, RT 04 RW 04",
+          "masked": "Jl. Contoh •••, RT •• RW ••"
+        },
+        "village": "Contoh",
+        "district": "Banyumanik",
+        "city": "Semarang",
+        "province": "Jawa Tengah"
+      }
+    }
+  },
+  {
+    "mrn": "00012342",
+    "name": "Maya Lestari",
+    "sex": "female",
+    "birthDate": "1992-06-15",
+    "ageYears": 34,
+    "nik": {
+      "value": "3273010000000014",
+      "masked": "3273••••••••0014"
+    },
+    "motherName": "Ibu Contoh",
+    "birthPlace": "Semarang",
+    "bloodType": "A",
+    "maritalStatus": "married",
+    "religion": "Islam",
+    "education": "SMA",
+    "occupation": "Wiraswasta",
+    "firstRegistered": "2022-01-10",
+    "address": {
+      "line": {
+        "value": "Jl. Contoh No. 14, RT 05 RW 01",
+        "masked": "Jl. Contoh •••, RT •• RW ••"
+      },
+      "village": "Contoh",
+      "district": "Banyumanik",
+      "city": "Semarang",
+      "province": "Jawa Tengah"
+    },
+    "phone": {
+      "value": "081200001004",
+      "masked": "0812••••1004"
+    },
+    "email": {
+      "value": "pasien4@example.com",
+      "masked": "pa••••@example.com"
+    },
+    "responsiblePerson": {
+      "name": "Keluarga Contoh",
+      "relationship": "husband",
+      "occupation": "Wiraswasta",
+      "address": {
+        "line": {
+          "value": "Jl. Contoh No. 14, RT 05 RW 01",
+          "masked": "Jl. Contoh •••, RT •• RW ••"
+        },
+        "village": "Contoh",
+        "district": "Banyumanik",
+        "city": "Semarang",
+        "province": "Jawa Tengah"
+      }
+    }
+  },
+  {
+    "mrn": "00012341",
+    "name": "Hendra Wijaya",
+    "sex": "male",
+    "birthDate": "1978-06-15",
+    "ageYears": 48,
+    "nik": {
+      "value": "3273010000000015",
+      "masked": "3273••••••••0015"
+    },
+    "motherName": "Ibu Contoh",
+    "birthPlace": "Semarang",
+    "bloodType": "B",
+    "maritalStatus": "married",
+    "religion": "Islam",
+    "education": "SMA",
+    "occupation": "Wiraswasta",
+    "firstRegistered": "2022-01-10",
+    "address": {
+      "line": {
+        "value": "Jl. Contoh No. 15, RT 01 RW 02",
+        "masked": "Jl. Contoh •••, RT •• RW ••"
+      },
+      "village": "Contoh",
+      "district": "Banyumanik",
+      "city": "Semarang",
+      "province": "Jawa Tengah"
+    },
+    "phone": {
+      "value": "081200001005",
+      "masked": "0812••••1005"
+    },
+    "email": {
+      "value": "pasien5@example.com",
+      "masked": "pa••••@example.com"
+    },
+    "responsiblePerson": {
+      "name": "Keluarga Contoh",
+      "relationship": "wife",
+      "occupation": "Wiraswasta",
+      "address": {
+        "line": {
+          "value": "Jl. Contoh No. 15, RT 01 RW 02",
+          "masked": "Jl. Contoh •••, RT •• RW ••"
+        },
+        "village": "Contoh",
+        "district": "Banyumanik",
+        "city": "Semarang",
+        "province": "Jawa Tengah"
+      }
+    }
+  },
+  {
+    "mrn": "00012340",
+    "name": "Dewi Anggraini",
+    "sex": "female",
+    "birthDate": "1954-06-15",
+    "ageYears": 72,
+    "nik": {
+      "value": "3273010000000016",
+      "masked": "3273••••••••0016"
+    },
+    "motherName": "Ibu Contoh",
+    "birthPlace": "Semarang",
+    "bloodType": "O",
+    "maritalStatus": "married",
+    "religion": "Islam",
+    "education": "SMA",
+    "occupation": "Wiraswasta",
+    "firstRegistered": "2022-01-10",
+    "address": {
+      "line": {
+        "value": "Jl. Contoh No. 16, RT 02 RW 03",
+        "masked": "Jl. Contoh •••, RT •• RW ••"
+      },
+      "village": "Contoh",
+      "district": "Banyumanik",
+      "city": "Semarang",
+      "province": "Jawa Tengah"
+    },
+    "phone": {
+      "value": "081200001006",
+      "masked": "0812••••1006"
+    },
+    "email": {
+      "value": "pasien6@example.com",
+      "masked": "pa••••@example.com"
+    },
+    "responsiblePerson": {
+      "name": "Keluarga Contoh",
+      "relationship": "husband",
+      "occupation": "Wiraswasta",
+      "address": {
+        "line": {
+          "value": "Jl. Contoh No. 16, RT 02 RW 03",
+          "masked": "Jl. Contoh •••, RT •• RW ••"
+        },
+        "village": "Contoh",
+        "district": "Banyumanik",
+        "city": "Semarang",
+        "province": "Jawa Tengah"
+      }
+    }
+  },
+  {
+    "mrn": "00012339",
+    "name": "Rizky Ramadhan",
+    "sex": "male",
+    "birthDate": "2018-06-15",
+    "ageYears": 8,
+    "nik": {
+      "value": "3273010000000017",
+      "masked": "3273••••••••0017"
+    },
+    "motherName": "Ibu Contoh",
+    "birthPlace": "Semarang",
+    "bloodType": "AB",
+    "maritalStatus": "single",
+    "religion": "Islam",
+    "education": "SD",
+    "occupation": "Pelajar",
+    "firstRegistered": "2022-01-10",
+    "address": {
+      "line": {
+        "value": "Jl. Contoh No. 17, RT 03 RW 04",
+        "masked": "Jl. Contoh •••, RT •• RW ••"
+      },
+      "village": "Contoh",
+      "district": "Banyumanik",
+      "city": "Semarang",
+      "province": "Jawa Tengah"
+    },
+    "phone": {
+      "value": "081200001007",
+      "masked": "0812••••1007"
+    },
+    "email": {
+      "value": "pasien7@example.com",
+      "masked": "pa••••@example.com"
+    },
+    "responsiblePerson": {
+      "name": "Keluarga Contoh",
+      "relationship": "wife",
+      "occupation": "Wiraswasta",
+      "address": {
+        "line": {
+          "value": "Jl. Contoh No. 17, RT 03 RW 04",
+          "masked": "Jl. Contoh •••, RT •• RW ••"
+        },
+        "village": "Contoh",
+        "district": "Banyumanik",
+        "city": "Semarang",
+        "province": "Jawa Tengah"
+      }
+    }
+  }
+]

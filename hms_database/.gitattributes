@@ -1,0 +1,6 @@
+# Migration checksums ignore CR bytes, but keep SQL and shell scripts LF for clean diffs and POSIX shells.
+*.sql   text eol=lf
+*.psql  text eol=lf
+*.sh    text eol=lf
+*.md    text eol=lf
+*.ps1   text eol=crlf

@@ -1,0 +1,66 @@
+# Production topology template. Use immutable image references and an approved
+# secret manager. Prefer managed PostgreSQL; this file intentionally does not
+# create a database service or expose database ports publicly.
+name: hms
+
+services:
+  hms-services:
+    image: ${HMS_SERVICES_IMAGE:?Set immutable service image reference}
+    environment:
+      APP_ENV: production
+      HTTP_ADDR: ":8080"
+      DATABASE_HOST: ${DATABASE_HOST:?Set database host}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_NAME: ${DATABASE_NAME:?Set database name}
+      DATABASE_USER: ${DATABASE_USER:?Set database user}
+      DATABASE_PASSWORD_FILE: /run/secrets/hms_db_password
+    secrets:
+      - hms_db_password
+    networks: [hms-private]
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    restart: unless-stopped
+    mem_limit: 1g
+    cpus: 1.0
+    healthcheck:
+      test: ["CMD", "/app/healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  hms-web:
+    image: ${HMS_WEB_IMAGE:?Set immutable web image reference}
+    depends_on:
+      hms-services:
+        condition: service_healthy
+    networks: [hms-private, hms-ingress]
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.5
+
+  # Add a separately hardened ingress/reverse-proxy service or use the
+  # organization's approved load balancer / ingress controller.
+  # Only ingress should publish 80/443. Do not publish app/database ports.
+
+networks:
+  hms-private:
+    internal: true
+  hms-ingress:
+
+secrets:
+  hms_db_password:
+    file: ${HMS_DB_PASSWORD_FILE:?Point to a protected secret file outside source control}

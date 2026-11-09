@@ -1,0 +1,8 @@
+# Never commit credentials, local connection files or database dumps (they may contain PHI or password hashes).
+.env
+.env.*
+*.pgpass
+.pgpass
+*.dump
+*.backup
+hms_roles.sql

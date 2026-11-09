@@ -1,0 +1,95 @@
+openapi: 3.1.0
+info:
+  title: HMS Authentication API
+  version: 1.0.0
+  description: |
+    Staff sign-in for the HMS web client (ADR-SVC-001). Credentials are verified by the legacy HMS; the session is an
+    HttpOnly, SameSite=Strict cookie (`__Host-hms_session` over HTTPS, `hms_session` on plain-HTTP development).
+    State-changing requests must come from the configured public origin (Origin header, or Sec-Fetch-Site:
+    same-origin) and use `application/json`. Every response carries `X-Request-ID` and `Cache-Control: no-store`.
+    Errors always have the shape `{"error": {"code": "...", "message": "..."}}`; codes are stable, messages may change.
+servers:
+  - url: /api/v1
+paths:
+  /auth/sign-in:
+    post:
+      summary: Sign in with the legacy HMS user ID and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [user_id, password]
+              properties:
+                user_id: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._@-]{0,63}$' }
+                password: { type: string, minLength: 1, maxLength: 128 }
+      responses:
+        '200':
+          description: Signed in; sets the session cookie. A first sign-in creates the HMS user with no permissions.
+          headers:
+            Set-Cookie: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+        '400': { $ref: '#/components/responses/Error', description: 'invalid_request' }
+        '401': { $ref: '#/components/responses/Error', description: 'invalid_credentials (same response for any wrong ID or password)' }
+        '403': { $ref: '#/components/responses/Error', description: 'account_disabled (suspended/deactivated in HMS) or origin_not_allowed' }
+        '415': { $ref: '#/components/responses/Error', description: 'unsupported_media_type' }
+        '429': { $ref: '#/components/responses/Error', description: 'too_many_attempts (account lockout) or too_many_requests (per address); see Retry-After' }
+        '503': { $ref: '#/components/responses/Error', description: 'service_unavailable (legacy HMS or database unavailable)' }
+  /auth/session:
+    get:
+      summary: Current session and the caller's permissions at the session facility
+      responses:
+        '200':
+          description: Valid session
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+        '401': { $ref: '#/components/responses/Error', description: 'unauthenticated (none, expired, revoked, user or legacy identity no longer active)' }
+        '503': { $ref: '#/components/responses/Error', description: 'service_unavailable' }
+  /auth/sign-out:
+    post:
+      summary: End the current session
+      responses:
+        '204': { description: Signed out; the cookie is cleared }
+        '401': { $ref: '#/components/responses/Error', description: unauthenticated }
+        '403': { $ref: '#/components/responses/Error', description: origin_not_allowed }
+        '503': { $ref: '#/components/responses/Error', description: service_unavailable }
+components:
+  schemas:
+    Session:
+      type: object
+      required: [user, organization_id, expires_at, permissions]
+      properties:
+        user:
+          type: object
+          required: [id, display_name]
+          properties:
+            id: { type: string, format: uuid }
+            display_name: { type: string }
+        organization_id: { type: string, format: uuid }
+        facility_id: { type: string, format: uuid }
+        expires_at: { type: string, format: date-time, description: Absolute expiry; idle expiry also applies }
+        permissions:
+          type: array
+          description: Permission codes in force at the session facility. For presentation only; every request is authorized by the server.
+          items: { type: string }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }

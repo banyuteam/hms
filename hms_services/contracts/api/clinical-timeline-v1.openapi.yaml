@@ -1,0 +1,351 @@
+openapi: 3.1.0
+info:
+  title: HMS Clinical Timeline and Bill API
+  version: 1.3.0
+  description: |
+    Visit timeline and bill, read through from the legacy HMS (ADR-SVC-004). Session (auth-v1) and permission at
+    the session facility required; every request is audited and nothing is returned when the audit event cannot be
+    written. Errors use the auth-v1 envelope (401, 403 forbidden, 404 not_found, 503 service_unavailable).
+    Values are returned as recorded; "" or null means not recorded. `at` is hospital local time with the facility
+    offset, or null when the legacy row has no valid date. Sections that hit their row cap are listed in `truncated`.
+servers:
+  - url: /api/v1
+paths:
+  /encounters/{number}/timeline:
+    parameters: [{ $ref: '#/components/parameters/Number' }]
+    get:
+      summary: Clinical timeline of one visit (encounter.clinical.read)
+      responses:
+        '200': { description: Timeline, content: { application/json: { schema: { $ref: '#/components/schemas/Timeline' } } } }
+        '404': { description: not_found }
+  /encounters/{number}/bill:
+    parameters: [{ $ref: '#/components/parameters/Number' }]
+    get:
+      summary: Charges recorded for the visit, with the cashier's saved header, payments and receivable (billing.read)
+      responses:
+        '200': { description: Bill, content: { application/json: { schema: { $ref: '#/components/schemas/Bill' } } } }
+        '404': { description: not_found (no such encounter) }
+components:
+  parameters:
+    Number: { name: number, in: path, required: true, description: URL-encoded encounter number, schema: { type: string } }
+  schemas:
+    Coded:
+      type: object
+      properties: { code: { type: string }, name: { type: [string, 'null'] } }
+    Timeline:
+      type: object
+      required: [encounter_number, summary, entries, truncated]
+      properties:
+        encounter_number: { type: string }
+        patient_mrn: { type: [string, 'null'] }
+        summary:
+          type: object
+          properties:
+            care_setting: { type: string, enum: [outpatient, inpatient, unknown] }
+            status: { type: object, properties: { code: { type: [string, 'null'] }, system: { type: string } } }
+            payer:
+              type: object
+              properties:
+                code: { type: string }
+                name: { type: [string, 'null'] }
+                company: { type: [string, 'null'] }
+                type: { type: string, enum: [personal, bpjs, insurer], description: 'legacy rule: "-"/UMU personal, BPJ bpjs, else insurer' }
+            diagnoses:
+              type: array
+              items:
+                type: object
+                properties:
+                  code: { type: string, description: ICD-10 }
+                  name: { type: [string, 'null'] }
+                  priority: { type: integer }
+                  care_setting: { type: string }
+                  case: { type: [string, 'null'], enum: [new, existing, null] }
+            coded_procedures:
+              type: array
+              items:
+                type: object
+                properties:
+                  code: { type: string, description: ICD-9-CM }
+                  name: { type: [string, 'null'] }
+                  priority: { type: integer }
+                  care_setting: { type: string }
+            attending_doctors:
+              type: array
+              items: { type: object, properties: { name: { type: [string, 'null'] }, priority: { type: integer } } }
+            discharge_summary:
+              type: [object, 'null']
+              description: Inpatient discharge summary (resume), as recorded
+              properties:
+                doctor_name: { type: [string, 'null'] }
+                chief_complaint: { type: string }
+                course: { type: string }
+                main_diagnosis: { $ref: '#/components/schemas/Coded' }
+                secondary_diagnosis: { $ref: '#/components/schemas/Coded' }
+                main_procedure: { $ref: '#/components/schemas/Coded' }
+                allergy: { type: string }
+                condition: { type: string, description: legacy code (keadaan) }
+                discharge_method: { type: string, description: legacy code (cara_keluar) }
+                discharge_medication: { type: string }
+                diet: { type: string }
+                education: { type: string }
+                control: { type: [string, 'null'] }
+            sep:
+              type: array
+              description: |
+                1.3.0 (ADR-SVC-007). SEPs (Surat Eligibilitas Peserta) of the visit from legacy `bridging_sep`, oldest
+                first, at most 20 (`sep` in `truncated` when cut). Empty when none is recorded (any payer). The SEP number
+                is sent in full (owner decision B-1). The copy of the patient's identity in `bridging_sep` is never read.
+              items:
+                type: object
+                properties:
+                  number: { type: string, description: no_sep }
+                  date: { type: [string, 'null'], format: date, description: tglsep }
+                  service_type: { type: [string, 'null'], description: "jnspelayanan as recorded: '1' inpatient, '2' outpatient (BPJS)" }
+                  class: { type: [string, 'null'], description: klsrawat as recorded ('1'–'3') }
+                  referral_number: { type: [string, 'null'], description: no_rujukan }
+                  referring_facility: { type: [string, 'null'], description: nmppkrujukan }
+                  initial_diagnosis: { $ref: '#/components/schemas/Coded', description: diagawal / nmdiagnosaawal (ICD-10) }
+                  destination_clinic: { type: [string, 'null'], description: nmpolitujuan }
+                  dpjp_name: { type: [string, 'null'], description: nmdpdjp }
+                  discharged_at: { type: [string, 'null'], format: date-time, description: tglpulang (discharge date sent to BPJS) }
+                  cob: { type: [string, 'null'], description: "legacy enum as recorded ('0. Tidak' / '1.Ya')" }
+                  suplesi: { type: [string, 'null'], description: "legacy enum as recorded ('0. Tidak' / '1.Ya')" }
+                  suplesi_sep_number: { type: [string, 'null'], description: no_sep_suplesi }
+        entries:
+          type: array
+          description: |
+            Time order (undated last; equal times keep the read order). Every entry has `type` and `at`; the other
+            fields depend on the type (schemas `Entry*` below). Legacy codes (consciousness, statuses, categories) are
+            returned as recorded.
+          items:
+            type: object
+            required: [type, at]
+            properties:
+              type:
+                type: string
+                enum: [registration, room_stay, clinical_note, procedure, lab_test, radiology_exam, radiology_report,
+                       prescription, medication_given, surgery, surgery_report]
+              at: { type: [string, 'null'], format: date-time }
+        truncated:
+          type: array
+          description: |
+            Section names that hit their row cap: room_stay, clinical_note_outpatient, clinical_note_inpatient,
+            procedure_<legacy table>, lab_test, lab_result, radiology_exam, radiology_report, prescription,
+            prescription_item, prescription_compound, medication_given, surgery, surgery_report, diagnosis,
+            coded_procedure, attending_doctor, sep (1.3.0).
+          items: { type: string }
+    Text: { type: [string, 'null'] }
+    EntryRegistration:
+      description: 'type=registration, at = registration time'
+      properties:
+        queue_number: { $ref: '#/components/schemas/Text' }
+        care_setting: { type: string }
+        status: { type: object, description: same as summary.status }
+        payer: { type: object, description: same as summary.payer }
+        clinic: { $ref: '#/components/schemas/Text' }
+        doctor_name: { $ref: '#/components/schemas/Text' }
+    EntryRoomStay:
+      description: 'type=room_stay, at = admission to the room'
+      properties:
+        room_code: { type: string }
+        room_class: { $ref: '#/components/schemas/Text' }
+        ward: { $ref: '#/components/schemas/Text' }
+        admission_diagnosis: { $ref: '#/components/schemas/Text' }
+        discharge_diagnosis: { $ref: '#/components/schemas/Text' }
+        discharged_at: { type: [string, 'null'], format: date-time }
+        length_of_stay: { type: [string, 'null'], description: days as recorded }
+        discharge_status: { type: [string, 'null'], description: legacy stts_pulang }
+    EntryClinicalNote:
+      description: 'type=clinical_note (CPPT). SOAP: keluhan = subjective, pemeriksaan = objective, penilaian = assessment, rtl = plan'
+      properties:
+        care_setting: { type: string, enum: [outpatient, inpatient] }
+        author_id: { type: string, description: staff number of the author }
+        author_name: { $ref: '#/components/schemas/Text' }
+        subjective: { type: string }
+        objective: { type: string }
+        assessment: { type: string }
+        plan: { type: string }
+        instruction: { type: string }
+        evaluation: { type: string }
+        allergy: { type: string }
+        consciousness: { type: [string, 'null'], description: legacy kesadaran }
+        vitals:
+          type: object
+          description: blood_pressure, pulse, respiration, temperature, spo2, gcs, height, weight (text or null, as recorded)
+          additionalProperties: { $ref: '#/components/schemas/Text' }
+    EntryProcedure:
+      description: type=procedure (billed service/action, not the ICD-9-CM list)
+      properties:
+        care_setting: { type: string, enum: [outpatient, inpatient] }
+        performed_by: { type: string, enum: [doctor, nurse, doctor_and_nurse] }
+        code: { type: string }
+        name: { $ref: '#/components/schemas/Text' }
+        doctor_name: { $ref: '#/components/schemas/Text' }
+        staff_name: { $ref: '#/components/schemas/Text' }
+    EntryLabTest:
+      description: type=lab_test; result lines attach by (encounter, test code, date, time)
+      properties:
+        code: { type: string }
+        name: { $ref: '#/components/schemas/Text' }
+        category: { type: string, description: 'legacy kategori: PA, PK, MB' }
+        care_setting: { type: string }
+        doctor_name: { $ref: '#/components/schemas/Text' }
+        referring_doctor_name: { $ref: '#/components/schemas/Text' }
+        analyst_name: { $ref: '#/components/schemas/Text' }
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              template_id: { type: integer }
+              item: { $ref: '#/components/schemas/Text' }
+              value: { type: string }
+              reference_range: { type: string }
+              unit: { $ref: '#/components/schemas/Text' }
+              note: { type: string, description: 'flag text as recorded (e.g. H, L); never derived' }
+    EntryRadiologyExam:
+      description: type=radiology_exam
+      properties:
+        code: { type: string }
+        name: { $ref: '#/components/schemas/Text' }
+        care_setting: { type: string }
+        doctor_name: { $ref: '#/components/schemas/Text' }
+        referring_doctor_name: { $ref: '#/components/schemas/Text' }
+        radiographer_name: { $ref: '#/components/schemas/Text' }
+        projection: { type: string }
+    EntryRadiologyReport:
+      description: type=radiology_report
+      properties: { text: { type: string } }
+    EntryPrescription:
+      description: 'type=prescription, at = prescribed at (else the care date)'
+      properties:
+        number: { type: string }
+        prescribed_at: { type: [string, 'null'], format: date-time }
+        dispensed_at: { type: [string, 'null'], format: date-time, description: 'handed over; null = not yet' }
+        care_setting: { type: string }
+        doctor_name: { $ref: '#/components/schemas/Text' }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              drug_code: { type: string }
+              drug_name: { $ref: '#/components/schemas/Text' }
+              quantity: { type: string }
+              unit: { $ref: '#/components/schemas/Text' }
+              instructions: { type: string }
+        compounds:
+          type: array
+          items:
+            type: object
+            properties:
+              number: { type: string }
+              name: { type: string }
+              quantity: { type: string }
+              instructions: { type: string }
+              note: { type: string }
+    EntryMedicationGiven:
+      description: type=medication_given (issued/charged to the patient, not a dose-by-dose administration record)
+      properties:
+        drug_code: { type: string }
+        drug_name: { $ref: '#/components/schemas/Text' }
+        quantity: { type: string }
+        unit: { $ref: '#/components/schemas/Text' }
+        batch: { type: string }
+        ward: { $ref: '#/components/schemas/Text' }
+        care_setting: { type: string }
+        instructions: { $ref: '#/components/schemas/Text' }
+    EntrySurgery:
+      description: type=surgery
+      properties:
+        name: { $ref: '#/components/schemas/Text' }
+        operator_name: { $ref: '#/components/schemas/Text' }
+        anesthesiologist_name: { $ref: '#/components/schemas/Text' }
+        anesthesia: { type: string }
+        category: { type: string }
+        care_setting: { type: string }
+    EntrySurgeryReport:
+      description: type=surgery_report
+      properties:
+        preoperative_diagnosis: { type: string }
+        postoperative_diagnosis: { type: string }
+        report: { type: string }
+        bleeding: { type: string, description: legacy Ya/Tidak }
+        complication: { type: string, description: legacy Ya/Tidak }
+        finished_at: { type: [string, 'null'], format: date-time }
+    Bill:
+      type: object
+      description: |
+        Charges recorded for the visit in the legacy source tables (basis `recorded_charges`), grouped by billing
+        category the way the legacy billing screen collects them at discharge; the cashier's saved `billing` table is
+        not used. Subtotals and the total are exact sums of the line amounts. Discounts and drug returns are negative.
+        The service fee (inpatient only) is computed from the legacy service settings: per setting, its percentage of
+        the subtotals it is switched on for (self-paying patients: cash settings; insurers and BPJS: receivable
+        settings). Daily room fees (`harian`) are not included.
+        `saved_bill`, `payments` and `receivable` are the cashier's saved header, payments and receivable, as saved.
+      properties:
+        encounter_number: { type: string }
+        currency: { type: string, const: IDR }
+        basis: { type: string, const: recorded_charges }
+        care_setting: { type: string, enum: [outpatient, inpatient, unknown] }
+        groups:
+          type: array
+          description: Only categories with at least one line, in this order.
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+                enum: [registration, room, outpatient_doctor, outpatient_nurse, outpatient_doctor_nurse,
+                       inpatient_doctor, inpatient_nurse, inpatient_doctor_nurse, surgery, laboratory, radiology,
+                       medication, take_home_medication, medication_return, extra_charge, discount, service]
+              legacy_category: { type: string, description: 'legacy billing category, e.g. Kamar, Ranap Dokter, Obat' }
+              subtotal: { type: string }
+              lines:
+                type: array
+                description: |
+                  One line per service and unit price (quantity = count, room days or drug units); surgery: one line
+                  per operation; laboratory also lists result items that carry their own price; a drug return is
+                  priced at what the patient was charged for that drug, batch and invoice (no such charge = amount "").
+                  Service lines: unit_price is the base, rate_percent the setting's percentage.
+                items:
+                  type: object
+                  properties:
+                    code: { type: string }
+                    label: { type: [string, 'null'] }
+                    quantity: { type: string }
+                    unit_price: { type: string }
+                    additional: { type: string, description: drugs only (embalase + tuslah); otherwise 0.00 }
+                    amount: { type: string }
+                    rate_percent: { type: [string, 'null'], description: service fee lines only }
+                    tariff:
+                      type: [string, 'null']
+                      description: |
+                        Today's price of this code in the tariff book (tariff-book-v1): procedures by who performed
+                        them, surgery package, laboratory test and item, radiology; drugs and take-home drugs at the
+                        outpatient price or the price of the latest room's class (none for intensive care). null: no
+                        tariff for this kind of line, or the code is not in the book.
+                    tariff_matches: { type: [boolean, 'null'], description: tariff equals unit_price (the price charged) }
+        total: { type: string }
+        saved_bill:
+          type: [object, 'null']
+          description: null = the cashier has not saved a bill for this visit
+          properties:
+            bill_number: { type: [string, 'null'] }
+            billed_at: { type: [string, 'null'], format: date-time }
+            care_setting: { type: string, enum: [outpatient, inpatient] }
+        payments:
+          type: array
+          items: { type: object, properties: { method: { type: string }, amount: { type: string }, tax: { type: string } } }
+        receivable:
+          type: [object, 'null']
+          properties:
+            status: { type: string, description: 'legacy: Lunas / Belum Lunas' }
+            total: { type: string }
+            down_payment: { type: string }
+            remaining: { type: string }
+            due_date: { type: [string, 'null'], format: date }
+        truncated:
+          type: array
+          description: 'charge_<source>, service_settings_* and payment_* sections that hit their cap: the total is then incomplete'
+          items: { type: string }

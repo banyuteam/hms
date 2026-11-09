@@ -1,0 +1,74 @@
+# Local development template. Adapt build contexts, commands and health endpoints
+# to the actual application before use.
+name: ${COMPOSE_PROJECT_NAME:-hms}
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:18}
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hms}
+      POSTGRES_USER: ${POSTGRES_USER:-hms_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a local development password}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - hms_postgres_dev:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks: [hms-private]
+
+  hms-services:
+    build:
+      context: ${HMS_SERVICES_BUILD_CONTEXT:-../hms_services}
+      dockerfile: Dockerfile
+    image: ${HMS_SERVICES_IMAGE:-local/hms-services:dev}
+    environment:
+      APP_ENV: development
+      HTTP_ADDR: ":8080"
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: ${POSTGRES_DB:-hms}
+      DATABASE_USER: ${POSTGRES_USER:-hms_app}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set a local development password}
+    ports:
+      - "127.0.0.1:${HMS_SERVICES_HTTP_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # Replace /healthz with the actual service health endpoint and add curl/wget
+      # to the runtime image or use an appropriate native healthcheck binary.
+      test: ["CMD", "/app/healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks: [hms-private]
+    init: true
+    restart: unless-stopped
+
+  hms-web:
+    build:
+      context: ${HMS_WEB_BUILD_CONTEXT:-../hms_workspace/web}
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+    image: ${HMS_WEB_IMAGE:-local/hms-web:dev}
+    ports:
+      - "127.0.0.1:${HMS_WEB_HTTP_PORT:-8088}:80"
+    depends_on:
+      hms-services:
+        condition: service_started
+    networks: [hms-private]
+    restart: unless-stopped
+
+networks:
+  hms-private:
+    driver: bridge
+
+volumes:
+  hms_postgres_dev:

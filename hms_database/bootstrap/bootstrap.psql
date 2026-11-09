@@ -1,0 +1,210 @@
+-- hms_database bootstrap (ADR-DB-002): creates the HMS database, its roles and baseline privileges.
+--
+-- Run as a PostgreSQL superuser through scripts/bootstrap.ps1 or scripts/bootstrap.sh. psql asks for the superuser
+-- password itself; it is never written to a file, a command line or an environment variable by these scripts.
+--
+-- Safe to run again: it creates only what is missing, re-applies role attributes and privileges, drops nothing and
+-- does not change an existing password unless HMS_*_PASSWORD is set in the environment.
+--
+-- Inputs (psql -v):  dbname       database to create (default hms)
+--                    role_prefix  prefix of the per-database roles (default hms_meta)
+-- Optional environment (CI only, see ADR-DB-002): HMS_MIGRATOR_PASSWORD, HMS_RUNTIME_PASSWORD,
+--                    HMS_AUDITOR_PASSWORD, HMS_REPORTING_PASSWORD. Without them psql prompts for the migrator and
+--                    runtime passwords when those roles have none (\password: hashed client-side before sending).
+\set ON_ERROR_STOP on
+SET client_min_messages = warning;
+
+\if :{?dbname}
+\else
+  \set dbname hms
+\endif
+\if :{?role_prefix}
+\else
+  \set role_prefix hms_meta
+\endif
+\set owner_role :role_prefix _owner
+\set migrator_role :role_prefix _migrator
+\set runtime_role :role_prefix _runtime
+\set auditor_role :role_prefix _auditor
+\set reporting_role :role_prefix _reporting
+
+SELECT set_config('hms.dbname', :'dbname', false) AS hms_ignored,
+       set_config('hms.role_prefix', :'role_prefix', false) AS hms_ignored2 \gset
+
+-- 1. Preconditions -----------------------------------------------------------------------------------------------
+DO $$
+BEGIN
+    IF current_setting('server_version_num')::int < 180000 THEN
+        RAISE EXCEPTION 'PostgreSQL 18 or later is required (server is %)', current_setting('server_version');
+    END IF;
+    IF NOT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) THEN
+        RAISE EXCEPTION 'run the bootstrap as a superuser (connected as %)', current_user;
+    END IF;
+    IF current_setting('hms.dbname') !~ '^[a-z][a-z0-9_]{0,39}$' THEN
+        RAISE EXCEPTION 'database name "%" must match ^[a-z][a-z0-9_]{0,39}$', current_setting('hms.dbname');
+    END IF;
+    IF current_setting('hms.role_prefix') !~ '^[a-z][a-z0-9_]{0,39}$' THEN
+        RAISE EXCEPTION 'role prefix "%" must match ^[a-z][a-z0-9_]{0,39}$', current_setting('hms.role_prefix');
+    END IF;
+END
+$$;
+
+-- 2. Roles -------------------------------------------------------------------------------------------------------
+-- Roles are cluster-wide. Every role this script manages carries a comment naming its purpose; an existing role
+-- without the expected comment belongs to something else and is never taken over.
+--
+-- Group roles (NOLOGIN, shared by every HMS database on the cluster, referenced by migrations in GRANTs):
+--   hms_platform_rw, hms_iam_rw, hms_eventing_rw, hms_integration_rw, hms_audit_append, hms_audit_read, hms_report_read
+-- Per-database roles (<prefix>_*):
+--   owner      NOLOGIN; owns the database and every object in it
+--   migrator   LOGIN;   may SET ROLE to owner (no inherited rights); runs migrations only
+--   runtime    LOGIN;   hms_services runtime: DML through group roles, no DDL
+--   auditor    LOGIN;   read-only audit review
+--   reporting  LOGIN;   read-only reporting
+DO $$
+DECLARE
+    db     text := current_setting('hms.dbname');
+    prefix text := current_setting('hms.role_prefix');
+    r      record;
+    found_comment text;
+BEGIN
+    FOR r IN
+        SELECT * FROM (VALUES
+            ('hms_platform_rw',        false, 'hms_database:group:platform read/write',            -1),
+            ('hms_iam_rw',             false, 'hms_database:group:iam read/write',                 -1),
+            ('hms_eventing_rw',        false, 'hms_database:group:eventing outbox/receipts',       -1),
+            ('hms_integration_rw',     false, 'hms_database:group:integration polling state',      -1),
+            ('hms_audit_append',       false, 'hms_database:group:audit append-only writer',       -1),
+            ('hms_audit_read',         false, 'hms_database:group:audit reader',                   -1),
+            ('hms_report_read',        false, 'hms_database:group:reporting reader',               -1),
+            (prefix || '_owner',       false, 'hms_database:' || db || ':owner',                   -1),
+            (prefix || '_migrator',    true,  'hms_database:' || db || ':migrator',                 3),
+            (prefix || '_runtime',     true,  'hms_database:' || db || ':runtime',                 50),
+            (prefix || '_auditor',     true,  'hms_database:' || db || ':auditor',                  5),
+            (prefix || '_reporting',   true,  'hms_database:' || db || ':reporting',               10)
+        ) AS t(name, can_login, purpose, conn_limit)
+    LOOP
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r.name) THEN
+            SELECT shobj_description(oid, 'pg_authid') INTO found_comment FROM pg_roles WHERE rolname = r.name;
+            IF found_comment IS DISTINCT FROM r.purpose THEN
+                RAISE EXCEPTION 'role % already exists but is not managed by hms_database (comment: %); choose another role prefix (bootstrap -RolePrefix or --role-prefix)',
+                    r.name, coalesce(found_comment, '<none>');
+            END IF;
+        ELSE
+            EXECUTE format('CREATE ROLE %I NOLOGIN', r.name);
+            EXECUTE format('COMMENT ON ROLE %I IS %L', r.name, r.purpose);
+        END IF;
+        -- Re-applied on every run so drift is corrected.
+        EXECUTE format('ALTER ROLE %I %s %s NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT %s',
+                       r.name,
+                       CASE WHEN r.can_login THEN 'LOGIN' ELSE 'NOLOGIN' END,
+                       CASE WHEN r.name = prefix || '_migrator' OR r.name = prefix || '_owner' OR NOT r.can_login
+                            THEN 'NOINHERIT' ELSE 'INHERIT' END,
+                       r.conn_limit);
+    END LOOP;
+
+    -- Memberships. The migrator gets no inherited rights: it acts only after SET ROLE <owner>.
+    EXECUTE format('GRANT %I TO %I WITH INHERIT FALSE, SET TRUE', prefix || '_owner', prefix || '_migrator');
+    EXECUTE format('GRANT hms_platform_rw, hms_iam_rw, hms_eventing_rw, hms_integration_rw, hms_audit_append TO %I WITH INHERIT TRUE, SET FALSE',
+                   prefix || '_runtime');
+    EXECUTE format('GRANT hms_audit_read TO %I WITH INHERIT TRUE, SET FALSE', prefix || '_auditor');
+    EXECUTE format('GRANT hms_report_read TO %I WITH INHERIT TRUE, SET FALSE', prefix || '_reporting');
+END
+$$;
+
+-- 3. Database ----------------------------------------------------------------------------------------------------
+-- Builtin C.UTF-8 locale: identical collation on Windows, Linux and containers, unaffected by glibc/ICU upgrades.
+-- Language-aware sorting, where needed, uses an explicit COLLATE in the query or column.
+SELECT format('CREATE DATABASE %I OWNER %I TEMPLATE template0 ENCODING %L LOCALE_PROVIDER builtin BUILTIN_LOCALE %L LOCALE %L',
+              :'dbname', :'owner_role', 'UTF8', 'C.UTF-8', 'C')
+WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'dbname') \gexec
+
+SELECT pg_get_userbyid(datdba) = :'owner_role' AS hms_owner_ok FROM pg_database WHERE datname = :'dbname' \gset
+\if :hms_owner_ok
+\else
+  SELECT format('database %s exists but is not owned by %s; refusing to take it over', :'dbname', :'owner_role') AS hms_error \gset
+  \ir ../tooling/psql/fail.psql
+\endif
+
+-- psql reuses the superuser password for this connection.
+\connect :"dbname"
+SET client_min_messages = warning;
+SELECT set_config('hms.dbname', :'dbname', false) AS hms_ignored,
+       set_config('hms.role_prefix', :'role_prefix', false) AS hms_ignored2 \gset
+
+-- 4. Database-level privileges and settings ----------------------------------------------------------------------
+DO $$
+DECLARE
+    db     text := current_setting('hms.dbname');
+    prefix text := current_setting('hms.role_prefix');
+BEGIN
+    -- Nobody connects or creates temporary tables unless granted; nobody uses the public schema.
+    EXECUTE format('REVOKE ALL ON DATABASE %I FROM PUBLIC', db);
+    EXECUTE format('GRANT CONNECT ON DATABASE %I TO %I, %I, %I, %I', db,
+                   prefix || '_migrator', prefix || '_runtime', prefix || '_auditor', prefix || '_reporting');
+    REVOKE ALL ON SCHEMA public FROM PUBLIC;
+
+    -- Functions are not executable by PUBLIC unless a migration grants EXECUTE explicitly.
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC', prefix || '_owner');
+
+    EXECUTE format('ALTER DATABASE %I SET timezone = %L', db, 'UTC');
+
+    EXECUTE format('ALTER ROLE %I IN DATABASE %I SET statement_timeout = %L', prefix || '_runtime', db, '30s');
+    EXECUTE format('ALTER ROLE %I IN DATABASE %I SET lock_timeout = %L', prefix || '_runtime', db, '5s');
+    EXECUTE format('ALTER ROLE %I IN DATABASE %I SET idle_in_transaction_session_timeout = %L', prefix || '_runtime', db, '60s');
+
+    EXECUTE format('ALTER ROLE %I IN DATABASE %I SET lock_timeout = %L', prefix || '_migrator', db, '10s');
+    EXECUTE format('ALTER ROLE %I IN DATABASE %I SET idle_in_transaction_session_timeout = %L', prefix || '_migrator', db, '5min');
+
+    EXECUTE format('ALTER ROLE %I IN DATABASE %I SET default_transaction_read_only = on', prefix || '_auditor', db);
+    EXECUTE format('ALTER ROLE %I IN DATABASE %I SET statement_timeout = %L', prefix || '_auditor', db, '120s');
+    EXECUTE format('ALTER ROLE %I IN DATABASE %I SET default_transaction_read_only = on', prefix || '_reporting', db);
+    EXECUTE format('ALTER ROLE %I IN DATABASE %I SET statement_timeout = %L', prefix || '_reporting', db, '120s');
+    EXECUTE format('ALTER ROLE %I IN DATABASE %I SET idle_in_transaction_session_timeout = %L', prefix || '_reporting', db, '60s');
+END
+$$;
+
+-- 5. Passwords ---------------------------------------------------------------------------------------------------
+\getenv hms_migrator_password HMS_MIGRATOR_PASSWORD
+\getenv hms_runtime_password HMS_RUNTIME_PASSWORD
+\getenv hms_auditor_password HMS_AUDITOR_PASSWORD
+\getenv hms_reporting_password HMS_REPORTING_PASSWORD
+
+SELECT bool_or(rolname = :'migrator_role' AND rolpassword IS NULL) AS hms_migrator_needs_pw,
+       bool_or(rolname = :'runtime_role' AND rolpassword IS NULL) AS hms_runtime_needs_pw
+FROM pg_authid WHERE rolname IN (:'migrator_role', :'runtime_role') \gset
+
+\if :{?hms_migrator_password}
+  ALTER ROLE :"migrator_role" PASSWORD :'hms_migrator_password';
+\elif :hms_migrator_needs_pw
+  \echo 'Set the password for' :migrator_role '(runs migrations):'
+  \password :migrator_role
+\endif
+\if :{?hms_runtime_password}
+  ALTER ROLE :"runtime_role" PASSWORD :'hms_runtime_password';
+\elif :hms_runtime_needs_pw
+  \echo 'Set the password for' :runtime_role '(hms_services runtime):'
+  \password :runtime_role
+\endif
+\if :{?hms_auditor_password}
+  ALTER ROLE :"auditor_role" PASSWORD :'hms_auditor_password';
+\endif
+\if :{?hms_reporting_password}
+  ALTER ROLE :"reporting_role" PASSWORD :'hms_reporting_password';
+\endif
+\unset hms_migrator_password
+\unset hms_runtime_password
+\unset hms_auditor_password
+\unset hms_reporting_password
+
+-- 6. Summary -----------------------------------------------------------------------------------------------------
+\echo ''
+\echo 'Database:' :dbname
+SELECT r.rolname AS role, r.rolcanlogin AS login, r.rolinherit AS inherit, r.rolconnlimit AS conn_limit,
+       (a.rolpassword IS NOT NULL) AS has_password,
+       coalesce((SELECT string_agg(g.rolname || CASE WHEN m.set_option THEN ' (set)' ELSE '' END, ', ' ORDER BY g.rolname)
+                 FROM pg_auth_members m JOIN pg_roles g ON g.oid = m.roleid WHERE m.member = r.oid), '') AS member_of
+FROM pg_roles r JOIN pg_authid a ON a.oid = r.oid
+WHERE r.rolname IN (:'owner_role', :'migrator_role', :'runtime_role', :'auditor_role', :'reporting_role')
+ORDER BY r.rolname;
+\echo 'Bootstrap complete. Next: run scripts/migrate as' :migrator_role

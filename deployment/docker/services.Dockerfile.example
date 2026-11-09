@@ -1,0 +1,18 @@
+# Example multi-stage Go service image. Align Go version, module paths and binary
+# name with the actual hms_services repository.
+FROM golang:1.24-alpine AS build
+WORKDIR /src
+RUN apk add --no-cache ca-certificates git
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
+    -o /out/hms-services ./cmd/hms-services
+
+FROM gcr.io/distroless/static-debian12:nonroot AS runtime
+WORKDIR /app
+COPY --from=build /out/hms-services /app/hms-services
+# Add a healthcheck binary or use an orchestrator-native HTTP probe.
+USER nonroot:nonroot
+EXPOSE 8080
+ENTRYPOINT ["/app/hms-services"]
