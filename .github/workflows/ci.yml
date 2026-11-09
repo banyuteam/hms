@@ -1,0 +1,183 @@
+# Workspace CI (CI/test-ready gate, root CLAUDE.md §13). Builds and tests hms_database, hms_services and
+# hms_workspace/web from a clean checkout. It publishes nothing: no image push, no deployment, no secrets used.
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  database-and-services:
+    name: Database + services (PostgreSQL 18)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          # Ephemeral CI container on the runner only; not a real credential.
+          POSTGRES_PASSWORD: ci-superuser-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      SUPERUSER_PASSWORD: ci-superuser-only
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Generate role passwords for this run
+        run: |
+          for name in MIGRATOR_PASSWORD RUNTIME_PASSWORD; do
+            value="$(openssl rand -hex 24)"
+            echo "::add-mask::$value"
+            echo "$name=$value" >> "$GITHUB_ENV"
+          done
+
+      # The scripts run inside the postgres:18 image so psql matches the server (the same path as compose.yaml).
+      - name: Bootstrap database and roles
+        run: |
+          docker run --rm --network host -v "$GITHUB_WORKSPACE/hms_database:/hms_database:ro" \
+            -e PGPASSWORD="$SUPERUSER_PASSWORD" -e HMS_MIGRATOR_PASSWORD="$MIGRATOR_PASSWORD" \
+            -e HMS_RUNTIME_PASSWORD="$RUNTIME_PASSWORD" \
+            postgres:18 bash /hms_database/scripts/bootstrap.sh --host 127.0.0.1 --database hms
+
+      - name: Migrate (plan, apply, re-apply must be a no-op)
+        run: |
+          migrate() {
+            docker run --rm --network host -v "$GITHUB_WORKSPACE/hms_database:/hms_database:ro" \
+              -e PGPASSWORD="$MIGRATOR_PASSWORD" postgres:18 bash /hms_database/scripts/migrate.sh \
+              --host 127.0.0.1 --database hms "$@"
+          }
+          migrate --plan
+          migrate
+          migrate --plan | tee plan-after.txt
+          if grep -q '^  pending ' plan-after.txt; then echo "::error::migrations still pending after apply"; exit 1; fi
+
+      - name: Database tests (tests/sql, rolled back)
+        run: |
+          docker run --rm --network host -v "$GITHUB_WORKSPACE/hms_database:/hms_database:ro" \
+            -e PGPASSWORD="$SUPERUSER_PASSWORD" postgres:18 bash /hms_database/scripts/test.sh \
+            --host 127.0.0.1 --database hms --superuser postgres
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: hms_services/go.mod
+          cache-dependency-path: hms_services/go.sum
+
+      - name: gofmt
+        working-directory: hms_services
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then echo "::error::gofmt needed:"; echo "$unformatted"; exit 1; fi
+
+      - name: go vet
+        working-directory: hms_services
+        run: go vet ./...
+
+      - name: go test (including PostgreSQL integration tests)
+        working-directory: hms_services
+        env:
+          GOFLAGS: -mod=readonly
+        run: |
+          export HMS_TEST_DATABASE_URL="postgres://hms_meta_runtime:${RUNTIME_PASSWORD}@127.0.0.1:5432/hms?sslmode=disable"
+          export HMS_TEST_ADMIN_DATABASE_URL="postgres://postgres:${SUPERUSER_PASSWORD}@127.0.0.1:5432/hms?sslmode=disable"
+          go test -count=1 -v ./... 2>&1 | tee go-test.log
+          status="${PIPESTATUS[0]}"
+          grep -E '^(ok|FAIL|---)' go-test.log | grep -v -- '--- PASS' || true
+          if [ "$status" -ne 0 ]; then exit "$status"; fi
+          # The database tests must run here, never be silently skipped.
+          if grep -q -- '--- SKIP' go-test.log; then echo "::error::tests were skipped"; exit 1; fi
+          test "$(grep -c -- '--- PASS: TestPG' go-test.log)" -ge 1
+
+  web:
+    name: Web (typecheck, lint, format, tests, build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: hms_workspace/web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24.13.0"
+          cache: npm
+          cache-dependency-path: hms_workspace/web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm test
+      - name: Production build (live data source)
+        run: npm run build
+        env:
+          VITE_DATA_SOURCE: bff
+
+  images:
+    name: Container images (build + smoke)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Validate compose files
+        run: |
+          mkdir -p deployment/secrets/dev
+          for f in postgres_superuser_password hms_migrator_password hms_runtime_password legacy_db_password \
+                   legacy_login_id_key legacy_login_password_key; do
+            printf 'ci-placeholder' > "deployment/secrets/dev/$f"
+          done
+          cp deployment/.env.example deployment/.env
+          sed -i 's/^LEGACY_DB_NAME=.*/LEGACY_DB_NAME=ci/; s/^LEGACY_DB_USER=.*/LEGACY_DB_USER=ci/' deployment/.env
+          docker compose -f deployment/compose.yaml config -q
+          for f in placeholder-a placeholder-b placeholder-c placeholder-d; do printf 'x' > "/tmp/$f"; done
+          HMS_SERVICES_IMAGE=example/hms-services@sha256:0000000000000000000000000000000000000000000000000000000000000000 \
+          HMS_WEB_IMAGE=example/hms-web@sha256:0000000000000000000000000000000000000000000000000000000000000000 \
+          PUBLIC_ORIGIN=https://hms.example.org TRUSTED_PROXIES=10.0.0.0/24 HMS_ORGANIZATION_CODE=X HMS_FACILITY_CODE=X \
+          DATABASE_HOST=db DATABASE_NAME=hms LEGACY_DB_HOST=legacy LEGACY_DB_NAME=x LEGACY_DB_USER=x \
+          HMS_RUNTIME_PASSWORD_FILE=/tmp/placeholder-a LEGACY_DB_PASSWORD_FILE=/tmp/placeholder-b \
+          LEGACY_LOGIN_ID_KEY_FILE=/tmp/placeholder-c LEGACY_LOGIN_PASSWORD_KEY_FILE=/tmp/placeholder-d \
+            docker compose -f deployment/compose.production.yaml config -q
+
+      - name: Build hms-services image
+        run: |
+          docker build --build-arg VERSION=ci --build-arg REVISION="$GITHUB_SHA" -t hms-services:ci hms_services
+
+      - name: Smoke hms-services image (non-root, rejects missing configuration)
+        run: |
+          test "$(docker image inspect -f '{{.Config.User}}' hms-services:ci)" = "nonroot:nonroot"
+          set +e
+          out="$(docker run --rm --read-only --cap-drop ALL hms-services:ci serve 2>&1)"; status=$?
+          set -e
+          echo "$out"
+          test "$status" -ne 0
+          echo "$out" | grep -q 'invalid configuration'
+
+      - name: Build hms-web image
+        run: |
+          docker build --build-arg VERSION=ci --build-arg REVISION="$GITHUB_SHA" -t hms-web:ci hms_workspace/web
+
+      - name: Smoke hms-web image (health, SPA fallback, security headers)
+        run: |
+          docker run -d --name web --read-only --tmpfs /tmp --cap-drop ALL --add-host hms-services:127.0.0.1 \
+            -p 127.0.0.1:18080:8080 hms-web:ci
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:18080/healthz && break; sleep 1; done
+          curl -fsS -o /dev/null http://127.0.0.1:18080/healthz
+          curl -fsS -D headers.txt -o index.html http://127.0.0.1:18080/encounter
+          grep -qi '^content-security-policy:' headers.txt
+          grep -qi '^x-content-type-options: nosniff' headers.txt
+          grep -q '<div id="root">' index.html
+          test "$(docker exec web id -u)" != "0"
+          docker logs web
+          docker rm -f web

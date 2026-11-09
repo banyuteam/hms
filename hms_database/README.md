@@ -57,7 +57,7 @@ Resulting roles (prefix `hms_meta` by default; a second database on the same ser
 
 ## Writing a migration
 
-1. Next free number: `migrations/0005_short_name.sql` (lowercase snake case).
+1. Next free number: `migrations/0006_short_name.sql` (lowercase snake case).
 2. Header comment: purpose, owner/writer, classification, online-safety, rollback/fix-forward.
 3. Schema-qualify every object; name constraints (`pk_`, `fk_`, `uq_`, `ck_`, `idx_`, `trg_`); `timestamptz` for
    instants; `uuidv7()` defaults for externally referenced ids.
@@ -69,9 +69,11 @@ Resulting roles (prefix `hms_meta` by default; a second database on the same ser
 
 ## Open items
 
-- CI pipeline (ephemeral PostgreSQL 18 service: bootstrap -> migrate -> test -> migrate --plan) is not set up.
-- Root `deployment/compose.yaml` still runs `hms-services` with the container superuser (`POSTGRES_USER`); it should
-  use `hms_meta_runtime`, with bootstrap and migrations as one-shot steps. Owned by the root workspace.
+- CI pipeline (`.github/workflows/ci.yml`, ephemeral PostgreSQL 18 service: bootstrap -> migrate --plan -> migrate ->
+  migrate --plan must show nothing pending -> tests) is written but has not had its first run. The same sequence passed
+  locally on 2026-11-09 against a fresh PostgreSQL 18.6 cluster (5 migrations, all 8 test files).
+- Root `deployment/compose.yaml` now runs bootstrap (superuser) and migrations (`hms_meta_migrator`) as one-shot jobs
+  and `hms-services` as `hms_meta_runtime`; passwords are mounted secret files. Not yet run with Docker.
 - `hms_services` sign-in (ADR-SVC-001) connects as `hms_meta_runtime` and uses `iam`, `audit` and `platform`; it
   still needs permission registration and real Khanza verification (ADR-DB-003).
 - IAM role catalog and the first IAM administrator are owner decisions; nothing is seeded.

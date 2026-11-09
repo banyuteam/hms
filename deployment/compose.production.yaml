@@ -1,25 +1,39 @@
-# Production topology template. Use immutable image references and an approved
-# secret manager. Prefer managed PostgreSQL; this file intentionally does not
-# create a database service or expose database ports publicly.
+# Production topology TEMPLATE (not production-ready on its own; see deployment/RELEASE-CHECKLIST.md).
+# Uses prebuilt immutable images and file secrets from an approved secret manager. Prefer managed PostgreSQL: this
+# file creates no database service and publishes no database or application port. Database bootstrap and migrations
+# are a controlled one-shot release step (hms_database/documentation), never part of service startup.
 name: hms
 
 services:
   hms-services:
-    image: ${HMS_SERVICES_IMAGE:?Set immutable service image reference}
+    image: ${HMS_SERVICES_IMAGE:?Set an immutable hms-services image reference (digest)}
     environment:
       APP_ENV: production
       HTTP_ADDR: ":8080"
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set the public https origin}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:?Set the reverse proxy address or range}
+      HMS_ORGANIZATION_CODE: ${HMS_ORGANIZATION_CODE:?Set organization code}
+      HMS_FACILITY_CODE: ${HMS_FACILITY_CODE:?Set facility code}
       DATABASE_HOST: ${DATABASE_HOST:?Set database host}
       DATABASE_PORT: ${DATABASE_PORT:-5432}
       DATABASE_NAME: ${DATABASE_NAME:?Set database name}
-      DATABASE_USER: ${DATABASE_USER:?Set database user}
-      DATABASE_PASSWORD_FILE: /run/secrets/hms_db_password
+      DATABASE_USER: ${DATABASE_USER:-hms_meta_runtime}
+      DATABASE_PASSWORD_FILE: /run/secrets/hms_runtime_password
+      DATABASE_SSLMODE: ${DATABASE_SSLMODE:-verify-full}
+      LEGACY_DB_HOST: ${LEGACY_DB_HOST:?Set legacy HMS host}
+      LEGACY_DB_PORT: ${LEGACY_DB_PORT:-3306}
+      LEGACY_DB_NAME: ${LEGACY_DB_NAME:?Set legacy HMS database}
+      LEGACY_DB_USER: ${LEGACY_DB_USER:?Set the SELECT-only legacy account}
+      LEGACY_DB_PASSWORD_FILE: /run/secrets/legacy_db_password
+      LEGACY_LOGIN_ID_KEY_FILE: /run/secrets/legacy_login_id_key
+      LEGACY_LOGIN_PASSWORD_KEY_FILE: /run/secrets/legacy_login_password_key
     secrets:
-      - hms_db_password
+      - hms_runtime_password
+      - legacy_db_password
+      - legacy_login_id_key
+      - legacy_login_password_key
     networks: [hms-private]
     read_only: true
-    tmpfs:
-      - /tmp
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
@@ -28,23 +42,22 @@ services:
     mem_limit: 1g
     cpus: 1.0
     healthcheck:
-      test: ["CMD", "/app/healthcheck"]
+      test: ["CMD", "/app/hms-services", "healthcheck"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 30s
 
   hms-web:
-    image: ${HMS_WEB_IMAGE:?Set immutable web image reference}
+    image: ${HMS_WEB_IMAGE:?Set an immutable hms-web image reference (digest)}
     depends_on:
       hms-services:
         condition: service_healthy
+    # Reached only by the TLS-terminating ingress on hms-ingress; it forwards /api to hms-services on hms-private.
     networks: [hms-private, hms-ingress]
     read_only: true
     tmpfs:
       - /tmp
-      - /var/cache/nginx
-      - /var/run
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
@@ -52,15 +65,21 @@ services:
     mem_limit: 256m
     cpus: 0.5
 
-  # Add a separately hardened ingress/reverse-proxy service or use the
-  # organization's approved load balancer / ingress controller.
-  # Only ingress should publish 80/443. Do not publish app/database ports.
+  # Add a separately hardened ingress/reverse-proxy service or use the organization's approved load balancer or
+  # ingress controller: TLS, HSTS, request rate limits. Only the ingress publishes 80/443.
 
 networks:
+  # Not internal: hms-services must reach the external legacy HMS and managed PostgreSQL. Restrict egress with
+  # host or network firewall rules to exactly those endpoints.
   hms-private:
-    internal: true
   hms-ingress:
 
 secrets:
-  hms_db_password:
-    file: ${HMS_DB_PASSWORD_FILE:?Point to a protected secret file outside source control}
+  hms_runtime_password:
+    file: ${HMS_RUNTIME_PASSWORD_FILE:?Point to a protected secret file outside source control}
+  legacy_db_password:
+    file: ${LEGACY_DB_PASSWORD_FILE:?Point to a protected secret file outside source control}
+  legacy_login_id_key:
+    file: ${LEGACY_LOGIN_ID_KEY_FILE:?Point to a protected secret file outside source control}
+  legacy_login_password_key:
+    file: ${LEGACY_LOGIN_PASSWORD_KEY_FILE:?Point to a protected secret file outside source control}

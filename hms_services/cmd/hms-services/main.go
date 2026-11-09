@@ -16,7 +16,9 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/signal"
 	"slices"
@@ -59,13 +61,15 @@ func run(args []string) error {
 	}
 	rest := global.Args()
 	if len(rest) == 0 {
-		return errors.New("usage: hms-services [-env-file FILE] serve | setup-organization | check-legacy-key | check-clinical-read | check-bill-sources | inventory-legacy-schema | bootstrap-admin")
+		return errors.New("usage: hms-services [-env-file FILE] serve | healthcheck | setup-organization | check-legacy-key | check-clinical-read | check-bill-sources | inventory-legacy-schema | bootstrap-admin")
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	switch rest[0] {
 	case "serve":
 		return serve(ctx, lookup)
+	case "healthcheck":
+		return healthcheck(ctx, lookup)
 	case "setup-organization":
 		return setupOrganization(ctx, lookup, rest[1:])
 	case "check-legacy-key":
@@ -202,6 +206,46 @@ func readiness(pool *pgxpool.Pool, legacy *sql.DB) http.HandlerFunc {
 		}
 		httpx.WriteJSON(w, status, map[string]any{"status": word, "checks": checks})
 	}
+}
+
+// healthcheck probes this process's own GET /healthz (liveness, not readiness), for container health checks in images
+// without a shell or HTTP client. It reads only HTTP_ADDR.
+func healthcheck(ctx context.Context, lookup config.Lookup) error {
+	addr, _ := lookup("HTTP_ADDR")
+	target, err := healthURL(addr)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("healthcheck: %w", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("healthcheck: status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// healthURL maps a listen address (HTTP_ADDR, default 127.0.0.1:8080) to the loopback /healthz URL.
+func healthURL(addr string) (string, error) {
+	if strings.TrimSpace(addr) == "" {
+		addr = "127.0.0.1:8080"
+	}
+	host, port, err := net.SplitHostPort(strings.TrimSpace(addr))
+	if err != nil || port == "" {
+		return "", fmt.Errorf("healthcheck: HTTP_ADDR %q is not host:port", addr)
+	}
+	if ip, err := netip.ParseAddr(host); host == "" || (err == nil && ip.IsUnspecified()) {
+		host = "127.0.0.1"
+	}
+	return "http://" + net.JoinHostPort(host, port) + "/healthz", nil
 }
 
 func setupOrganization(ctx context.Context, lookup config.Lookup, args []string) error {

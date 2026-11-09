@@ -65,8 +65,15 @@ npx vite --host 192.168.0.106
 
 Testers open `https://192.168.0.106:5174` and accept the self-signed certificate once (compare its SHA-256 fingerprint).
 Known limits: every LAN client reaches hms-services as `127.0.0.1`, so the audit trail does not tell machines apart and the
-per-address sign-in limit (20/min) is shared; the Vite dev server is not hardened for networks. A real deployment needs the
-ingress, TLS and container images that are not built yet (root `deployment/`).
+per-address sign-in limit (20/min) is shared; the Vite dev server is not hardened for networks. A real deployment needs a
+TLS ingress (not built yet) in front of the container image below.
+
+**Container image** (`Dockerfile`, `nginx/default.conf`): `docker build -t local/hms-web:dev .` builds the live-data SPA
+(`VITE_DATA_SOURCE=bff` by default; `--build-arg VITE_DATA_SOURCE=synthetic` for the demo) and serves it with unprivileged
+nginx on port 8080, which forwards `/api` to `hms-services:8080`, sends a Content-Security-Policy and the other security
+headers, and logs paths without query strings. `.dockerignore` keeps a local `.env` out of the build. The workspace stack is
+`deployment/compose.yaml`. The CSP was derived from the code (no inline scripts, iframes, workers or third-party hosts) and
+has not yet been checked in a browser.
 
 `VITE_DATA_SOURCE` is a build choice, never guessed at runtime, so the app cannot fall back to synthetic data when the server
 is down. A live build: `$env:VITE_DATA_SOURCE='bff'; npm run build`; the ingress serves `dist/` and forwards `/api` to

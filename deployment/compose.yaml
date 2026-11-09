@@ -1,48 +1,155 @@
-# Local development template. Adapt build contexts, commands and health endpoints
-# to the actual application before use.
+# HMS local development stack (development-ready only; see deployment/README.md). Not a production deployment.
+#
+#   docker compose -f deployment/compose.yaml config -q        # validate
+#   docker compose -f deployment/compose.yaml up --build        # build and start
+#   docker compose -f deployment/compose.yaml down              # stop (add -v to delete the dev database)
+#
+# Start order: postgres -> db-bootstrap -> db-migrate -> org-setup -> hms-services -> hms-web.
+# The database superuser is used only by db-bootstrap. Migrations run once as hms_meta_migrator; hms-services runs as
+# hms_meta_runtime (ADR-DB-002). Passwords and keys are mounted files under ${HMS_SECRETS_DIR}, never env values.
+# The legacy HMS (Khanza MySQL) stays external and read-only: hms-services reaches it with a SELECT-only account.
 name: ${COMPOSE_PROJECT_NAME:-hms}
+
+x-hms-services-build: &hms-services-build
+  context: ../hms_services
+  dockerfile: Dockerfile
+
+x-hardening: &hardening
+  read_only: true
+  cap_drop: ["ALL"]
+  security_opt: ["no-new-privileges:true"]
+
+x-db-job: &db-job
+  image: ${POSTGRES_IMAGE:-postgres:18}
+  networks: [hms-private]
+  volumes:
+    - ../hms_database:/hms_database:ro
+  depends_on:
+    postgres:
+      condition: service_healthy
+  restart: "no"
+
+x-runtime-database: &runtime-database
+  DATABASE_HOST: postgres
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: ${HMS_DATABASE_NAME:-hms}
+  DATABASE_USER: hms_meta_runtime
+  DATABASE_PASSWORD_FILE: /run/secrets/hms_runtime_password
+  DATABASE_SSLMODE: disable   # private development network only; production requires verify-full or verify-ca
 
 services:
   postgres:
     image: ${POSTGRES_IMAGE:-postgres:18}
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-hms}
-      POSTGRES_USER: ${POSTGRES_USER:-hms_app}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a local development password}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_superuser_password
+    secrets: [postgres_superuser_password]
     ports:
-      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+      # Loopback only, for psql from the host. 5433 avoids a PostgreSQL already installed on 5432.
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
     volumes:
       - hms_postgres_dev:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
       timeout: 5s
-      retries: 10
-      start_period: 15s
+      retries: 20
+      start_period: 10s
     networks: [hms-private]
+    restart: unless-stopped
+    mem_limit: 1g
+    cpus: 1.0
+
+  # Creates the database and roles (re-runnable). The only job that uses the superuser.
+  db-bootstrap:
+    <<: *db-job
+    secrets: [postgres_superuser_password, hms_migrator_password, hms_runtime_password]
+    environment:
+      HMS_DATABASE_NAME: ${HMS_DATABASE_NAME:-hms}
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        PGPASSWORD="$$(cat /run/secrets/postgres_superuser_password)" \
+        HMS_MIGRATOR_PASSWORD="$$(cat /run/secrets/hms_migrator_password)" \
+        HMS_RUNTIME_PASSWORD="$$(cat /run/secrets/hms_runtime_password)" \
+          bash /hms_database/scripts/bootstrap.sh --host postgres --database "$$HMS_DATABASE_NAME"
+
+  # Applies pending migrations once (ledger and checksums, ADR-DB-001), as hms_meta_migrator.
+  db-migrate:
+    <<: *db-job
+    depends_on:
+      db-bootstrap:
+        condition: service_completed_successfully
+    secrets: [hms_migrator_password]
+    environment:
+      HMS_DATABASE_NAME: ${HMS_DATABASE_NAME:-hms}
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        PGPASSWORD="$$(cat /run/secrets/hms_migrator_password)" \
+          bash /hms_database/scripts/migrate.sh --host postgres --database "$$HMS_DATABASE_NAME"
+
+  # Creates the organization and facility rows if missing (idempotent), as hms_meta_runtime.
+  org-setup:
+    build: *hms-services-build
+    image: ${HMS_SERVICES_IMAGE:-local/hms-services:dev}
+    <<: *hardening
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+    secrets: [hms_runtime_password]
+    environment:
+      <<: *runtime-database
+    command:
+      - setup-organization
+      - -org-code=${HMS_ORGANIZATION_CODE:?Set HMS_ORGANIZATION_CODE in deployment/.env}
+      - -org-name=${HMS_ORGANIZATION_NAME:?Set HMS_ORGANIZATION_NAME in deployment/.env}
+      - -facility-code=${HMS_FACILITY_CODE:?Set HMS_FACILITY_CODE in deployment/.env}
+      - -facility-name=${HMS_FACILITY_NAME:?Set HMS_FACILITY_NAME in deployment/.env}
+      - -timezone=${HMS_FACILITY_TIMEZONE:-Asia/Jakarta}
+    networks: [hms-private]
+    restart: "no"
 
   hms-services:
-    build:
-      context: ${HMS_SERVICES_BUILD_CONTEXT:-../hms_services}
-      dockerfile: Dockerfile
+    build: *hms-services-build
     image: ${HMS_SERVICES_IMAGE:-local/hms-services:dev}
-    environment:
-      APP_ENV: development
-      HTTP_ADDR: ":8080"
-      DATABASE_HOST: postgres
-      DATABASE_PORT: "5432"
-      DATABASE_NAME: ${POSTGRES_DB:-hms}
-      DATABASE_USER: ${POSTGRES_USER:-hms_app}
-      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set a local development password}
-    ports:
-      - "127.0.0.1:${HMS_SERVICES_HTTP_PORT:-8080}:8080"
+    <<: *hardening
     depends_on:
-      postgres:
-        condition: service_healthy
+      org-setup:
+        condition: service_completed_successfully
+    secrets:
+      - hms_runtime_password
+      - legacy_db_password
+      - legacy_login_id_key
+      - legacy_login_password_key
+    environment:
+      <<: *runtime-database
+      APP_ENV: development
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      HTTP_ADDR: ":8080"
+      # The exact origin the browser uses for hms-web. Browse to this URL, not localhost.
+      PUBLIC_ORIGIN: http://127.0.0.1:${HMS_WEB_HTTP_PORT:-8088}
+      # Only hms-web's fixed address may set X-Real-IP (sign-in rate limits per client address).
+      TRUSTED_PROXIES: ${HMS_WEB_IP:-172.28.50.10}
+      HMS_ORGANIZATION_CODE: ${HMS_ORGANIZATION_CODE:?Set HMS_ORGANIZATION_CODE in deployment/.env}
+      HMS_FACILITY_CODE: ${HMS_FACILITY_CODE:?Set HMS_FACILITY_CODE in deployment/.env}
+      LEGACY_DB_HOST: ${LEGACY_DB_HOST:?Set LEGACY_DB_HOST in deployment/.env}
+      LEGACY_DB_PORT: ${LEGACY_DB_PORT:-3306}
+      LEGACY_DB_NAME: ${LEGACY_DB_NAME:?Set LEGACY_DB_NAME in deployment/.env}
+      LEGACY_DB_USER: ${LEGACY_DB_USER:?Set LEGACY_DB_USER (SELECT-only account) in deployment/.env}
+      LEGACY_DB_PASSWORD_FILE: /run/secrets/legacy_db_password
+      LEGACY_LOGIN_ID_KEY_FILE: /run/secrets/legacy_login_id_key
+      LEGACY_LOGIN_PASSWORD_KEY_FILE: /run/secrets/legacy_login_password_key
+      LEGACY_LOGIN_EMPLOYEE_FIELD: ${LEGACY_LOGIN_EMPLOYEE_FIELD:-nik}
+    # Lets LEGACY_DB_HOST=host.docker.internal reach a development Khanza on the host (Linux needs this line).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
-      # Replace /healthz with the actual service health endpoint and add curl/wget
-      # to the runtime image or use an appropriate native healthcheck binary.
-      test: ["CMD", "/app/healthcheck"]
+      test: ["CMD", "/app/hms-services", "healthcheck"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -50,25 +157,53 @@ services:
     networks: [hms-private]
     init: true
     restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.0
 
   hms-web:
     build:
-      context: ${HMS_WEB_BUILD_CONTEXT:-../hms_workspace/web}
+      context: ../hms_workspace/web
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        VITE_DATA_SOURCE: ${VITE_DATA_SOURCE:-bff}
+        VITE_IDLE_MINUTES: ${VITE_IDLE_MINUTES:-15}
     image: ${HMS_WEB_IMAGE:-local/hms-web:dev}
+    <<: *hardening
+    tmpfs:
+      - /tmp
     ports:
-      - "127.0.0.1:${HMS_WEB_HTTP_PORT:-8088}:80"
+      - "127.0.0.1:${HMS_WEB_HTTP_PORT:-8088}:8080"
     depends_on:
       hms-services:
-        condition: service_started
-    networks: [hms-private]
+        condition: service_healthy
+    networks:
+      hms-private:
+        ipv4_address: ${HMS_WEB_IP:-172.28.50.10}
     restart: unless-stopped
+    mem_limit: 128m
+    cpus: 0.5
 
 networks:
   hms-private:
     driver: bridge
+    ipam:
+      config:
+        - subnet: ${HMS_NETWORK_SUBNET:-172.28.50.0/24}
 
 volumes:
   hms_postgres_dev:
+
+# Development secret files (git-ignored). Create them as described in deployment/README.md.
+secrets:
+  postgres_superuser_password:
+    file: ${HMS_SECRETS_DIR:-./secrets/dev}/postgres_superuser_password
+  hms_migrator_password:
+    file: ${HMS_SECRETS_DIR:-./secrets/dev}/hms_migrator_password
+  hms_runtime_password:
+    file: ${HMS_SECRETS_DIR:-./secrets/dev}/hms_runtime_password
+  legacy_db_password:
+    file: ${HMS_SECRETS_DIR:-./secrets/dev}/legacy_db_password
+  legacy_login_id_key:
+    file: ${HMS_SECRETS_DIR:-./secrets/dev}/legacy_login_id_key
+  legacy_login_password_key:
+    file: ${HMS_SECRETS_DIR:-./secrets/dev}/legacy_login_password_key

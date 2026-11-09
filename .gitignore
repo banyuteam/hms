@@ -1,0 +1,7 @@
+# Workspace-level ignores. Projects keep their own .gitignore files.
+
+# Local deployment settings and secret material (deployment/README.md): never committed.
+/deployment/.env
+/deployment/secrets/*
+!/deployment/secrets/.gitkeep
+!/deployment/secrets/README.md

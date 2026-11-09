@@ -1,0 +1,19 @@
+# Keep local settings, secrets and build output out of the image build context. A developer's .env must never reach
+# `vite build`: it could switch on the demo account or another data source.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+node_modules
+dist
+coverage
+playwright-report
+test-results
+.git
+.claude
+.vscode
+.idea
+*.log
+Dockerfile
+.dockerignore

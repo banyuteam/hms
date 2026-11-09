@@ -4,8 +4,9 @@ Owns Go runtime behavior, APIs, orchestration, read-only legacy polling, event s
 extension workers. Start with `CLAUDE.md`; use project skills under `.claude/skills/`. Coordinate schema and event
 contract changes with `hms_database`.
 
-**Status: development-ready** sign-in, IAM administration and the first clinical read slice (patients and encounters). Not CI-, staging- or production-ready: no container
-image, CI pipeline, ingress or TLS yet.
+**Status: development-ready** sign-in, IAM administration and the first clinical read slice (patients and encounters). Not CI-, staging- or production-ready yet:
+the container image (`Dockerfile`) and the workspace CI (`.github/workflows/ci.yml`) exist but have not had a first
+successful run; there is no ingress or TLS yet.
 
 ## What exists
 
@@ -102,6 +103,21 @@ $env:HMS_TEST_ADMIN_DATABASE_URL = 'postgres://<superuser>:<pw>@127.0.0.1:5432/h
 go test -count=1 -run TestPG ./platform/iam/ ./clinical/
 ```
 
+All six `TestPG*` tests passed on 2026-11-09 against a fresh PostgreSQL 18.6 database built by `hms_database`
+bootstrap + migrations `0001`–`0005`. CI runs them on every push and fails if any are skipped.
+
+## Container image
+
+```powershell
+docker build -t local/hms-services:dev .      # from hms_services/
+```
+
+Multi-stage build to a static binary on distroless `nonroot`; no configuration or secrets in the image (environment
+and `*_FILE` mounts at run time). `hms-services healthcheck` probes the process's own `/healthz` for container health
+checks (the image has no shell or HTTP client); `/readyz` stays the readiness probe. The workspace development stack
+(`deployment/compose.yaml`) runs it as `hms_meta_runtime` after one-shot bootstrap, migration and `setup-organization`
+jobs.
+
 ## Open items
 - Khanza sign-in verified on the dev server (2026-11-08): ID key, password key and `nik` mapping confirmed.
 - Clinical role catalog (which roles get patient.read / encounter.read / encounter.clinical.read / billing.read /
@@ -112,4 +128,5 @@ go test -count=1 -run TestPG ./platform/iam/ ./clinical/
   number in full) and checked by claim readiness v3 (ADR-SVC-007). INA-CBG / E-Klaim tables (`inacbg_*`) are
   inventoried but not read (B-2, B-3 wait for the casemix team).
 - Not yet served: the outpatient discharge summary, other clinical documents.
-- Dockerfile, CI, ingress rate limiting/TLS, purge of expired sessions and lockout rows, mobile token design.
+- First green CI run; image scan, SBOM and digest-pinned base images for releases.
+- Ingress rate limiting/TLS, purge of expired sessions and lockout rows, mobile token design.

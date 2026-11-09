@@ -8,6 +8,8 @@ hms/
 ├── README.md
 ├── PROJECT-STRUCTURE.md
 ├── SKILLS-CATALOG.md
+├── .gitignore
+├── .github/workflows/ci.yml                 # workspace CI (database, services, web, images)
 ├── .claude/skills/                         # cross-project governance
 ├── standards/
 │   ├── architecture/
@@ -28,16 +30,15 @@ hms/
 │       ├── dsl-ir-contract.md
 │       └── ui-ir-contract.md
 ├── deployment/
-│   ├── compose.yaml
-│   ├── compose.production.yaml
-│   ├── environments/
-│   ├── secrets/                             # references and procedures; no committed secrets
+│   ├── compose.yaml                         # development stack (images: each project's Dockerfile)
+│   ├── compose.production.yaml              # production topology template
+│   ├── .env.example
+│   ├── secrets/                             # git-ignored dev secret files; no committed secrets
 │   ├── monitoring/
 │   │   ├── prometheus/
 │   │   ├── grafana/
 │   │   ├── loki/
 │   │   └── alertmanager/
-│   ├── docker/
 │   ├── ENVIRONMENTS.md
 │   └── RELEASE-CHECKLIST.md
 │

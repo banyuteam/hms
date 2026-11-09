@@ -1,0 +1,14 @@
+# Keep secrets, local settings and non-build material out of the image build context.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.git
+.claude
+.vscode
+.idea
+documentation
+tests
+scripts
+*.log
