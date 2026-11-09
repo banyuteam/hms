@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  HMS Desktop per-machine MSI (ADR-DSK-003). Build with build-msi.ps1; do not hand-edit GUIDs.
+  UpgradeCode is permanent: changing it breaks upgrades of every installed copy.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="HMS Desktop"
+           Manufacturer="$(Manufacturer)"
+           Version="$(Version)"
+           UpgradeCode="475C6B2D-093F-452A-BAA8-0D6C0C748BC8"
+           Scope="perMachine"
+           Language="1033">
+    <SummaryInformation Description="HMS Desktop $(Version) ($(BuildKind))" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of HMS Desktop is already installed. Uninstall it first to install an older version." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <!-- Evergreen WebView2 runtime, per-machine (WOW6432Node on x64) or per-user; "0.0.0.0" means removed. -->
+    <Property Id="WV2_MACHINE">
+      <RegistrySearch Id="WebView2Machine" Root="HKLM" Bitness="always32"
+                      Key="SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+                      Name="pv" Type="raw" />
+    </Property>
+    <Property Id="WV2_USER">
+      <RegistrySearch Id="WebView2User" Root="HKCU"
+                      Key="Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+                      Name="pv" Type="raw" />
+    </Property>
+    <Launch Condition="VersionNT64" Message="HMS Desktop requires 64-bit Windows." />
+    <Launch Condition="Installed OR (WV2_MACHINE AND WV2_MACHINE &lt;&gt; &quot;0.0.0.0&quot;) OR (WV2_USER AND WV2_USER &lt;&gt; &quot;0.0.0.0&quot;)"
+            Message="HMS Desktop requires the Microsoft Edge WebView2 Runtime (Evergreen). Ask IT to install it, then run this installer again." />
+
+    <!-- Optional: HMS_ORIGIN=https://host[:port] writes config.toml, only when none exists (ADR-DSK-003 §2). -->
+    <Property Id="HMS_ORIGIN" Secure="yes" />
+    <Property Id="EXISTINGCONFIG" Secure="yes">
+      <DirectorySearch Id="ConfigFolderSearch" Path="[CommonAppDataFolder]HMS Desktop" Depth="0">
+        <FileSearch Id="ConfigFileSearch" Name="config.toml" />
+      </DirectorySearch>
+    </Property>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="HMS Desktop" />
+    </StandardDirectory>
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="CONFIGFOLDER" Name="HMS Desktop" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <Feature Id="Main" Title="HMS Desktop" AllowAbsent="no">
+      <Component Id="HmsDesktopExe" Directory="INSTALLFOLDER" Bitness="always64">
+        <File Id="HmsDesktopExe" Source="$(ExePath)" KeyPath="yes" />
+      </Component>
+
+      <!-- Non-advertised shortcut (no install-on-demand repair at launch). Own component with an HKCU key path, the
+           ICE43/ICE57-clean pattern; with ALLUSERS=1 the shortcut itself goes to the all-users Start menu. -->
+      <Component Id="StartMenuShortcut" Directory="ProgramMenuFolder">
+        <Shortcut Id="StartMenuHms" Name="HMS" Description="HMS Desktop" Target="[#HmsDesktopExe]"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RegistryValue Root="HKCU" Key="Software\HMS Desktop" Name="StartMenuShortcut" Type="integer" Value="1"
+                       KeyPath="yes" />
+      </Component>
+
+      <!-- Configuration folder: SYSTEM and Administrators full control, Users read only; not inherited from
+           ProgramData (whose defaults let any user create files). Kept on uninstall: it is IT-owned. -->
+      <Component Id="ConfigFolder" Directory="CONFIGFOLDER" Guid="9625DE70-6B64-49DA-A951-6ABED26BB63F"
+                 Permanent="yes" Bitness="always64">
+        <CreateFolder>
+          <PermissionEx Sddl="O:SYG:SYD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FRFX;;;BU)" />
+        </CreateFolder>
+      </Component>
+
+      <Component Id="ConfigFromProperty" Directory="CONFIGFOLDER" Guid="3942E915-DA26-45FA-83F6-D739DB731DC2"
+                 Permanent="yes" NeverOverwrite="yes" Bitness="always64"
+                 Condition="HMS_ORIGIN AND NOT EXISTINGCONFIG">
+        <IniFile Id="HmsOrigin" Directory="CONFIGFOLDER" Name="config.toml" Action="createLine"
+                 Section="hms" Key="origin" Value="&quot;[HMS_ORIGIN]&quot;" />
+        <RegistryValue Root="HKLM" Key="Software\HMS Desktop" Name="ConfigWrittenByInstaller" Type="integer"
+                       Value="1" KeyPath="yes" />
+      </Component>
+    </Feature>
+  </Package>
+</Wix>

@@ -1,0 +1,9 @@
+# HMS Desktop workstation configuration (ADR-DSK-002, ADR-DSK-003).
+# Location: %ProgramData%\HMS Desktop\config.toml, normally written by the installer (HMS_ORIGIN property) or pushed
+# by IT. The shell refuses this file unless it and its folder are owned by SYSTEM/Administrators/TrustedInstaller and
+# writable only by them. Debug builds may instead read the file named by HMS_DESKTOP_CONFIG (no permission check).
+
+[hms]
+# The HMS web origin: https://host[:port] only. No path, query or credentials. Use punycode for non-ASCII hosts.
+# Plain http is accepted only for localhost in debug builds.
+origin = "https://hms.example.internal"
