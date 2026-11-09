@@ -21,19 +21,24 @@ successful run; there is no ingress or TLS yet.
 | `platform/audit` | Writes `audit.audit_events` |
 | `platform/tenancy` | Organization/facility resolution and setup |
 | `tariffs` | Tariff book API (tariff-book-v1): legacy master price tables, read-only |
-| `assistant`, `assistant/rules` | Assistant rule evaluation (assistant-v1, ADR-SVC-006): deterministic rule sets in Go (no language model), first `claim-readiness` v1 over the visit timeline |
+| `assistant`, `assistant/rules` | Assistant rule evaluation (assistant-v1, ADR-SVC-006): deterministic rule sets in Go (no language model), `claim-readiness` v3 over the visit timeline; evaluation receipts, feedback, comments, interaction events and retention (ADR-SVC-008) |
 | `contracts/api/auth-v1.openapi.yaml`, `iam-admin-v1.openapi.yaml`, `clinical-read-v1.openapi.yaml`, `clinical-timeline-v1.openapi.yaml`, `tariff-book-v1.openapi.yaml`, `assistant-v1.openapi.yaml` | API contracts |
 | `documentation/architecture/ADR-SVC-00*.md` | Design and decisions (sign-in, IAM administration, clinical read, visit timeline and bill, tariff book, assistant evaluation, BPJS bridging read) |
 
 Endpoints: `POST /api/v1/auth/sign-in`, `GET /api/v1/auth/session`, `POST /api/v1/auth/sign-out`, the IAM
 administration API under `/api/v1/iam/`, patients and encounters under `/api/v1/patients` and `/api/v1/encounters`,
 `GET /api/v1/encounters/{number}/timeline` and `/bill`, the tariff book under `/api/v1/tariffs`,
-`GET /api/v1/assistant/rule-sets` and `POST /api/v1/assistant/rules/evaluate` (see the contracts), `GET /healthz`, `GET /readyz`.
+`GET /api/v1/assistant/rule-sets` and `POST /api/v1/assistant/rules/evaluate`, assistant feedback (assistant-v1 1.1.0,
+ADR-SVC-008): `POST /api/v1/assistant/feedback`, `GET /api/v1/assistant/feedback/summary`,
+`GET /api/v1/assistant/feedback/comments`, `POST /api/v1/assistant/events` (see the contracts), `GET /healthz`,
+`GET /readyz`. A retention loop in `serve` purges expired assistant feedback data every 6 hours.
 
 Clinical reads need the permissions `patient.read`, `encounter.read` and, to reveal one sensitive identifier,
 `patient.identifiers.reveal`; the visit timeline (notes, results, medication, surgery, diagnoses) needs
 `encounter.clinical.read` and the bill (charges recorded in the source tables) `billing.read` (ADR-SVC-004); the tariff book `tariff.read` (ADR-SVC-005); assistant checks `assistant.rules.evaluate` plus the read permission of the
-data they use (`encounter.clinical.read` for claim readiness, ADR-SVC-006; no role has it by default). Grant them through roles in User & Access. Every read is written to the audit trail, and
+data they use (`encounter.clinical.read` for claim readiness, ADR-SVC-006; no role has it by default); feedback
+summaries `assistant.feedback.review` and feedback comments `assistant.feedback.comments.read` (ADR-SVC-008; no role
+has them by default). Grant them through roles in User & Access. Every read is written to the audit trail, and
 nothing is returned when the audit event cannot be written.
 
 ## Run locally
@@ -100,11 +105,11 @@ go test ./...                                   # unit and HTTP tests, no databa
 # PostgreSQL integration tests (development/CI database only: they leave synthetic rows and audit events)
 $env:HMS_TEST_DATABASE_URL = 'postgres://hms_meta_runtime:<pw>@127.0.0.1:5432/hms?sslmode=disable'
 $env:HMS_TEST_ADMIN_DATABASE_URL = 'postgres://<superuser>:<pw>@127.0.0.1:5432/hms?sslmode=disable'
-go test -count=1 -run TestPG ./platform/iam/ ./clinical/
+go test -count=1 -run TestPG ./platform/iam/ ./clinical/ ./assistant/
 ```
 
-All six `TestPG*` tests passed on 2026-11-09 against a fresh PostgreSQL 18.6 database built by `hms_database`
-bootstrap + migrations `0001`–`0005`. CI runs them on every push and fails if any are skipped.
+All eight `TestPG*` tests passed on 2026-11-09 against a fresh PostgreSQL 18.6 database built by `hms_database`
+bootstrap + migrations `0001`–`0006`. CI runs them on every push and fails if any are skipped.
 
 ## Container image
 

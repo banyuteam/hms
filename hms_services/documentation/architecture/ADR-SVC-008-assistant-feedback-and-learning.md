@@ -1,6 +1,7 @@
 # ADR-SVC-008: Assistant feedback and learning loop — structured feedback on claim findings first
 
-- Status: Accepted 2026-11-09 (owner decisions L-1 to L-11 below). Not implemented.
+- Status: Accepted 2026-11-09 (owner decisions L-1 to L-11 below). Implemented in hms_database (0006) and
+  hms_services (assistant-v1 1.1.0); the web UI (step 3) is not built yet.
 - Date: 2026-11-09
 - Owners: hms_services (API, ingestion, analysis); hms_database (schema, roles, retention); hms_workspace/web (feedback UI)
 - Affected projects: hms_services, hms_database, hms_workspace/web
@@ -48,7 +49,8 @@ Phase A has data.
    that matters); feedback on it is then refused as "not found".
 3. **API (assistant-v1 1.1.0, additive).** All routes: session required, same Origin and JSON checks as other
    state-changing requests, bounded bodies, unknown fields rejected, per-user rate limits, errors in the `httpx` envelope.
-   - `POST /api/v1/assistant/feedback`: `{evaluation_id, rule_id, reason, comment?}` for a finding, or
+   - `POST /api/v1/assistant/feedback`: `{evaluation_id, rule_id, result, reason, comment?}` for a finding (`result`
+     is the result that was shown), or
      `{evaluation_id, helpfulness, expected?, comment?}` for the answer. Body at most 1 KiB. Requires
      `assistant.rules.evaluate` (L-4: whoever may run claim checks may report on them; no separate grant). Idempotent:
      one current item per user, evaluation and target (finding or answer); a repeat with the same content returns the
@@ -153,18 +155,39 @@ Phase A has data.
 4. Rollback: remove the permissions from roles (the UI hides feedback), or deploy the previous build; the tables stay
    and expire by retention.
 
+## Implementation (2026-11-09)
+- hms_database `0006_assistant_feedback.sql`: schema `assistant`, group role `hms_assistant_rw`. Composite foreign keys
+  enforce lineage (own evaluation; a rule it evaluated with the result it had); feedback versions are immutable except
+  `superseded_at`, once; aggregate views suppress groups below 5. Tests: `tests/sql/080_assistant.sql`.
+- hms_services `assistant`:
+  - `Handler.WithReceipts` writes a receipt after the audited evaluation; a failed receipt is logged and the result is
+    still returned.
+  - `FeedbackHandler`: the four routes of assistant-v1 1.1.0, per-user rate limits (30 feedback items, 120 event
+    batches per minute), strict JSON, audit fail-closed. Accepted feedback is audited inside the store transaction.
+  - `PgStore`: monthly counts are incremented in the same transaction as the receipt or event they count (UTC months),
+    so retention only deletes and never has to rebuild a count from rows that may already be gone.
+  - `RunRetention`: purge a minute after start and every 6 hours, in batches of 1000; concurrent replicas are harmless;
+    a non-empty purge writes one system audit event (`assistant.retention.purge`, counts only).
+  - Permissions `assistant.feedback.review` and `assistant.feedback.comments.read` are registered at startup; no role
+    receives them by default.
+- Tests: `assistant/feedback_test.go` (validation, lineage errors, audit, suppression, comments, events, routes need a
+  session), `assistant/assistant_test.go` (receipts), `assistant/pgstore_integration_test.go` (lifecycle, window,
+  facility scope, summaries, comments, events, retention; PostgreSQL 18).
+
 ## Acceptance criteria
 - [x] Owner decisions L-1 to L-11 recorded.
 - [ ] assistant-v1 1.1.0 contract reviewed by the hms_workspace owner.
-- [ ] Feedback for another user's evaluation, another facility, an unknown or expired evaluation, or a rule not in it is
-      rejected and audited; nothing reveals whether the evaluation exists.
+- [x] Feedback for another user's evaluation, another facility, an unknown or expired evaluation, or a rule not in it is
+      rejected and audited; nothing reveals whether the evaluation exists (store and HTTP tests).
 - [ ] Feedback rows, events and audit details contain no record values and no encounter or patient identifiers; comment
-      text appears only in `feedback_comments` and the comments route (tested, including logs).
-- [ ] Repeat submission is idempotent; a changed item is a new version; duplicate events are ignored.
-- [ ] Summaries are aggregate-only, apply the minimum group size, count comments without showing them and return no
+      text appears only in `feedback_comments` and the comments route (audit detail and event shape tested; a log
+      capture test is still to do).
+- [x] Repeat submission is idempotent; a changed item is a new version; duplicate events are ignored.
+- [x] Summaries are aggregate-only, apply the minimum group size, count comments without showing them and return no
       user ids.
-- [ ] Comment reads require `assistant.feedback.comments.read` and are audited.
-- [ ] No code path changes a rule, label or evaluation result from feedback or events (tested).
-- [ ] Telemetry failures never block or slow the panel (tested).
-- [ ] Retention purge removes expired receipts, comments, feedback and events, and keeps audit events; monthly event
-      aggregates are built before raw events expire.
+- [x] Comment reads require `assistant.feedback.comments.read` and are audited (route permission; fail-closed audit).
+- [ ] No code path changes a rule, label or evaluation result from feedback or events (true by construction: nothing
+      in `assistant/rules` or the evaluate path reads the schema; a test asserting it is still to do).
+- [ ] Telemetry failures never block or slow the panel (web, step 3).
+- [x] Retention purge removes expired receipts, comments, feedback and events, and keeps audit events; monthly counts
+      are written with the rows they count, so they survive the purge.

@@ -153,7 +153,10 @@ func serve(ctx context.Context, lookup config.Lookup) error {
 	clinicalReader := legacyhms.NewClinical(legacyhms.RowsQuerierFor(legacyDB))
 	clinical.NewHandler(clinicalReader, store, handler, loc, logger).Register(mux)
 	tariffs.NewHandler(legacyhms.NewTariff(legacyhms.RowsQuerierFor(legacyDB)), store, handler, logger).Register(mux)
-	assistant.NewHandler(clinicalReader, store, handler, loc, logger).Register(mux)
+	assistantStore := assistant.NewPgStore(pool)
+	assistant.NewHandler(clinicalReader, store, handler, loc, logger).WithReceipts(assistantStore).Register(mux)
+	assistant.NewFeedbackHandler(assistantStore, store, handler, logger).Register(mux)
+	go assistant.RunRetention(ctx, assistantStore, 6*time.Hour, logger)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})

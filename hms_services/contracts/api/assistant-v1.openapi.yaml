@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HMS Assistant API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     Implemented in hms_services (package assistant, ADR-SVC-006); used by hms_workspace/web (src/api/claimApi.ts). Deterministic rule evaluation for the assistant: no language model, no
     generated text. Session (auth-v1) and permission `assistant.rules.evaluate` at the session facility required. The
@@ -12,6 +12,11 @@ info:
     versions 1 and 2 are retired and answered with unsupported_rule_set.
     A result is a snapshot of the legacy record at `evaluated_at`. Findings are codes for the client to localize; they
     carry no record values. A complete checklist is an internal readiness check, not insurer acceptance.
+
+    1.1.0 (additive, ADR-SVC-008 Phase A): feedback on an evaluation, aggregate summaries, restricted comments and
+    interaction events. Feedback is evidence for rule owners only: it never changes a result, a rule or a permission.
+    Every returned evaluation leaves a receipt (ids, rule set and rule results; no record values) so feedback can be
+    checked against it; receipts are kept 30 days, or as long as feedback references them.
 servers:
   - url: /api/v1
 paths:
@@ -54,6 +59,116 @@ paths:
         '415': { description: unsupported_media_type }
         '429': { description: too_many_requests }
         '503': { description: 'service_unavailable (legacy read failed or timed out, audit write failed)' }
+  /assistant/feedback:
+    post:
+      summary: Report on a finding or rate the answer of an evaluation the caller ran (1.1.0)
+      description: |
+        Permission `assistant.rules.evaluate`. Same-origin JSON only; body at most 1 KiB; unknown fields rejected; limited
+        per user (429). Accepted only for an evaluation of the same user at the session facility, at most 7 days old;
+        a finding must name a rule of that evaluation with the result it had. One current item per user, evaluation and
+        target: an identical repeat returns the stored item (200), a change stores a new version (201). Every
+        submission and every rejection is audited (`assistant.feedback.submit`; choices only, never the comment).
+        Comments are kept 90 days, choices 12 months.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/FindingFeedback'
+                - $ref: '#/components/schemas/AnswerFeedback'
+      responses:
+        '200': { description: unchanged repeat, content: { application/json: { schema: { $ref: '#/components/schemas/FeedbackStored' } } } }
+        '201': { description: stored, content: { application/json: { schema: { $ref: '#/components/schemas/FeedbackStored' } } } }
+        '400': { description: invalid_request }
+        '401': { description: unauthenticated }
+        '403': { description: 'forbidden; origin_not_allowed' }
+        '404': { description: 'evaluation_not_found (unknown, of another user or facility, or older than 7 days; not said which)' }
+        '415': { description: unsupported_media_type }
+        '422': { description: 'rule_not_in_evaluation (the rule was not evaluated, or had another result)' }
+        '429': { description: too_many_requests }
+        '503': { description: 'service_unavailable (store or audit write failed; nothing stored)' }
+  /assistant/feedback/summary:
+    get:
+      summary: Current feedback counts per choice for the session facility (1.1.0)
+      description: |
+        Permission `assistant.feedback.review`. Groups below `min_group_size` (5) have null counts and
+        `suppressed: true`. No user ids and no comment text. `evaluations` is the number of evaluations of the rule set
+        in the range (the denominator). Audited (`assistant.feedback.summary`).
+      parameters:
+        - { name: rule_set, in: query, required: true, schema: { type: string, pattern: '^[a-z][a-z0-9-]{1,63}$' } }
+        - { name: version, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: from, in: query, schema: { type: string, pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$' }, description: 'first month (UTC), default: to' }
+        - { name: to, in: query, schema: { type: string, pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$' }, description: 'last month (UTC), default: the current month; at most 12 months' }
+      responses:
+        '200':
+          description: Summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FeedbackSummary' }
+        '400': { description: invalid_request }
+        '401': { description: unauthenticated }
+        '403': { description: forbidden }
+        '503': { description: service_unavailable }
+  /assistant/feedback/comments:
+    get:
+      summary: Comment text of current feedback, newest first, never the submitter (1.1.0)
+      description: |
+        Permission `assistant.feedback.comments.read`. Comments may contain patient data: every read is audited
+        (`assistant.feedback.comments.read`, with the filter and the number returned) and nothing is returned if the
+        audit event cannot be written. Pages of 50; pass `next_before` as `before` for the next page.
+      parameters:
+        - { name: rule_set, in: query, required: true, schema: { type: string } }
+        - { name: version, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: rule_id, in: query, schema: { type: string, pattern: '^[a-z][a-z0-9_]{0,63}$' } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+        - { name: before, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Comments
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [comments, next_before]
+                properties:
+                  comments: { type: array, items: { $ref: '#/components/schemas/FeedbackComment' } }
+                  next_before: { type: [string, 'null'], format: uuid }
+        '400': { description: invalid_request }
+        '401': { description: unauthenticated }
+        '403': { description: forbidden }
+        '503': { description: 'service_unavailable (store or audit write failed)' }
+  /assistant/events:
+    post:
+      summary: Record assistant interaction events (fire-and-forget, 1.1.0)
+      description: |
+        Session only. Same-origin JSON; body at most 4 KiB; 1 to 20 events; a batch with an invalid event is rejected.
+        No text, tags, encounter or patient identifiers. A repeated `event_id` of the same user is ignored. Topic `claim`
+        from a session without `assistant.rules.evaluate` is dropped. Events are kept 90 days, monthly counts 12 months.
+        Clients send without retrying and never block on the answer.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [events]
+              properties:
+                events: { type: array, minItems: 1, maxItems: 20, items: { $ref: '#/components/schemas/InteractionEvent' } }
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema: { type: object, required: [accepted], properties: { accepted: { type: integer, description: newly stored events } } }
+        '400': { description: invalid_request }
+        '401': { description: unauthenticated }
+        '403': { description: origin_not_allowed }
+        '415': { description: unsupported_media_type }
+        '429': { description: too_many_requests }
+        '503': { description: service_unavailable }
 components:
   schemas:
     RuleSetInfo:
@@ -207,3 +322,93 @@ components:
           items: { type: string }
           description: paths into the clinical-timeline-v1 Timeline response the rule looked at (no values)
         human_review: { type: boolean, description: true for every failed and not_evaluated finding }
+    FindingFeedback:
+      type: object
+      additionalProperties: false
+      required: [evaluation_id, rule_id, result, reason]
+      properties:
+        evaluation_id: { type: string, format: uuid }
+        rule_id: { type: string, pattern: '^[a-z][a-z0-9_]{0,63}$' }
+        result: { type: string, enum: [passed, failed, not_applicable, not_evaluated], description: the result that was shown }
+        reason: { type: string, enum: [result_wrong, unclear, not_relevant, data_outdated] }
+        comment: { $ref: '#/components/schemas/FeedbackCommentText' }
+    AnswerFeedback:
+      type: object
+      additionalProperties: false
+      required: [evaluation_id, helpfulness]
+      properties:
+        evaluation_id: { type: string, format: uuid }
+        helpfulness: { type: string, enum: [helpful, partially_helpful, not_helpful] }
+        expected:
+          type: string
+          enum: [more_specific, different_interpretation, actionable_steps, additional_information, other]
+          description: only with partially_helpful or not_helpful
+        comment: { $ref: '#/components/schemas/FeedbackCommentText' }
+    FeedbackCommentText:
+      type: string
+      maxLength: 200
+      description: |
+        Optional; trimmed; plain text (no control characters other than line breaks). Treated as patient data:
+        restricted, never logged or audited, deleted after 90 days.
+    FeedbackStored:
+      type: object
+      required: [feedback_id, version]
+      properties:
+        feedback_id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+    FeedbackSummary:
+      type: object
+      required: [rule_set, from, to, evaluations, min_group_size, groups]
+      properties:
+        rule_set:
+          type: object
+          required: [id, version]
+          properties: { id: { type: string }, version: { type: [integer, 'null'] } }
+        from: { type: string, examples: ['2026-09'] }
+        to: { type: string, examples: ['2026-11'] }
+        evaluations: { type: integer }
+        min_group_size: { type: integer, examples: [5] }
+        groups:
+          type: array
+          items:
+            type: object
+            required: [target, rule_id, result, reason, helpfulness, expected, count, comments, suppressed]
+            properties:
+              target: { type: string, enum: [finding, answer] }
+              rule_id: { type: [string, 'null'] }
+              result: { type: [string, 'null'] }
+              reason: { type: [string, 'null'] }
+              helpfulness: { type: [string, 'null'] }
+              expected: { type: [string, 'null'] }
+              count: { type: [integer, 'null'], description: null when suppressed }
+              comments: { type: [integer, 'null'], description: number of comments (never their text); null when suppressed }
+              suppressed: { type: boolean }
+    FeedbackComment:
+      type: object
+      required: [feedback_id, target, rule_id, result, reason, helpfulness, expected, comment, date]
+      properties:
+        feedback_id: { type: string, format: uuid }
+        target: { type: string, enum: [finding, answer] }
+        rule_id: { type: [string, 'null'] }
+        result: { type: [string, 'null'] }
+        reason: { type: [string, 'null'] }
+        helpfulness: { type: [string, 'null'] }
+        expected: { type: [string, 'null'] }
+        comment: { type: string }
+        date: { type: string, format: date, description: UTC date only; never the submitter or the time }
+    InteractionEvent:
+      type: object
+      additionalProperties: false
+      required: [schema_version, event_id, type, client_at, panel_session]
+      properties:
+        schema_version: { type: integer, enum: [1] }
+        event_id: { type: string, format: uuid, description: client-generated, for deduplication only }
+        type: { type: string, enum: [topic_selected, fallback_shown] }
+        client_at: { type: string, format: date-time, description: 'client clock; untrusted; at most 7 days old and 1 hour ahead' }
+        panel_session: { type: string, format: uuid, description: random id per assistant panel session; never an identity }
+        topic: { type: string, enum: [claim, summary, diagnoses, procedures, labs, medications], description: topic_selected only }
+        input: { type: string, enum: [button, typed], description: topic_selected only }
+        fallback_kind:
+          type: string
+          enum: [help, need_tag, need_visit, choose_visit, not_loaded, refused]
+          description: fallback_shown only
