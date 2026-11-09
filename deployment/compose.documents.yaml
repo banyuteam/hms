@@ -23,10 +23,11 @@ services:
       - hms_assistant_documents:/data/assistant-documents
     secrets: [ai_bridge_secret]
     environment:
-      # Read by hms-services from step 3 of ADR-SVC-009 on; unused before.
+      # Document handling in hms-services (ADR-SVC-009): on when DOCUMENTS_DIR is set.
       DOCUMENTS_DIR: /data/assistant-documents
       CLAMAV_ADDR: clamav:3310
       CONVERTER_URL: http://converter:3000
+      # Used from ADR-SVC-009 step 4 (the AI reading); unused before.
       AI_BRIDGE_URL: http://hms-ai-bridge:8090
       AI_BRIDGE_SECRET_FILE: /run/secrets/ai_bridge_secret
 

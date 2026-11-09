@@ -270,7 +270,7 @@ const (
 )
 
 // PurgeResult counts rows deleted per table.
-type PurgeResult map[string]int64
+type PurgeResult = map[string]int64
 
 // Purge deletes expired rows in bounded batches, comments and feedback first so that the receipts they kept become
 // deletable in the same run. It never touches audit events. A non-empty purge is recorded as one system audit event.

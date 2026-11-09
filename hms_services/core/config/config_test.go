@@ -81,3 +81,34 @@ func TestSecretFilesAndRedaction(t *testing.T) {
 		t.Error("NAME and NAME_FILE together must be refused")
 	}
 }
+
+func TestDocumentsAreOffUnlessConfigured(t *testing.T) {
+	c, err := Load(env(nil))
+	if err != nil || c.Documents.Enabled {
+		t.Fatalf("documents on by default: %+v %v", c.Documents, err)
+	}
+	if _, err := Load(env(map[string]string{"CLAMAV_ADDR": "clamav:3310"})); err == nil ||
+		!strings.Contains(err.Error(), "need DOCUMENTS_DIR") {
+		t.Errorf("scanner without a directory: %v", err)
+	}
+}
+
+func TestDocuments(t *testing.T) {
+	c, err := Load(env(map[string]string{"DOCUMENTS_DIR": "/data/assistant-documents", "CLAMAV_ADDR": "clamav:3310",
+		"CONVERTER_URL": "http://converter:3000"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := c.Documents
+	if !d.Enabled || d.ClamAVAddr != "clamav:3310" || d.ConverterURL.Host != "converter:3000" || d.Retention.Hours() != 7*24 {
+		t.Errorf("documents %+v", d)
+	}
+	_, err = Load(env(map[string]string{"DOCUMENTS_DIR": "relative/dir", "CLAMAV_ADDR": "clamav",
+		"CONVERTER_URL": "ftp://x", "DOCUMENTS_RETENTION_DAYS": "31"}))
+	for _, want := range []string{"DOCUMENTS_DIR must be an absolute path", "CLAMAV_ADDR must be host:port",
+		"CONVERTER_URL must be an http(s) URL", "DOCUMENTS_RETENTION_DAYS must be an integer between 1 and 30"} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("missing %q in %v", want, err)
+		}
+	}
+}

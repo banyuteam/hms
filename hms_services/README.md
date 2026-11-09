@@ -30,7 +30,9 @@ administration API under `/api/v1/iam/`, patients and encounters under `/api/v1/
 `GET /api/v1/encounters/{number}/timeline` and `/bill`, the tariff book under `/api/v1/tariffs`,
 `GET /api/v1/assistant/rule-sets` and `POST /api/v1/assistant/rules/evaluate`, assistant feedback (assistant-v1 1.1.0,
 ADR-SVC-008): `POST /api/v1/assistant/feedback`, `GET /api/v1/assistant/feedback/summary`,
-`GET /api/v1/assistant/feedback/comments`, `POST /api/v1/assistant/events` (see the contracts), `GET /healthz`,
+`GET /api/v1/assistant/feedback/comments`, `POST /api/v1/assistant/events`, and, when `DOCUMENTS_DIR`,
+`CLAMAV_ADDR` and `CONVERTER_URL` are set, document uploads (assistant-v1 1.2.0, ADR-SVC-009):
+`POST /api/v1/assistant/documents`, `DELETE /api/v1/assistant/documents/{id}` (see the contracts), `GET /healthz`,
 `GET /readyz`. A retention loop in `serve` purges expired assistant feedback data every 6 hours.
 
 Clinical reads need the permissions `patient.read`, `encounter.read` and, to reveal one sensitive identifier,

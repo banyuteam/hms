@@ -108,8 +108,8 @@ volume at rest (D-8), back it up with a tested restore, and run one `hms-service
 volume. Two more secret files are needed (`ai_bridge_secret`, `anthropic_api_key`; secrets/README.md). The Anthropic key
 must belong to the organization with zero data retention (D-3). Development and CI use synthetic documents only.
 
-Status: the bridge is a skeleton (`/v1/read` answers `not_implemented`), and `hms-services` does not use the scanner,
-converter or bridge yet (ADR-SVC-009 steps 3 and 4). Image versions (`clamav/clamav:1.4`, `gotenberg/gotenberg:8`,
+Status: `hms-services` uploads, checks and stores documents with the scanner and the converter (step 3); the bridge
+is still a skeleton (`/v1/read` answers `not_implemented`) and nothing calls it yet (step 4). Image versions (`clamav/clamav:1.4`, `gotenberg/gotenberg:8`,
 `python:3.13.11-slim`) are not verified here; pin them by digest and scan them before any release.
 
 ## Legacy MySQL

@@ -31,6 +31,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"hms/services/assistant"
+	"hms/services/assistant/documents"
 	"hms/services/assistant/rules"
 	"hms/services/clinical"
 	"hms/services/core/config"
@@ -156,7 +157,16 @@ func serve(ctx context.Context, lookup config.Lookup) error {
 	assistantStore := assistant.NewPgStore(pool)
 	assistant.NewHandler(clinicalReader, store, handler, loc, logger).WithReceipts(assistantStore).Register(mux)
 	assistant.NewFeedbackHandler(assistantStore, store, handler, logger).Register(mux)
-	go assistant.RunRetention(ctx, assistantStore, 6*time.Hour, logger)
+	purgers := []assistant.Purger{assistantStore}
+	// Uploaded documents (ADR-SVC-009): only when the document volume, scanner and converter are configured.
+	if d := cfg.Documents; d.Enabled {
+		docStore, volume := documents.NewPgStore(pool), documents.Volume{Dir: d.Dir}
+		documents.NewHandler(docStore, store, &documents.ClamAV{Addr: d.ClamAVAddr}, documents.NewConverter(d.ConverterURL),
+			volume, handler, d, logger).Register(mux)
+		purgers = append(purgers, documents.Retention{Store: docStore, Volume: volume})
+		logger.Info("assistant documents enabled", "retention_days", int(d.Retention.Hours()/24))
+	}
+	go assistant.RunRetention(ctx, 6*time.Hour, logger, purgers...)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -365,7 +375,8 @@ func permissionRegistry() []iam.PermissionDef {
 	all := append([]iam.PermissionDef{}, iam.Registry...)
 	all = append(all, clinical.Permissions...)
 	all = append(all, tariffs.Permissions...)
-	return append(all, assistant.Permissions...)
+	all = append(all, assistant.Permissions...)
+	return append(all, documents.Permissions...)
 }
 
 func systemEvent(orgID, action string) audit.Event {

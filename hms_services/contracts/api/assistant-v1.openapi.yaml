@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HMS Assistant API
-  version: 1.1.0
+  version: 1.2.0
   description: |
     Implemented in hms_services (package assistant, ADR-SVC-006); used by hms_workspace/web (src/api/claimApi.ts). Deterministic rule evaluation for the assistant: no language model, no
     generated text. Session (auth-v1) and permission `assistant.rules.evaluate` at the session facility required. The
@@ -17,6 +17,10 @@ info:
     interaction events. Feedback is evidence for rule owners only: it never changes a result, a rule or a permission.
     Every returned evaluation leaves a receipt (ids, rule set and rule results; no record values) so feedback can be
     checked against it; receipts are kept 30 days, or as long as feedback references them.
+
+    1.2.0 (additive, ADR-SVC-009 step 3): upload and delete documents for the assistant to read. Only when the server
+    has document handling configured (otherwise the routes answer 404). Reading them with the AI model is a later minor
+    version.
 servers:
   - url: /api/v1
 paths:
@@ -139,6 +143,57 @@ paths:
         '401': { description: unauthenticated }
         '403': { description: forbidden }
         '503': { description: 'service_unavailable (store or audit write failed)' }
+  /assistant/documents:
+    post:
+      summary: Upload one document (image, PDF, DOCX or XLSX) about an explicitly tagged visit (1.2.0)
+      description: |
+        Permission `assistant.documents.analyze` (pilot role only) and the visit's data permission
+        `encounter.clinical.read`, checked before the file is looked at. Same origin; `multipart/form-data` with exactly
+        two parts, `visit_number` and `file`; at most 10 MiB. The file name is never read or stored. Checks, in order:
+        type from the content (not the name), malware scan of the original bytes, DOCX/XLSX converted to PDF in an
+        isolated converter, PDFs must be unencrypted, without active content (JavaScript, launch actions, embedded
+        files) and have 1 to 50 pages; images are re-encoded (metadata such as GPS removed) and at most 20 megapixels.
+        Every upload and every refusal is audited (`assistant.document.upload`; types, sizes, reason; never the name or
+        content). The stored file is deleted after 7 days.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [visit_number, file]
+              properties:
+                visit_number: { type: string, pattern: '^[0-9/]{1,17}$' }
+                file: { type: string, format: binary }
+      responses:
+        '201':
+          description: Stored
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StoredDocument' }
+        '400': { description: invalid_request (parts missing, extra or malformed; bad visit number) }
+        '401': { description: unauthenticated }
+        '403': { description: 'forbidden (route permission or no facility); reference_forbidden (visit data permission); origin_not_allowed' }
+        '413': { description: too_large (over 10 MiB, or an archive that unpacks too large) }
+        '415': { description: 'unsupported_media_type (not multipart); unsupported_type; legacy_office (DOC/XLS)' }
+        '422':
+          description: |
+            The file was refused: malware_found, macro_document, active_content, encrypted_pdf, too_many_pages,
+            image_too_large, unreadable_file
+        '429': { description: too_many_requests (20 uploads per minute per user) }
+        '503': { description: 'scan_unavailable, conversion_unavailable, service_unavailable (nothing stored)' }
+  /assistant/documents/{id}:
+    delete:
+      summary: Delete one of the caller's own documents from the volume now (1.2.0)
+      description: Same origin. The metadata stays (marked purged) for the audit period. Audited (`assistant.document.delete`).
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Deleted }
+        '401': { description: unauthenticated }
+        '403': { description: 'forbidden; origin_not_allowed' }
+        '404': { description: 'document_not_found (unknown, someone else''s, or already deleted)' }
+        '503': { description: service_unavailable }
   /assistant/events:
     post:
       summary: Record assistant interaction events (fire-and-forget, 1.1.0)
@@ -412,3 +467,17 @@ components:
           type: string
           enum: [help, need_tag, need_visit, choose_visit, not_loaded, refused]
           description: fallback_shown only
+    StoredDocument:
+      type: object
+      required: [document_id, uploaded_media_type, media_type, size_bytes, page_count, expires_at]
+      properties:
+        document_id: { type: string, format: uuid }
+        uploaded_media_type:
+          type: string
+          enum: [image/jpeg, image/png, application/pdf,
+                 application/vnd.openxmlformats-officedocument.wordprocessingml.document,
+                 application/vnd.openxmlformats-officedocument.spreadsheetml.sheet]
+        media_type: { type: string, enum: [image/jpeg, image/png, application/pdf], description: as stored (Office as PDF) }
+        size_bytes: { type: integer }
+        page_count: { type: [integer, 'null'], description: PDFs only }
+        expires_at: { type: string, format: date-time, description: when the file is deleted from the volume }

@@ -205,6 +205,19 @@ and reference it in the release checklist. Any change to D-1, D-3, D-4 or the D-
   64 KiB body limit, busy slots, content-free access logs; `/v1/read` answers `not_implemented`), with unit tests,
   Dockerfile (uid 65532) and CI jobs (unit tests, image build and smoke). The hms-services image creates the document
   mount point owned by its non-root user. Not yet run with Docker on a developer machine; image versions unverified.
+- **Step 3 (2026-11-09):** package `hms_services/assistant/documents` (standard library only; no model call):
+  `POST /api/v1/assistant/documents` and `DELETE /api/v1/assistant/documents/{id}` (assistant-v1 1.2.0), registered only
+  when `DOCUMENTS_DIR`, `CLAMAV_ADDR` and `CONVERTER_URL` are set. Order of checks: permission `assistant.documents.analyze`
+  and the visit's `encounter.clinical.read` (before the file is read); type from the bytes (OOXML inspected for macros,
+  ActiveX, size and entry count); ClamAV INSTREAM on the original bytes; DOCX/XLSX to PDF in the converter; PDF rules
+  (unencrypted, no JavaScript/launch/embedded files, 1-50 pages; compressed object streams are inflated and scanned,
+  `#xx` name escapes decoded); images re-encoded (EXIF/GPS dropped, at most 20 megapixels); stored atomically under
+  `yyyy/mm/<uuid>`; metadata and audit event in one transaction (file removed if that fails). The file name is never
+  read. A new IAM helper `AllowUpload` applies the same-origin check to multipart requests. Retention: expired files
+  deleted and marked purged, readings and metadata after 12 months, through the shared retention loop.
+  **Limits of the PDF check:** a bounded scan, not a full parser; malformed or unusual PDFs may be refused as
+  `unreadable_file`, and active content in stream types other than object streams is not inspected (stored files are
+  never served back to browsers, and the scanner checks them too).
 
 ## Acceptance criteria
 - [x] D-1 to D-12 decided; privacy officer sign-off reported (2026-11-09).
