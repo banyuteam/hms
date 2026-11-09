@@ -12,3 +12,5 @@ documentation
 tests
 scripts
 *.log
+# Python workers have their own images (e.g. runtimes/python-workers/ai-bridge).
+runtimes/python-workers

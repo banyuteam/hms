@@ -18,6 +18,8 @@ COPY . .
 # -buildvcs=false: .git is not in the build context; the revision is recorded as an image label instead.
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
     go build -trimpath -buildvcs=false -ldflags="-s -w" -o /out/hms-services ./cmd/hms-services
+# Mount point of the document volume (ADR-SVC-009): owned by nonroot so a fresh named volume takes that owner.
+RUN mkdir -p /out/assistant-documents
 
 FROM ${RUNTIME_IMAGE} AS runtime
 ARG VERSION=dev
@@ -27,6 +29,7 @@ LABEL org.opencontainers.image.title="hms-services" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}"
 COPY --from=build /out/hms-services /app/hms-services
+COPY --from=build --chown=65532:65532 /out/assistant-documents /data/assistant-documents
 USER nonroot:nonroot
 ENV HTTP_ADDR=:8080
 EXPOSE 8080

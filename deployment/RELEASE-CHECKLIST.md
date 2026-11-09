@@ -46,3 +46,11 @@
 - [ ] Android signing and release pipeline verified where applicable.
 - [ ] iOS signing/provisioning and Apple-compatible build environment verified where applicable.
 - [ ] Mobile capability registry matches shipped features.
+
+## Document understanding (ADR-SVC-009), when enabled
+- [ ] Privacy officer sign-off on file; the Anthropic organization has zero data retention for the configured model.
+- [ ] Outbound allow-list enforced: AI bridge to the Anthropic API only, scanner to the ClamAV mirrors only, converter none.
+- [ ] Document volume encrypted at rest, backed up, restore tested; retention purge verified (files after 7 days).
+- [ ] ClamAV signatures current; converter and bridge run non-root with resource limits; images pinned by digest and scanned.
+- [ ] Cost caps configured and alerting to the owner tested.
+- [ ] Only the pilot role holds `assistant.documents.analyze`.

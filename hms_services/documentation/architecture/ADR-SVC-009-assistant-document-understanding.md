@@ -190,6 +190,22 @@ and reference it in the release checklist. Any change to D-1, D-3, D-4 or the D-
 5. hms_workspace/web: attach control, upload states, AI-reading bubble.
 6. Pilot with one role; review cost, accuracy and feedback (ADR-SVC-008) before widening.
 
+## Implementation
+- **Step 1 (2026-11-09):** contract `hms_services/contracts/internal/ai-bridge-v1.openapi.yaml` (documents referenced by
+  storage key and SHA-256; closed `VisitFacts` schema with no field for a name, NIK, address or phone; bounded answer
+  with `answered`/`declined`/`unreadable`). hms_database `0007_assistant_documents.sql`: `assistant.documents`
+  (metadata only, no file name, Office stored as its PDF, limits enforced, `purged_at` set once),
+  `assistant.document_readings` (outcome, model, bridge version, tokens; never the question or answer),
+  `assistant.document_reading_files`, view `document_usage_monthly`; tests `090_assistant_documents.sql`.
+- **Step 2 (2026-11-09):** opt-in overlays `deployment/compose.documents.yaml` and `compose.production.documents.yaml`:
+  ClamAV (`hms-scan`), Gotenberg/LibreOffice converter (`hms-convert`, internal, no outbound), `hms-ai-bridge`
+  (`hms-ai` internal + `hms-ai-egress`), document volume (read-write in hms-services, read-only in the bridge), two new
+  secret files. Outbound allow-lists documented for the host firewall (Docker cannot filter by host name). Bridge
+  skeleton under `runtimes/python-workers/ai-bridge` (standard library: health, readiness, bearer secret,
+  64 KiB body limit, busy slots, content-free access logs; `/v1/read` answers `not_implemented`), with unit tests,
+  Dockerfile (uid 65532) and CI jobs (unit tests, image build and smoke). The hms-services image creates the document
+  mount point owned by its non-root user. Not yet run with Docker on a developer machine; image versions unverified.
+
 ## Acceptance criteria
 - [x] D-1 to D-12 decided; privacy officer sign-off reported (2026-11-09).
 - [ ] The model call is behind a provider-neutral `DocumentReader` interface and the `ai-bridge-v1` contract; only the

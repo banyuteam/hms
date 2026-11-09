@@ -1,0 +1,118 @@
+# Document understanding for the development stack (ADR-SVC-009). Opt in on top of compose.yaml:
+#
+#   docker compose -f deployment/compose.yaml -f deployment/compose.documents.yaml config -q
+#   docker compose -f deployment/compose.yaml -f deployment/compose.documents.yaml up --build
+#
+# Adds: the malware scanner (ClamAV), the Office-to-PDF converter (LibreOffice behind Gotenberg), the AI bridge
+# (runtimes/python-workers/ai-bridge) and the document volume, and connects hms-services to them. Development uses
+# synthetic documents only. Needs two more secret files in deployment/secrets/dev/ (see secrets/README.md):
+# ai_bridge_secret and anthropic_api_key (may be empty: the bridge then reports not configured).
+#
+# Networks: each component sits on its own network with hms-services, so none of them can reach the database, the
+# legacy HMS or each other. Docker cannot filter outbound traffic by host name: in production the scanner may reach only
+# the ClamAV signature mirrors and the bridge only the Anthropic API (host firewall or egress proxy; deployment/README.md).
+
+x-hardening: &hardening
+  cap_drop: ["ALL"]
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  hms-services:
+    networks: [hms-private, hms-scan, hms-convert, hms-ai]
+    volumes:
+      - hms_assistant_documents:/data/assistant-documents
+    secrets: [ai_bridge_secret]
+    environment:
+      # Read by hms-services from step 3 of ADR-SVC-009 on; unused before.
+      DOCUMENTS_DIR: /data/assistant-documents
+      CLAMAV_ADDR: clamav:3310
+      CONVERTER_URL: http://converter:3000
+      AI_BRIDGE_URL: http://hms-ai-bridge:8090
+      AI_BRIDGE_SECRET_FILE: /run/secrets/ai_bridge_secret
+
+  # Malware scanner: hms-services streams each upload to clamd (INSTREAM). Signatures update from the ClamAV mirrors,
+  # so this network is not internal. Loading the signatures takes a few minutes and about 1.5-2.5 GB of memory.
+  clamav:
+    image: ${CLAMAV_IMAGE:-clamav/clamav:1.4}
+    <<: *hardening
+    cap_add: ["CHOWN", "SETGID", "SETUID", "DAC_OVERRIDE"]   # the image drops to its clamav user at start
+    volumes:
+      - hms_clamav_signatures:/var/lib/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "echo PING | nc -w 2 127.0.0.1 3310 | grep -q PONG"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 300s
+    networks: [hms-scan]
+    restart: unless-stopped
+    mem_limit: 3g
+    cpus: 1.0
+
+  # Office (DOCX, XLSX) to PDF only: LibreOffice behind Gotenberg's HTTP API, browser routes and webhooks off.
+  # No outbound network at all (internal network); hms-services sends the file and receives the PDF.
+  converter:
+    image: ${CONVERTER_IMAGE:-gotenberg/gotenberg:8}
+    <<: *hardening
+    command:
+      - gotenberg
+      - --api-port=3000
+      - --api-timeout=60s
+      - --chromium-disable-routes=true
+      - --webhook-disable=true
+      - --log-format=json
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks: [hms-convert]
+    restart: unless-stopped
+    mem_limit: 1g
+    cpus: 1.0
+
+  hms-ai-bridge:
+    build:
+      context: ../hms_services/runtimes/python-workers/ai-bridge
+      dockerfile: Dockerfile
+    image: ${HMS_AI_BRIDGE_IMAGE:-local/hms-ai-bridge:dev}
+    <<: *hardening
+    read_only: true
+    secrets: [ai_bridge_secret, anthropic_api_key]
+    environment:
+      BRIDGE_SECRET_FILE: /run/secrets/ai_bridge_secret
+      ANTHROPIC_API_KEY_FILE: /run/secrets/anthropic_api_key
+      DOCUMENTS_DIR: /data/assistant-documents
+      BRIDGE_SLOTS: ${AI_BRIDGE_SLOTS:-4}
+    volumes:
+      - hms_assistant_documents:/data/assistant-documents:ro
+    # hms-ai: private link to hms-services (internal). hms-ai-egress: outbound to the AI provider.
+    networks: [hms-ai, hms-ai-egress]
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.0
+
+networks:
+  hms-scan:
+    driver: bridge
+  hms-convert:
+    driver: bridge
+    internal: true
+  hms-ai:
+    driver: bridge
+    internal: true
+  hms-ai-egress:
+    driver: bridge
+
+volumes:
+  hms_assistant_documents:
+  hms_clamav_signatures:
+
+secrets:
+  ai_bridge_secret:
+    file: ${HMS_SECRETS_DIR:-./secrets/dev}/ai_bridge_secret
+  anthropic_api_key:
+    file: ${HMS_SECRETS_DIR:-./secrets/dev}/anthropic_api_key

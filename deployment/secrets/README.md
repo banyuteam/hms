@@ -12,5 +12,12 @@ Everything in this folder except this README and `.gitkeep` is git-ignored. `com
 | `legacy_login_id_key` | Khanza AES key for `user.id_user` |
 | `legacy_login_password_key` | Khanza AES key for `user.password` |
 
+With the document understanding overlay (`compose.documents.yaml`), two more:
+
+| File | Value |
+|---|---|
+| `ai_bridge_secret` | Shared secret between `hms-services` and `hms-ai-bridge`, at least 32 characters (generate it like the passwords) |
+| `anthropic_api_key` | Anthropic API key of the zero-data-retention organization (ADR-SVC-009 D-3); may be empty in development (the bridge then reports not configured). Never commit it, never paste it into an issue or chat |
+
 Use development values only. Production secrets come from the approved secret manager, never from this folder.
 See `deployment/README.md` for commands that create the files.
