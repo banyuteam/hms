@@ -141,8 +141,12 @@ Design tokens: `.claude/skills/design-tokens`. Tailwind theme keys map 1:1 to `-
   `src/data/claimFixtures.ts`). Questions are asked with topic buttons or typed text about one subject visit: the only
   tagged visit, or the chip the user picks when several are tagged (never guessed). The claim answer groups the server's
   findings (needs attention, not checked, complete, not applicable), says where to look in the Records window, and offers
-  "Open visit in Records" and "Check again" (a new audited evaluation). Baseline and findings:
-  `docs/assistant-inventory.md`; feedback on findings is proposed in ADR-SVC-008.
+  "Open visit in Records" and "Check again" (a new audited evaluation). Under each finding, "Report a problem" (four
+  reasons, optional 200-character comment) and under the answer "Was this answer useful?" send feedback to rule owners
+  (`src/api/feedbackApi.ts`, assistant-v1 1.1.0, ADR-SVC-008); it never changes a result, and demo data sends nothing.
+  Topic choices and fallbacks are sent as usage events without text, tags or record identifiers (the server adds the
+  signed-in user), fire-and-forget (`src/api/assistantEvents.ts`).
+  Baseline and findings: `docs/assistant-inventory.md`.
 
 - No separate Patient Management or tabbed Patient Detail window (owner decision 2026-11-05: remodel windows only).
 - Playwright e2e specs (Playwright is not in the approved stack); no visual/browser run of this project yet.

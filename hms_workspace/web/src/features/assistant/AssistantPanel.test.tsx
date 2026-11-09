@@ -13,6 +13,7 @@ import { useAssistantActions } from '@/state/assistant';
 import { useHome } from '@/state/home';
 import { AssistantPanel } from './AssistantPanel';
 import { claimApi } from '@/api/claimApi';
+import { feedbackApi } from '@/api/feedbackApi';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -325,6 +326,136 @@ describe('AssistantPanel', () => {
       await userEvent.click(within(panel).getByRole('button', { name: 'Check again' }));
       await waitFor(() => expect(evaluate).toHaveBeenCalledTimes(2));
       expect(evaluate).toHaveBeenNthCalledWith(2, NR);
+    });
+  });
+
+  describe('feedback on a claim answer (ADR-SVC-008)', () => {
+    /** A claim answer with one finding that needs attention: the primary code does not match the summary. */
+    async function claimAnswer() {
+      const e = structuredClone(SYNTHETIC_CLAIM_EVALUATIONS[NR]!);
+      e.findings = e.findings.map((f) =>
+        f.rule_id === 'primary_diagnosis_matches_summary'
+          ? { ...f, result: 'failed', reason: 'mismatch', human_review: true }
+          : f,
+      );
+      vi.spyOn(claimApi, 'evaluate').mockResolvedValue(e);
+      renderPanel(true);
+      const panel = await screen.findByRole('complementary', { name: PANEL });
+      await waitFor(() => expect(within(panel).getByText(NR)).toBeInTheDocument());
+      await userEvent.click(within(panel).getByRole('button', { name: 'Claim readiness' }));
+      await within(panel).findByRole('list', { name: 'Result counts' });
+      return { panel, evaluationId: e.evaluation_id };
+    }
+    const FINDING = 'Primary code matches discharge summary';
+
+    it('reports a problem with a finding: a reason is required, the comment is optional and trimmed', async () => {
+      const submit = vi.spyOn(feedbackApi, 'submit');
+      const { panel, evaluationId } = await claimAnswer();
+      await userEvent.click(
+        within(panel).getByRole('button', { name: `Report a problem with: ${FINDING}` }),
+      );
+      const form = within(panel).getByRole('form', { name: `Report a problem with: ${FINDING}` });
+      expect(within(form).getByText(/Do not enter patient names/)).toBeInTheDocument();
+      await userEvent.click(within(form).getByRole('button', { name: 'Send feedback' }));
+      expect(await within(form).findByRole('alert')).toHaveTextContent('Choose what is wrong.');
+      expect(submit).not.toHaveBeenCalled();
+
+      await userEvent.click(
+        within(form).getByRole('radio', { name: 'The record was corrected after the check' }),
+      );
+      await userEvent.type(
+        within(form).getByRole('textbox', { name: 'Comment (optional)' }),
+        '  Corrected on the ward.  ',
+      );
+      expect(within(form).getByText('26/200')).toBeInTheDocument();
+      await userEvent.click(within(form).getByRole('button', { name: 'Send feedback' }));
+      expect(
+        await within(panel).findByText('Demo data: feedback is not sent.'),
+      ).toBeInTheDocument();
+      expect(submit).toHaveBeenCalledWith({
+        evaluation_id: evaluationId,
+        rule_id: 'primary_diagnosis_matches_summary',
+        result: 'failed',
+        reason: 'data_outdated',
+        comment: 'Corrected on the ward.',
+      });
+    });
+
+    it('says "sent" only after the server stored it, and the result on screen does not change', async () => {
+      vi.spyOn(feedbackApi, 'submit').mockResolvedValue({ kind: 'sent', version: 1 });
+      const { panel } = await claimAnswer();
+      await userEvent.click(
+        within(panel).getByRole('button', { name: `Report a problem with: ${FINDING}` }),
+      );
+      await userEvent.click(within(panel).getByRole('radio', { name: 'Unclear' }));
+      await userEvent.click(within(panel).getByRole('button', { name: 'Send feedback' }));
+      expect(
+        await within(panel).findByText('Sent. Thank you — the result does not change.'),
+      ).toBeInTheDocument();
+      const row = within(panel).getByText(FINDING).closest('li') as HTMLElement;
+      expect(within(row).getByText('Check')).toBeInTheDocument();
+    });
+
+    it('a failed send says nothing was saved and can be tried again with the same content', async () => {
+      const submit = vi
+        .spyOn(feedbackApi, 'submit')
+        .mockRejectedValueOnce(new ApiError(0, 'NETWORK'))
+        .mockResolvedValueOnce({ kind: 'sent', version: 1 });
+      const { panel } = await claimAnswer();
+      await userEvent.click(
+        within(panel).getByRole('button', { name: `Report a problem with: ${FINDING}` }),
+      );
+      await userEvent.click(within(panel).getByRole('radio', { name: 'The result looks wrong' }));
+      await userEvent.click(within(panel).getByRole('button', { name: 'Send feedback' }));
+      expect(await within(panel).findByText(/nothing was saved/)).toBeInTheDocument();
+      expect(within(panel).queryByText(/^Sent\./)).toBeNull();
+      await userEvent.click(within(panel).getByRole('button', { name: 'Try again' }));
+      expect(await within(panel).findByText(/^Sent\./)).toBeInTheDocument();
+      expect(submit).toHaveBeenCalledTimes(2);
+      expect(submit.mock.calls[1]![0]).toEqual(submit.mock.calls[0]![0]);
+    });
+
+    it('an expired check cannot be retried: it says why', async () => {
+      vi.spyOn(feedbackApi, 'submit').mockRejectedValue(new ApiError(404, 'evaluation_not_found'));
+      const { panel } = await claimAnswer();
+      await userEvent.click(
+        within(panel).getByRole('button', { name: `Report a problem with: ${FINDING}` }),
+      );
+      await userEvent.click(within(panel).getByRole('radio', { name: 'Unclear' }));
+      await userEvent.click(within(panel).getByRole('button', { name: 'Send feedback' }));
+      expect(await within(panel).findByText(/older than 7 days/)).toBeInTheDocument();
+      expect(within(panel).queryByRole('button', { name: 'Try again' })).toBeNull();
+    });
+
+    it('rates the answer: useful is sent at once, not useful may say what was expected', async () => {
+      const submit = vi.spyOn(feedbackApi, 'submit');
+      const { panel, evaluationId } = await claimAnswer();
+      const question = within(panel).getByRole('group', { name: 'Was this answer useful?' });
+      await userEvent.click(within(question).getByRole('button', { name: 'Not useful' }));
+      expect(within(question).getByRole('button', { name: 'Not useful' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      const form = within(panel).getByRole('form', { name: 'Feedback on this answer' });
+      await userEvent.click(within(form).getByRole('radio', { name: 'Steps I can take' }));
+      await userEvent.click(within(form).getByRole('button', { name: 'Send feedback' }));
+      expect(
+        await within(panel).findByText('Demo data: feedback is not sent.'),
+      ).toBeInTheDocument();
+      expect(submit).toHaveBeenCalledWith({
+        evaluation_id: evaluationId,
+        helpfulness: 'not_helpful',
+        expected: 'actionable_steps',
+        comment: undefined,
+      });
+    });
+
+    it('a useful answer needs no form', async () => {
+      const submit = vi.spyOn(feedbackApi, 'submit');
+      const { panel, evaluationId } = await claimAnswer();
+      await userEvent.click(within(panel).getByRole('button', { name: 'Useful' }));
+      expect(submit).toHaveBeenCalledWith({ evaluation_id: evaluationId, helpfulness: 'helpful' });
+      expect(within(panel).queryByRole('form', { name: 'Feedback on this answer' })).toBeNull();
     });
   });
 });

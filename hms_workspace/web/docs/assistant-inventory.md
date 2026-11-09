@@ -8,7 +8,7 @@ type), and a question with only a patient tagged gets "tag the visit you are ask
 latest visit. F-8 to F-10 are fixed (2026-11-09): a tagged section gives the topic when the text names none, and the
 quick-action buttons put it first (F-8); with several visits tagged the assistant asks which one and the user picks a chip
 (F-9); the UI no longer calls it AI (labels, sparkles icon, "AI draft"), and the attachment control that never read files
-is gone (F-10). Feedback on findings is proposed in ADR-SVC-008 (not built).
+is gone (F-10). Feedback on findings and answers is built per ADR-SVC-008 (Phase A, assistant panel).
 **Governs:** `hms-assistant-workspace-governance` skill, Phase 1 · **Next:** ADR-SVC-006 and `assistant-v1` contract (Phase 2)
 **Reviewed:** `src/features/assistant/{AssistantPanel,rules}.tsx|ts`, `src/state/assistant.tsx`, `src/api/select.ts`,
 `src/api/liveTimeline.ts`, `src/features/emr/windows/*` (Ask AI buttons), `hms_services/contracts/api/clinical-timeline-v1.openapi.yaml` 1.2.0

@@ -3,12 +3,19 @@ import { emrKeys } from '@/api/hooks';
 import type { EncounterJourney } from '@/api/journey';
 import { claimApi, claimErrorKind, claimKey, type ClaimEvaluation } from '@/api/claimApi';
 import {
+  recordAssistantEvent,
+  resetAssistantEvents,
+  type FallbackKind,
+} from '@/api/assistantEvents';
+import {
   ask as askTopic,
   claimErrorLines,
   claimLines,
   reply,
   subjectOf,
+  TOPICS,
   type AssistantTag,
+  type Intent,
   type Reply,
   type ReplyLine,
   type Topic,
@@ -162,6 +169,27 @@ export interface AssistantActions {
 const AssistantStateContext = createContext<AssistantState | null>(null);
 const AssistantActionsContext = createContext<AssistantActions | null>(null);
 
+/** Replies that ask back instead of answering, as interaction events name them (ADR-SVC-008 Decision 6). */
+const FALLBACKS: Partial<Record<Intent, FallbackKind>> = {
+  help: 'help',
+  needTag: 'need_tag',
+  needVisit: 'need_visit',
+  chooseVisit: 'choose_visit',
+  notLoaded: 'not_loaded',
+  refuse: 'refused',
+};
+
+const isTopic = (i: Intent): i is Topic => (TOPICS as readonly string[]).includes(i);
+
+/** Usage events for one question: the topic asked (button) or answered (typed), and any fallback shown. */
+function recordUsage(r: Reply, button?: Topic) {
+  if (button) recordAssistantEvent({ type: 'topic_selected', topic: button, input: 'button' });
+  else if (isTopic(r.intent))
+    recordAssistantEvent({ type: 'topic_selected', topic: r.intent, input: 'typed' });
+  const fallback = FALLBACKS[r.intent];
+  if (fallback) recordAssistantEvent({ type: 'fallback_shown', fallback_kind: fallback });
+}
+
 const journeyOf = (norawat: string) =>
   resourceCache.getData<EncounterJourney>(emrKeys.journey(norawat));
 
@@ -212,11 +240,15 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         const t = text.trim();
         if (!t) return;
         const { tags, subject } = stateRef.current;
-        respond(reply(t, tags, journeyOf, subject), { text: t });
+        const r = reply(t, tags, journeyOf, subject);
+        recordUsage(r);
+        respond(r, { text: t });
       },
       ask: (topic) => {
         const { tags, subject } = stateRef.current;
-        respond(askTopic(topic, tags, journeyOf, subject), { topic });
+        const r = askTopic(topic, tags, journeyOf, subject);
+        recordUsage(r, topic);
+        respond(r, { topic });
       },
       recheck: (norawat) => {
         const tagged = stateRef.current.tags.find(
@@ -227,7 +259,10 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
           tags: [tagged ?? { id: `enc:${norawat}`, kind: 'encounter', norawat }],
         });
       },
-      reset: () => dispatch({ type: 'session/reset' }),
+      reset: () => {
+        resetAssistantEvents();
+        dispatch({ type: 'session/reset' });
+      },
     };
   }, []);
   return (

@@ -1,7 +1,7 @@
 # ADR-SVC-008: Assistant feedback and learning loop — structured feedback on claim findings first
 
-- Status: Accepted 2026-11-09 (owner decisions L-1 to L-11 below). Implemented in hms_database (0006) and
-  hms_services (assistant-v1 1.1.0); the web UI (step 3) is not built yet.
+- Status: Accepted 2026-11-09 (owner decisions L-1 to L-11 below). Phase A implemented 2026-11-09: hms_database
+  (0006), hms_services (assistant-v1 1.1.0) and hms_workspace/web (assistant panel).
 - Date: 2026-11-09
 - Owners: hms_services (API, ingestion, analysis); hms_database (schema, roles, retention); hms_workspace/web (feedback UI)
 - Affected projects: hms_services, hms_database, hms_workspace/web
@@ -174,6 +174,19 @@ Phase A has data.
   session), `assistant/assistant_test.go` (receipts), `assistant/pgstore_integration_test.go` (lifecycle, window,
   facility scope, summaries, comments, events, retention; PostgreSQL 18).
 
+- hms_workspace/web (assistant panel only, L-9):
+  - `src/api/feedbackApi.ts`: the feedback client (answer validated with Zod); demo data sends nothing.
+  - `src/features/assistant/FeedbackControls.tsx`: "Report a problem" on each finding of the claim result (four
+    reasons, optional comment with a 200-character counter and a reminder to leave patient details out) and "Was this
+    answer useful?" under it (useful is sent at once; partly or not useful may name what was expected). React Hook Form
+    with Zod. States: sending, "sent" only after the server stored it, demo, or an error that says nothing was saved
+    (Try again, except for an expired check or a missing permission). Sending never changes the result on screen.
+  - `src/api/assistantEvents.ts`: `topic_selected` and `fallback_shown`, one request per event, never awaited or
+    retried, errors ignored, no browser storage; it bypasses `liveSend`, so it can never sign anyone out. A random
+    panel session id lives in memory until sign-out. Recorded from the assistant state (`recordUsage`).
+  - Tests: `feedbackApi.test.ts`, `assistantEvents.test.ts`, `state/assistantUsage.test.tsx` and the feedback cases of
+    `AssistantPanel.test.tsx`.
+
 ## Acceptance criteria
 - [x] Owner decisions L-1 to L-11 recorded.
 - [ ] assistant-v1 1.1.0 contract reviewed by the hms_workspace owner.
@@ -188,6 +201,6 @@ Phase A has data.
 - [x] Comment reads require `assistant.feedback.comments.read` and are audited (route permission; fail-closed audit).
 - [ ] No code path changes a rule, label or evaluation result from feedback or events (true by construction: nothing
       in `assistant/rules` or the evaluate path reads the schema; a test asserting it is still to do).
-- [ ] Telemetry failures never block or slow the panel (web, step 3).
+- [x] Telemetry failures never block or slow the panel (not awaited, errors ignored, no retry; tested).
 - [x] Retention purge removes expired receipts, comments, feedback and events, and keeps audit events; monthly counts
       are written with the rows they count, so they survive the purge.
