@@ -183,7 +183,11 @@ func (h *Handler) RequirePermission(permission string, next http.Handler) http.H
 // unsafeRequestAllowed blocks cross-site state changes: the request must come from the public origin and be JSON
 // (a cross-site form cannot send application/json without a CORS preflight, which this API never grants).
 func (h *Handler) unsafeRequestAllowed(w http.ResponseWriter, r *http.Request) bool {
-	if !h.sameOrigin(w, r) {
+	origin := r.Header.Get("Origin")
+	sameOrigin := origin == h.opt.PublicOrigin.String() ||
+		(origin == "" && r.Header.Get("Sec-Fetch-Site") == "same-origin")
+	if !sameOrigin {
+		httpx.WriteError(w, http.StatusForbidden, "origin_not_allowed", "Request origin not allowed.")
 		return false
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.ContentLength != 0 &&
@@ -192,16 +196,6 @@ func (h *Handler) unsafeRequestAllowed(w http.ResponseWriter, r *http.Request) b
 		return false
 	}
 	return true
-}
-
-// sameOrigin requires the public origin (Origin header, or Sec-Fetch-Site: same-origin). false = 403 written.
-func (h *Handler) sameOrigin(w http.ResponseWriter, r *http.Request) bool {
-	origin := r.Header.Get("Origin")
-	if origin == h.opt.PublicOrigin.String() || (origin == "" && r.Header.Get("Sec-Fetch-Site") == "same-origin") {
-		return true
-	}
-	httpx.WriteError(w, http.StatusForbidden, "origin_not_allowed", "Request origin not allowed.")
-	return false
 }
 
 func (h *Handler) clearCookie(w http.ResponseWriter) {
@@ -216,20 +210,6 @@ func (h *Handler) RequestInfo(r *http.Request) RequestInfo { return h.requestInf
 // false = the error has been written.
 func (h *Handler) AllowStateChange(w http.ResponseWriter, r *http.Request) bool {
 	return h.unsafeRequestAllowed(w, r)
-}
-
-// AllowUpload applies the same-origin check to a file upload, which is multipart/form-data rather than JSON. A
-// cross-site form could send multipart, so the Origin check (and the SameSite=Strict session cookie) is what blocks it.
-// false = the error has been written.
-func (h *Handler) AllowUpload(w http.ResponseWriter, r *http.Request) bool {
-	if !h.sameOrigin(w, r) {
-		return false
-	}
-	if !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
-		httpx.WriteError(w, http.StatusUnsupportedMediaType, "unsupported_media_type", "Use multipart/form-data.")
-		return false
-	}
-	return true
 }
 
 // Can reports whether the request's caller holds permission at the session's facility, for checks a module makes

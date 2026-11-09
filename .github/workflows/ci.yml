@@ -124,21 +124,6 @@ jobs:
         env:
           VITE_DATA_SOURCE: bff
 
-  ai-bridge:
-    name: AI bridge (unit tests)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: hms_services/runtimes/python-workers/ai-bridge
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.13.11"
-      - name: Unit tests (no provider calls)
-        run: python -m unittest discover -s tests -v
-
   images:
     name: Container images (build + smoke)
     runs-on: ubuntu-24.04
@@ -150,16 +135,13 @@ jobs:
         run: |
           mkdir -p deployment/secrets/dev
           for f in postgres_superuser_password hms_migrator_password hms_runtime_password legacy_db_password \
-                   legacy_login_id_key legacy_login_password_key ai_bridge_secret anthropic_api_key; do
+                   legacy_login_id_key legacy_login_password_key; do
             printf 'ci-placeholder' > "deployment/secrets/dev/$f"
           done
           cp deployment/.env.example deployment/.env
           sed -i 's/^LEGACY_DB_NAME=.*/LEGACY_DB_NAME=ci/; s/^LEGACY_DB_USER=.*/LEGACY_DB_USER=ci/' deployment/.env
           docker compose -f deployment/compose.yaml config -q
-          docker compose -f deployment/compose.yaml -f deployment/compose.documents.yaml config -q
-          for f in placeholder-a placeholder-b placeholder-c placeholder-d placeholder-e placeholder-f; do
-            printf 'x' > "/tmp/$f"
-          done
+          for f in placeholder-a placeholder-b placeholder-c placeholder-d; do printf 'x' > "/tmp/$f"; done
           HMS_SERVICES_IMAGE=example/hms-services@sha256:0000000000000000000000000000000000000000000000000000000000000000 \
           HMS_WEB_IMAGE=example/hms-web@sha256:0000000000000000000000000000000000000000000000000000000000000000 \
           PUBLIC_ORIGIN=https://hms.example.org TRUSTED_PROXIES=10.0.0.0/24 HMS_ORGANIZATION_CODE=X HMS_FACILITY_CODE=X \
@@ -167,17 +149,6 @@ jobs:
           HMS_RUNTIME_PASSWORD_FILE=/tmp/placeholder-a LEGACY_DB_PASSWORD_FILE=/tmp/placeholder-b \
           LEGACY_LOGIN_ID_KEY_FILE=/tmp/placeholder-c LEGACY_LOGIN_PASSWORD_KEY_FILE=/tmp/placeholder-d \
             docker compose -f deployment/compose.production.yaml config -q
-          HMS_SERVICES_IMAGE=example/hms-services@sha256:0000000000000000000000000000000000000000000000000000000000000000 \
-          HMS_WEB_IMAGE=example/hms-web@sha256:0000000000000000000000000000000000000000000000000000000000000000 \
-          CLAMAV_IMAGE=example/clamav@sha256:0000000000000000000000000000000000000000000000000000000000000000 \
-          CONVERTER_IMAGE=example/gotenberg@sha256:0000000000000000000000000000000000000000000000000000000000000000 \
-          HMS_AI_BRIDGE_IMAGE=example/hms-ai-bridge@sha256:0000000000000000000000000000000000000000000000000000000000000000 \
-          PUBLIC_ORIGIN=https://hms.example.org TRUSTED_PROXIES=10.0.0.0/24 HMS_ORGANIZATION_CODE=X HMS_FACILITY_CODE=X \
-          DATABASE_HOST=db DATABASE_NAME=hms LEGACY_DB_HOST=legacy LEGACY_DB_NAME=x LEGACY_DB_USER=x \
-          HMS_RUNTIME_PASSWORD_FILE=/tmp/placeholder-a LEGACY_DB_PASSWORD_FILE=/tmp/placeholder-b \
-          LEGACY_LOGIN_ID_KEY_FILE=/tmp/placeholder-c LEGACY_LOGIN_PASSWORD_KEY_FILE=/tmp/placeholder-d \
-          AI_BRIDGE_SECRET_FILE=/tmp/placeholder-e ANTHROPIC_API_KEY_FILE=/tmp/placeholder-f \
-            docker compose -f deployment/compose.production.yaml -f deployment/compose.production.documents.yaml config -q
 
       - name: Build hms-services image
         run: |
@@ -210,32 +181,3 @@ jobs:
           test "$(docker exec web id -u)" != "0"
           docker logs web
           docker rm -f web
-
-      - name: Build hms-ai-bridge image
-        run: |
-          docker build --build-arg VERSION=ci --build-arg REVISION="$GITHUB_SHA" -t hms-ai-bridge:ci \
-            hms_services/runtimes/python-workers/ai-bridge
-
-      - name: Smoke hms-ai-bridge image (non-root, health, secret required, nothing read without a key)
-        run: |
-          test "$(docker image inspect -f '{{.Config.User}}' hms-ai-bridge:ci)" = "65532:65532"
-          secret="$(openssl rand -hex 24)"
-          mkdir -p /tmp/bridge && printf '%s' "$secret" > /tmp/bridge/secret && chmod 644 /tmp/bridge/secret
-          docker run -d --name bridge --read-only --cap-drop ALL --security-opt no-new-privileges:true \
-            -v /tmp/bridge/secret:/run/secrets/ai_bridge_secret:ro -e BRIDGE_SECRET_FILE=/run/secrets/ai_bridge_secret \
-            -p 127.0.0.1:18090:8090 hms-ai-bridge:ci
-          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:18090/healthz && break; sleep 1; done
-          curl -fsS http://127.0.0.1:18090/healthz | grep -q '"status":"ok"'
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18090/readyz)" = "503"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' \
-            http://127.0.0.1:18090/v1/read)" = "401"
-          curl -s -X POST -H "Authorization: Bearer $secret" -H 'Content-Type: application/json' -d '{}' \
-            http://127.0.0.1:18090/v1/read | grep -q not_configured
-          test "$(docker exec bridge id -u)" = "65532"
-          docker logs bridge
-          docker rm -f bridge
-          # Without the secret file the bridge refuses to start.
-          set +e
-          docker run --rm --read-only hms-ai-bridge:ci; status=$?
-          set -e
-          test "$status" -ne 0

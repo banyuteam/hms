@@ -19,7 +19,7 @@ Not CI-, staging- or production-ready yet; see [Open items](#open-items).
 | `schemas/<schema>/README.md` | Per-schema owner, classification, tables and usage patterns |
 | `documentation/` | Domain ownership, data dictionary, ADRs, operations runbook |
 
-Schemas created so far: `hms_meta` (ledger), `platform`, `audit`, `eventing`, `integration`, `iam`, `assistant`. Clinical and patient
+Schemas created so far: `hms_meta` (ledger), `platform`, `audit`, `eventing`, `integration`, `iam`. Clinical and patient
 domains are not modeled yet: they need clinical-owner input first.
 
 ## Quick start (local PostgreSQL 18)
@@ -57,7 +57,7 @@ Resulting roles (prefix `hms_meta` by default; a second database on the same ser
 
 ## Writing a migration
 
-1. Next free number: `migrations/0008_short_name.sql` (lowercase snake case).
+1. Next free number: `migrations/0006_short_name.sql` (lowercase snake case).
 2. Header comment: purpose, owner/writer, classification, online-safety, rollback/fix-forward.
 3. Schema-qualify every object; name constraints (`pk_`, `fk_`, `uq_`, `ck_`, `idx_`, `trg_`); `timestamptz` for
    instants; `uuidv7()` defaults for externally referenced ids.

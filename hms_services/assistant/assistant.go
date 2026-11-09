@@ -29,8 +29,6 @@ const PermEvaluate = "assistant.rules.evaluate"
 
 var Permissions = []iam.PermissionDef{
 	{Code: PermEvaluate, Description: "Run assistant checks (claim readiness) on a visit the user may also read"},
-	{Code: PermFeedbackReview, Description: "Read aggregate feedback on assistant checks (counts, no comment text)"},
-	{Code: PermCommentsRead, Description: "Read feedback comments on assistant checks (may contain patient data; audited)"},
 }
 
 const (
@@ -71,15 +69,14 @@ func evaluateClaimReadiness(ctx context.Context, r Reader, number string, loc *t
 }
 
 type Handler struct {
-	reader   Reader
-	audit    AuditWriter
-	receipts ReceiptWriter // nil: no receipts (feedback then finds no evaluation)
-	iam      *iam.Handler
-	limiter  *httpx.WindowLimiter
-	loc      *time.Location
-	logger   *slog.Logger
-	now      func() time.Time
-	newID    func() string
+	reader  Reader
+	audit   AuditWriter
+	iam     *iam.Handler
+	limiter *httpx.WindowLimiter
+	loc     *time.Location
+	logger  *slog.Logger
+	now     func() time.Time
+	newID   func() string
 	// From the iam handler; replaced in tests.
 	can              func(r *http.Request, permission string) (bool, error)
 	allowStateChange func(w http.ResponseWriter, r *http.Request) bool
@@ -89,12 +86,6 @@ func NewHandler(reader Reader, auditor AuditWriter, iamHandler *iam.Handler, loc
 	return &Handler{reader: reader, audit: auditor, iam: iamHandler, loc: loc, logger: logger, now: time.Now, newID: newUUID,
 		limiter: httpx.NewWindowLimiter(evaluationsPerMinute, time.Minute, time.Now),
 		can:     iamHandler.Can, allowStateChange: iamHandler.AllowStateChange}
-}
-
-// WithReceipts makes the handler write an evaluation receipt (ADR-SVC-008 L-1) for every result it returns.
-func (h *Handler) WithReceipts(rw ReceiptWriter) *Handler {
-	h.receipts = rw
-	return h
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {
@@ -236,29 +227,7 @@ func (h *Handler) evaluate(w http.ResponseWriter, r *http.Request) {
 	detail["failed"] = strconv.Itoa(out.Summary.FailedError + out.Summary.FailedWarning)
 	detail["not_evaluated"] = strconv.Itoa(out.Summary.NotEvaluated)
 	if h.record(w, r, audit.OutcomeSuccess, ref.ResourceID, detail) {
-		h.writeReceipt(r, out)
 		httpx.WriteJSON(w, http.StatusOK, out)
-	}
-}
-
-// writeReceipt stores the receipt of a returned evaluation. A failure is logged and the result still returned: the
-// audit event is the record that matters; feedback on this evaluation is then refused as not found.
-func (h *Handler) writeReceipt(r *http.Request, e Evaluation) {
-	p, _ := iam.PrincipalFrom(r.Context())
-	if h.receipts == nil || p.FacilityID == "" {
-		return
-	}
-	at, err := time.Parse(time.RFC3339, e.EvaluatedAt)
-	if err != nil {
-		at = h.now()
-	}
-	rc := Receipt{EvaluationID: e.EvaluationID, OrganizationID: p.OrganizationID, FacilityID: p.FacilityID,
-		UserID: p.UserID, RuleSetID: e.RuleSet.ID, RuleSetVersion: e.RuleSet.Version, EvaluatedAt: at}
-	for _, f := range e.Findings {
-		rc.Results = append(rc.Results, RuleResult{RuleID: f.RuleID, Result: f.Result})
-	}
-	if err := h.receipts.WriteReceipt(r.Context(), rc); err != nil {
-		h.logger.Warn("evaluation receipt not written", "action", "assistant.rules.evaluate", "err", err)
 	}
 }
 

@@ -4,7 +4,7 @@ BEGIN;
 DO $$
 DECLARE
     p        text := current_setting('hms.role_prefix');
-    schemas  text[] := ARRAY['hms_meta', 'platform', 'audit', 'eventing', 'integration', 'iam', 'assistant'];
+    schemas  text[] := ARRAY['hms_meta', 'platform', 'audit', 'eventing', 'integration', 'iam'];
     offender text;
 BEGIN
     SELECT string_agg(n.nspname || '.' || c.relname, ', ') INTO offender
@@ -56,16 +56,6 @@ BEGIN
     PERFORM pg_temp.ok(NOT has_table_privilege(p || '_reporting', 'eventing.outbox_events', 'SELECT'), 'reporting cannot read outbox');
     PERFORM pg_temp.ok(NOT has_table_privilege(p || '_reporting', 'integration.poll_checkpoints', 'SELECT'),
                           'reporting cannot read integration state');
-    PERFORM pg_temp.ok(has_table_privilege(p || '_reporting', 'assistant.feedback_summary_monthly', 'SELECT')
-                          AND has_table_privilege(p || '_reporting', 'assistant.usage_summary_monthly', 'SELECT'),
-                          'reporting reads the assistant aggregate views');
-    PERFORM pg_temp.ok(NOT has_table_privilege(p || '_reporting', 'assistant.feedback', 'SELECT')
-                          AND NOT has_table_privilege(p || '_reporting', 'assistant.feedback_comments', 'SELECT')
-                          AND NOT has_table_privilege(p || '_reporting', 'assistant.interaction_events', 'SELECT')
-                          AND NOT has_table_privilege(p || '_reporting', 'assistant.evaluation_receipts', 'SELECT'),
-                          'reporting cannot read assistant rows or comments');
-    PERFORM pg_temp.ok(NOT has_table_privilege(p || '_auditor', 'assistant.feedback_comments', 'SELECT'),
-                          'auditor cannot read assistant comments');
     PERFORM pg_temp.ok(has_table_privilege(p || '_auditor', 'audit.audit_events', 'SELECT'), 'auditor reads audit');
     PERFORM pg_temp.ok(NOT has_table_privilege(p || '_auditor', 'audit.audit_events', 'INSERT'), 'auditor cannot write audit');
     PERFORM pg_temp.ok(NOT has_table_privilege(p || '_auditor', 'platform.facilities', 'SELECT'), 'auditor cannot read platform');

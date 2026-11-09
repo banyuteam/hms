@@ -11,7 +11,3 @@ secrets/
 *.exe
 *.test
 *.out
-
-# Python bytecode (runtimes/python-workers)
-__pycache__/
-*.pyc

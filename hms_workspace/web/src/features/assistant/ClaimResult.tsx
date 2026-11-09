@@ -14,7 +14,6 @@ import {
   viewFinding,
   type ClaimGroup,
 } from './claimView';
-import { AnswerFeedback, FindingFeedback } from './FeedbackControls';
 
 const COUNT_TONES: [key: keyof ReturnType<typeof claimCounts>, pill: PillStatus][] = [
   ['toFix', 'danger'],
@@ -23,7 +22,7 @@ const COUNT_TONES: [key: keyof ReturnType<typeof claimCounts>, pill: PillStatus]
   ['passed', 'success'],
 ];
 
-function FindingRow({ finding, evaluationId }: { finding: ClaimFinding; evaluationId: string }) {
+function FindingRow({ finding }: { finding: ClaimFinding }) {
   const { t } = useI18n();
   const v = viewFinding(t, finding);
   const where = findingSections(finding);
@@ -39,27 +38,18 @@ function FindingRow({ finding, evaluationId }: { finding: ClaimFinding; evaluati
           {t('emr.claim.where', { sections: where.map((k) => t(k)).join(', ') })}
         </span>
       )}
-      <FindingFeedback evaluationId={evaluationId} finding={finding} label={v.label} />
     </li>
   );
 }
 
-function Group({
-  group,
-  findings,
-  evaluationId,
-}: {
-  group: ClaimGroup;
-  findings: ClaimFinding[];
-  evaluationId: string;
-}) {
+function Group({ group, findings }: { group: ClaimGroup; findings: ClaimFinding[] }) {
   const { t } = useI18n();
   if (findings.length === 0) return null;
   const review = findings.some((f) => f.human_review);
   const rows = (
     <ul className="m-0 flex list-none flex-col p-0">
       {findings.map((f) => (
-        <FindingRow key={f.rule_id} finding={f} evaluationId={evaluationId} />
+        <FindingRow key={f.rule_id} finding={f} />
       ))}
     </ul>
   );
@@ -84,7 +74,7 @@ function Group({
 /**
  * The server's claim-readiness evaluation in the assistant: the counts, then the findings grouped by what needs work,
  * with where to look in the Records window. The next steps only navigate (open Records) or ask the server again; the
- * assistant changes nothing in the record. Optional feedback (ADR-SVC-008) goes to rule owners and changes no result.
+ * assistant changes nothing in the record.
  */
 export function ClaimResult({ evaluation: e }: { evaluation: ClaimEvaluation }) {
   const { t, locale } = useI18n();
@@ -110,7 +100,7 @@ export function ClaimResult({ evaluation: e }: { evaluation: ClaimEvaluation }) 
         ))}
       </ul>
       {CLAIM_GROUPS.map((g) => (
-        <Group key={g} group={g} findings={groups[g]} evaluationId={e.evaluation_id} />
+        <Group key={g} group={g} findings={groups[g]} />
       ))}
       {e.status === 'partial' && <p className="type-caption m-0">{t('emr.claim.partial')}</p>}
       {(truncated > 0 || notConnected > 0) && (
@@ -136,7 +126,6 @@ export function ClaimResult({ evaluation: e }: { evaluation: ClaimEvaluation }) 
           {t('emr.claim.recheck')}
         </Button>
       </span>
-      <AnswerFeedback evaluationId={e.evaluation_id} />
     </li>
   );
 }

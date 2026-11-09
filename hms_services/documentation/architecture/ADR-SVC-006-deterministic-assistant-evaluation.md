@@ -119,8 +119,7 @@ detection, read-back and the refusal guard. `hms_database` is unchanged: the exi
   separate contract change; connecting it will be claim-readiness v2. **Done 2026-11-09 (ADR-SVC-007):** v2 reads
   `bridging_sep`; v1 is retired.
 - O-8: deterministic-only scope confirmed; the AI-agent sections of `hms-insurer-claim-virtual-assistant-backend` are
-  marked deferred in that skill. **Partly superseded 2026-11-09 by ADR-SVC-009:** reading uploaded documents uses an AI
-  model; rule sets such as claim readiness stay deterministic and never take model output as input.
+  marked deferred in that skill.
 
 ## Implementation (Phase 3, 2026-11-09)
 - `assistant/rules`: `RuleSet`, `Finding`, `Outcome`, `ClaimReadiness` v1 and `EvaluateClaimReadiness(Visit)`. No

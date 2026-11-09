@@ -6,7 +6,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"net"
 	"net/netip"
 	"net/url"
 	"os"
@@ -75,16 +74,6 @@ type SignIn struct {
 	PerIPPerMinute  int
 }
 
-// Documents configures uploaded-document handling (ADR-SVC-009). Off unless DOCUMENTS_DIR is set; then the scanner and
-// the converter are required too.
-type Documents struct {
-	Enabled      bool
-	Dir          string
-	ClamAVAddr   string // host:port of clamd
-	ConverterURL *url.URL
-	Retention    time.Duration // how long a file stays on the volume (D-7: 7 days; at most 30, as the database enforces)
-}
-
 type Config struct {
 	Env              Env
 	HTTPAddr         string
@@ -98,7 +87,6 @@ type Config struct {
 	LegacyLogin      LegacyLogin
 	Session          Session
 	SignIn           SignIn
-	Documents        Documents
 }
 
 // Lookup reads one variable; os.LookupEnv in production, a map in tests.
@@ -145,8 +133,6 @@ func Load(get Lookup) (*Config, error) {
 			PerIPPerMinute:  p.integer("SIGNIN_RATE_PER_MINUTE", 20, 1, 600),
 		},
 	}
-
-	c.Documents = p.documents()
 
 	switch c.Env {
 	case Development, Test, Production:
@@ -204,33 +190,6 @@ func Load(get Lookup) (*Config, error) {
 		return nil, errors.New("invalid configuration:\n  " + strings.Join(p.problems, "\n  "))
 	}
 	return c, nil
-}
-
-func (p *parser) documents() Documents {
-	d := Documents{Dir: p.str("DOCUMENTS_DIR", "")}
-	addr, conv := p.str("CLAMAV_ADDR", ""), p.str("CONVERTER_URL", "")
-	if d.Dir == "" {
-		if addr != "" || conv != "" {
-			p.fail("CLAMAV_ADDR and CONVERTER_URL need DOCUMENTS_DIR")
-		}
-		return d
-	}
-	d.Enabled = true
-	if !strings.HasPrefix(d.Dir, "/") && !(len(d.Dir) > 2 && d.Dir[1] == ':') {
-		p.fail("DOCUMENTS_DIR must be an absolute path")
-	}
-	if _, port, err := net.SplitHostPort(addr); err != nil || port == "" {
-		p.fail("CLAMAV_ADDR must be host:port")
-	}
-	d.ClamAVAddr = addr
-	u, err := url.Parse(conv)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
-		p.fail("CONVERTER_URL must be an http(s) URL")
-	} else {
-		d.ConverterURL = u
-	}
-	d.Retention = time.Duration(p.integer("DOCUMENTS_RETENTION_DAYS", 7, 1, 30)) * 24 * time.Hour
-	return d
 }
 
 // LoadDatabase reads only the DATABASE_* settings, for commands that need nothing else.

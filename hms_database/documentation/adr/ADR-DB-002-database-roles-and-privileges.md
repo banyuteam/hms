@@ -20,9 +20,8 @@ development cluster may already hold roles from other projects (the shared dev c
    `<p>_owner` (NOLOGIN, owns database and objects), `<p>_migrator` (LOGIN, `SET` but not `INHERIT` on owner),
    `<p>_runtime` (LOGIN, hms_services), `<p>_auditor` and `<p>_reporting` (LOGIN, read-only sessions).
 3. Capability group roles, NOLOGIN, shared by HMS databases on a cluster and the only grantees in migrations:
-   `hms_platform_rw`, `hms_iam_rw` (added for ADR-DB-003), `hms_eventing_rw`, `hms_integration_rw`,
-   `hms_assistant_rw` (added for ADR-SVC-008, migration 0006), `hms_audit_append`, `hms_audit_read`,
-   `hms_report_read`. The runtime inherits the five `*_rw` roles and `hms_audit_append`; auditor and reporting one each.
+   `hms_platform_rw`, `hms_iam_rw` (added for ADR-DB-003), `hms_eventing_rw`, `hms_integration_rw`, `hms_audit_append`, `hms_audit_read`,
+   `hms_report_read`. The runtime inherits the first five; auditor and reporting one each.
 4. `PUBLIC` loses CONNECT/TEMPORARY/CREATE on the database, all rights on schema `public`, and EXECUTE on new
    functions (default privileges). Login roles get CONNECT on their own database only.
 5. Role settings: runtime `statement_timeout 30s`, `lock_timeout 5s`, `idle_in_transaction_session_timeout 60s`;

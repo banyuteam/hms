@@ -7,8 +7,6 @@ image: `hms_services/Dockerfile` and `hms_workspace/web/Dockerfile` (with `nginx
 |---|---|---|
 | `compose.yaml` | Local development stack | Development only; not yet run with Docker |
 | `compose.production.yaml` | Production topology template (prebuilt images, file secrets, no database service) | Template |
-| `compose.documents.yaml` | Opt-in overlay: document understanding (scanner, converter, AI bridge, document volume) | Development only; not yet run with Docker |
-| `compose.production.documents.yaml` | Production template of the same overlay | Template |
 | `.env.example` | Non-secret settings for `compose.yaml` | |
 | `secrets/` | Git-ignored development secret files ([secrets/README.md](secrets/README.md)) | Development only |
 | `ENVIRONMENTS.md`, `RELEASE-CHECKLIST.md` | Environment matrix and release gate | |
@@ -86,31 +84,6 @@ Notes:
 
 CI uses no secrets and pushes nothing. Not covered yet: image vulnerability scan, SBOM, digest-pinned base images,
 end-to-end tests against a running stack (needs a synthetic legacy database).
-
-## Document understanding overlay (ADR-SVC-009)
-
-```bash
-docker compose -f deployment/compose.yaml -f deployment/compose.documents.yaml up --build
-```
-
-Adds four pieces next to the development stack; each sits on its own network with `hms-services` only:
-
-| Service | Does | Network | Outbound |
-|---|---|---|---|
-| `clamav` | Malware scan of every upload (clamd INSTREAM on 3310); about 1.5-2.5 GB RAM, a few minutes to load signatures | `hms-scan` | ClamAV signature mirrors only |
-| `converter` | DOCX/XLSX to PDF (LibreOffice behind Gotenberg on 3000; browser routes and webhooks off) | `hms-convert` (internal) | none |
-| `hms-ai-bridge` | The only component that calls the AI provider (`hms_services/runtimes/python-workers/ai-bridge`) | `hms-ai` (internal) + `hms-ai-egress` | Anthropic API (HTTPS) only |
-| `hms_assistant_documents` volume | Uploaded files (D-2): written by `hms-services`, mounted **read-only** in the bridge | - | - |
-
-None of them can reach PostgreSQL, the legacy HMS or each other. Docker cannot filter outbound traffic by host name, so
-**production must enforce the outbound allow-list above** at the host firewall or an egress proxy, encrypt the document
-volume at rest (D-8), back it up with a tested restore, and run one `hms-services` replica while documents are on a local
-volume. Two more secret files are needed (`ai_bridge_secret`, `anthropic_api_key`; secrets/README.md). The Anthropic key
-must belong to the organization with zero data retention (D-3). Development and CI use synthetic documents only.
-
-Status: `hms-services` uploads, checks and stores documents with the scanner and the converter (step 3); the bridge
-is still a skeleton (`/v1/read` answers `not_implemented`) and nothing calls it yet (step 4). Image versions (`clamav/clamav:1.4`, `gotenberg/gotenberg:8`,
-`python:3.13.11-slim`) are not verified here; pin them by digest and scan them before any release.
 
 ## Legacy MySQL
 Legacy MySQL is an external protected system. It is not provisioned or migrated by this Compose project. Configure only

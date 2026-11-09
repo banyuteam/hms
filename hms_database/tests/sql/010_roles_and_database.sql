@@ -14,9 +14,9 @@ BEGIN
                           'the five per-database roles exist without elevated attributes');
     PERFORM pg_temp.ok((SELECT count(*) FROM pg_roles
                            WHERE rolname IN ('hms_platform_rw', 'hms_iam_rw', 'hms_eventing_rw', 'hms_integration_rw',
-                                             'hms_assistant_rw', 'hms_audit_append', 'hms_audit_read', 'hms_report_read')
-                             AND NOT rolcanlogin AND NOT rolsuper) = 8,
-                          'the eight group roles exist and cannot log in');
+                                             'hms_audit_append', 'hms_audit_read', 'hms_report_read')
+                             AND NOT rolcanlogin AND NOT rolsuper) = 7,
+                          'the seven group roles exist and cannot log in');
     PERFORM pg_temp.ok(NOT (SELECT rolcanlogin FROM pg_roles WHERE rolname = p || '_owner'), 'owner cannot log in');
     PERFORM pg_temp.ok((SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = current_database()) = p || '_owner',
                           'database is owned by the owner role');
@@ -39,9 +39,8 @@ BEGIN
     PERFORM pg_temp.ok((SELECT array_agg(g.rolname ORDER BY g.rolname) FROM pg_auth_members m
                            JOIN pg_roles g ON g.oid = m.roleid JOIN pg_roles u ON u.oid = m.member
                            WHERE u.rolname = p || '_runtime')
-                          = ARRAY['hms_assistant_rw', 'hms_audit_append', 'hms_eventing_rw', 'hms_iam_rw', 'hms_integration_rw',
-                                  'hms_platform_rw']::name[],
-                          'runtime is a member of exactly the six runtime groups');
+                          = ARRAY['hms_audit_append', 'hms_eventing_rw', 'hms_iam_rw', 'hms_integration_rw', 'hms_platform_rw']::name[],
+                          'runtime is a member of exactly the five runtime groups');
     PERFORM pg_temp.ok(NOT pg_has_role(p || '_runtime', p || '_owner', 'MEMBER'), 'runtime is not a member of owner');
     PERFORM pg_temp.ok(NOT pg_has_role(p || '_runtime', 'hms_audit_read', 'MEMBER'), 'runtime cannot read the audit trail');
 
@@ -50,8 +49,7 @@ BEGIN
         PERFORM pg_temp.ok(NOT has_database_privilege(r, current_database(), 'CREATE'), r || ' cannot create schemas');
         PERFORM pg_temp.ok(NOT has_database_privilege(r, current_database(), 'TEMPORARY'), r || ' cannot create temp tables');
         FOR s IN SELECT nspname FROM pg_namespace
-                 WHERE nspname IN ('public', 'hms_meta', 'platform', 'audit', 'eventing', 'integration', 'iam',
-                                   'assistant') LOOP
+                 WHERE nspname IN ('public', 'hms_meta', 'platform', 'audit', 'eventing', 'integration', 'iam') LOOP
             PERFORM pg_temp.ok(NOT has_schema_privilege(r, s, 'CREATE'), r || ' cannot create objects in ' || s);
         END LOOP;
         PERFORM pg_temp.ok(NOT has_table_privilege(r, 'hms_meta.schema_migrations', 'SELECT'), r || ' cannot read the ledger');

@@ -327,50 +327,7 @@ func TestRuleSetsAndRoutes(t *testing.T) {
 	if e.read.calls != 0 {
 		t.Error("nothing read without a session")
 	}
-	if len(Permissions) != 3 || Permissions[0].Code != PermEvaluate || Permissions[1].Code != PermFeedbackReview ||
-		Permissions[2].Code != PermCommentsRead {
+	if len(Permissions) != 1 || Permissions[0].Code != PermEvaluate {
 		t.Errorf("permissions %+v", Permissions)
-	}
-}
-
-type fakeReceipts struct {
-	fail     bool
-	receipts []Receipt
-}
-
-func (f *fakeReceipts) WriteReceipt(_ context.Context, r Receipt) error {
-	f.receipts = append(f.receipts, r)
-	if f.fail {
-		return errors.New("db down")
-	}
-	return nil
-}
-
-func TestAReturnedEvaluationLeavesAReceiptWithEveryRuleResult(t *testing.T) {
-	e := newEnv(t)
-	rc := &fakeReceipts{}
-	e.h.WithReceipts(rc)
-	if w := e.post(body(number)); w.Code != 200 {
-		t.Fatalf("status %d", w.Code)
-	}
-	if len(rc.receipts) != 1 {
-		t.Fatalf("receipts %+v", rc.receipts)
-	}
-	got := rc.receipts[0]
-	if got.EvaluationID != "0b6f1c1e-3d2a-4d8e-9a51-5c0f7f1b2a90" || got.UserID != "user-1" || got.FacilityID != "fac-1" ||
-		got.OrganizationID != "org-1" || got.RuleSetID != "claim-readiness" || got.RuleSetVersion != 3 ||
-		!got.EvaluatedAt.Equal(e.h.now()) || len(got.Results) != 9 ||
-		got.Results[0] != (RuleResult{RuleID: rules.RuleSEPPresent, Result: rules.Passed}) {
-		t.Errorf("receipt %+v", got)
-	}
-
-	// No receipt for an answer that is not an evaluation.
-	if w := e.post(body("2026/01/01/999999")); w.Code != 404 || len(rc.receipts) != 1 {
-		t.Errorf("not found: %d, receipts %d", w.Code, len(rc.receipts))
-	}
-	// A receipt that cannot be written does not withhold the result.
-	rc.fail = true
-	if w := e.post(body(number)); w.Code != 200 {
-		t.Errorf("receipt failure blocked the result: %d", w.Code)
 	}
 }
