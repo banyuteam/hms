@@ -20,7 +20,7 @@ import {
 } from '../components/Blocks';
 import { IdentityStrip } from '../components/IdentityStrip';
 import { SepDetails } from '../components/SepDetails';
-import { AskAi, EditAction, OpenWindow } from '../components/RecordActions';
+import { AskAssistant, EditAction, OpenWindow } from '../components/RecordActions';
 import { WindowPage } from '../components/WindowPage';
 import { formatStored } from '@/locales/storedTime';
 import { StoredTime } from '@/components/StoredTime';
@@ -280,7 +280,7 @@ export function RecordsWindow({ winId, norawat }: { winId: string; norawat?: str
                   label={t('emr.viewer.billing.short')}
                   onClick={() => open('billing', { norawat: nr, item: 'summary' })}
                 />
-                <AskAi tag={tag} />
+                <AskAssistant tag={tag} />
               </>
             }
           >
@@ -352,7 +352,7 @@ export function RecordsWindow({ winId, norawat }: { winId: string; norawat?: str
               actions={
                 <>
                   <EditAction label={t('emr.edit.addDx')} icon="plus" />
-                  <AskAi
+                  <AskAssistant
                     tag={{ ...tag, id: `enc:${nr}:dx`, kind: 'section', section: 'diagnoses' }}
                   />
                 </>
@@ -481,7 +481,7 @@ export function RecordsWindow({ winId, norawat }: { winId: string; norawat?: str
                 title={t('emr.claim.title')}
                 icon="shield"
                 actions={
-                  <AskAi
+                  <AskAssistant
                     tag={{ ...tag, id: `enc:${nr}:claim`, kind: 'section', section: 'claim' }}
                     label={t('emr.ai.askClaim')}
                   />

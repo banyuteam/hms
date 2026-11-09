@@ -83,7 +83,7 @@ hms-services. A build without it is the synthetic demo. Neither build contains a
 
 | Path          | Purpose                                                                                                                                                    |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`           | Home (search, four task cards, AI assistant card, records open in this session)                                                                            |
+| `/`           | Home (search, four task cards, assistant card, records open in this session)                                                                               |
 | `/login`      | Sign-in: demo accounts, or the Khanza user ID and password with live data                                                                                  |
 | `/{workflow}` | Opens/focuses a workflow window: `profile`, `records`, `encounter`, `diagnostics`, `lab`, `radiology`, `billing`, `prescription`, `access` (User & Access) |
 
@@ -101,7 +101,7 @@ The URL carries the window _kind_ only — never an MRN, `no_rawat` or name. Unk
 | `src/components/`                               | Button, Icon, StatusPill, Card, FieldRow, MaskedValue, QueryState, LanguageSwitch, Logo, Popover/MenuItem |
 | `src/features/workspace/`                       | Shell: top bar, dock, window frame, layouts, workflow routes, window registry                             |
 | `src/features/emr/`                             | W1 Profile, W2 Records, W3 Encounter, W4 Diagnostics, viewers, EMR components                             |
-| `src/features/home/`, `src/features/assistant/` | Home, AI assistant panel + rule-based replies                                                             |
+| `src/features/home/`, `src/features/assistant/` | Home, assistant panel + rule-based replies                                                                |
 | `src/features/iam/`                             | User & Access window: users, role grants/revocations, suspension, roles (iam-admin-v1)                    |
 | `src/auth/`                                     | `authApi.ts` (sign-in/session/sign-out, auth-v1), demo accounts, idle logout                              |
 | `src/pages/`                                    | Login (React Hook Form + Zod), WorkspacePage (URL ↔ window sync), NotFound                               |
@@ -135,10 +135,14 @@ Design tokens: `.claude/skills/design-tokens`. Tailwind theme keys map 1:1 to `-
   clinical-read-v1 1.1.0, needs `encounter.read`), grouped by payer code with the payer's name, the most recent first;
   each payer expands to its visits. The `pasien` guarantor columns (default payer, BPJS no., employer) are not shown.
 - Open requests to hms_services: `docs/contract-requests/09-…` (profile completeness) and `10-…` (data-quality flags).
-- **Assistant**: rule-based (no language model). Read-back answers come from the tagged records in the browser; claim
-  readiness, in the assistant and in the Records window, is evaluated by hms_services (`src/api/claimApi.ts`,
-  assistant-v1, ADR-SVC-006; live needs `assistant.rules.evaluate`; demo shows fixed answers from
-  `src/data/claimFixtures.ts`). Baseline and findings: `docs/assistant-inventory.md`.
+- **Assistant**: rule-based (no language model; not presented as AI). Read-back answers come from the tagged records in
+  the browser; claim readiness, in the assistant and in the Records window, is evaluated by hms_services
+  (`src/api/claimApi.ts`, assistant-v1, ADR-SVC-006; live needs `assistant.rules.evaluate`; demo shows fixed answers from
+  `src/data/claimFixtures.ts`). Questions are asked with topic buttons or typed text about one subject visit: the only
+  tagged visit, or the chip the user picks when several are tagged (never guessed). The claim answer groups the server's
+  findings (needs attention, not checked, complete, not applicable), says where to look in the Records window, and offers
+  "Open visit in Records" and "Check again" (a new audited evaluation). Baseline and findings:
+  `docs/assistant-inventory.md`; feedback on findings is proposed in ADR-SVC-008.
 
 - No separate Patient Management or tabbed Patient Detail window (owner decision 2026-11-05: remodel windows only).
 - Playwright e2e specs (Playwright is not in the approved stack); no visual/browser run of this project yet.

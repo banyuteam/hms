@@ -29,6 +29,8 @@ import {
   Lock,
   LogOut,
   Maximize2,
+  MessagesSquare,
+  RotateCw,
   Minimize2,
   Minus,
   PanelsTopLeft,
@@ -102,6 +104,9 @@ const ICONS = {
   pencil: Pencil,
   send: Send,
   sparkles: Sparkles,
+  /* Rule-based assistant (not presented as AI, F-10). */
+  assistant: MessagesSquare,
+  refresh: RotateCw,
 } as const;
 
 export type IconName = keyof typeof ICONS;

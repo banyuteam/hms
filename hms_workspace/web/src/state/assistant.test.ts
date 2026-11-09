@@ -31,24 +31,49 @@ describe('assistantReducer', () => {
     expect(s.tags).toEqual([]);
   });
 
-  it('dedupes attachments by name and detaches them', () => {
-    const f = { name: 'a.pdf', type: 'application/pdf', size: 10 };
-    let s = assistantReducer(initialAssistantState, { type: 'attachment/added', files: [f] });
-    s = assistantReducer(s, { type: 'attachment/added', files: [f, { ...f, name: 'b.pdf' }] });
-    expect(s.attachments.map((a) => a.name)).toEqual(['a.pdf', 'b.pdf']);
-    s = assistantReducer(s, { type: 'attachment/removed', name: 'a.pdf' });
-    expect(s.attachments.map((a) => a.name)).toEqual(['b.pdf']);
+  it('a chosen subject must be a tagged visit, is never set by tagging, and clears when its tag is removed', () => {
+    const other = {
+      id: 'enc:2026/08/14/000051',
+      kind: 'encounter' as const,
+      norawat: '2026/08/14/000051',
+    };
+    const patient = { id: 'pt:00012345', kind: 'patient' as const, mrn: '00012345' };
+    let s = assistantReducer(
+      { ...initialAssistantState, tags: [tag, other, patient] },
+      {
+        type: 'subject/chosen',
+        id: patient.id,
+      },
+    );
+    expect(s.subject).toBeUndefined();
+    s = assistantReducer(s, { type: 'subject/chosen', id: 'enc:not-tagged' });
+    expect(s.subject).toBeUndefined();
+    s = assistantReducer(s, { type: 'subject/chosen', id: other.id });
+    expect(s.subject).toBe(other.id);
+    s = assistantReducer(s, { type: 'tag/added', tag: { ...tag, id: 'enc:x', norawat: 'x' } });
+    expect(s.subject).toBe(other.id);
+    s = assistantReducer(s, { type: 'tag/removed', id: tag.id });
+    expect(s.subject).toBe(other.id);
+    s = assistantReducer(s, { type: 'tag/removed', id: other.id });
+    expect(s.subject).toBeUndefined();
   });
 
-  it('appends the question and the answer with consecutive ids and the current tags', () => {
+  it('appends the question and the answer with consecutive ids and the context they were about', () => {
     const start: AssistantState = { ...initialAssistantState, tags: [tag] };
     let s = assistantReducer(start, {
       type: 'message/answered',
       text: 'hi',
+      tags: [tag],
       lines: [{ raw: 'x' }],
       at: 1000,
     });
-    s = assistantReducer(s, { type: 'message/answered', text: 'again', lines: [], at: 2000 });
+    s = assistantReducer(s, {
+      type: 'message/answered',
+      topic: 'summary',
+      tags: [],
+      lines: [],
+      at: 2000,
+    });
     expect(s.messages.map((m) => [m.id, m.role, m.at])).toEqual([
       [1, 'user', 1000],
       [2, 'assistant', 1000],
@@ -56,13 +81,14 @@ describe('assistantReducer', () => {
       [4, 'assistant', 2000],
     ]);
     expect(s.messages[0]?.tags).toEqual([tag]);
+    expect(s.messages[2]).toMatchObject({ topic: 'summary', tags: [] });
     expect(s.seq).toBe(5);
   });
 
   it('a question checked on the server waits as pending, then gets exactly its own answer', () => {
     let s = assistantReducer(
       { ...initialAssistantState, tags: [tag] },
-      { type: 'message/asked', text: 'klaim?', request: 7, at: 1000 },
+      { type: 'message/asked', text: 'klaim?', tags: [tag], request: 7, at: 1000 },
     );
     expect(s.messages.map((m) => [m.role, m.pending ?? false])).toEqual([
       ['user', false],
@@ -88,6 +114,7 @@ describe('assistantReducer', () => {
     let s = assistantReducer(initialAssistantState, {
       type: 'message/asked',
       text: 'klaim?',
+      tags: [],
       request: 1,
       at: 1000,
     });

@@ -5,7 +5,7 @@ import enEmr from '@/locales/en/emr.json';
 import { renderApp } from '@/test/utils';
 
 describe('Home', () => {
-  it('shows search first, four task cards and the AI card — no viewers, no "Soon" tiles', async () => {
+  it('shows search first, four task cards and the assistant card — no viewers, no "Soon" tiles', async () => {
     renderApp('/', { role: 'employee' });
     expect(await screen.findByLabelText(/find patient \(name, mrn\)/i)).toBeInTheDocument();
     const start = screen.getByRole('heading', { name: 'Start' }).parentElement!;
@@ -15,7 +15,7 @@ describe('Home', () => {
       expect.stringContaining('Medical Records'),
       expect.stringContaining('Medical Encounter'),
       expect.stringContaining('Diagnostics & Pharmacy'),
-      expect.stringContaining('AI assistant'),
+      expect.stringContaining('Open assistant'),
     ]);
     expect(screen.queryByText(/billing/i)).toBeNull();
     expect(screen.queryByText('Soon')).toBeNull();
@@ -23,11 +23,11 @@ describe('Home', () => {
     expect(screen.getAllByText('Employee · view only')).toHaveLength(2);
   });
 
-  it('opens the docked assistant from the AI card', async () => {
+  it('opens the docked assistant from the assistant card', async () => {
     renderApp('/', { role: 'doctor' });
     const start = (await screen.findByRole('heading', { name: 'Start' })).parentElement!;
-    const ai = within(start).getAllByRole('button').at(-1)!;
-    await userEvent.click(ai);
+    const card = within(start).getAllByRole('button').at(-1)!;
+    await userEvent.click(card);
     expect(screen.getByRole('complementary', { name: enEmr['emr.ai.title'] })).toBeInTheDocument();
   });
 

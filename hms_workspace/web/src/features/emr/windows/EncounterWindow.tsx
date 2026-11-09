@@ -10,7 +10,7 @@ import {
 } from '../components/Blocks';
 import { CpptNote } from '../components/CpptNote';
 import { IdentityStrip } from '../components/IdentityStrip';
-import { AskAi, EditAction, OpenWindow } from '../components/RecordActions';
+import { AskAssistant, EditAction, OpenWindow } from '../components/RecordActions';
 import { WindowPage } from '../components/WindowPage';
 import { StoredTime, useStoredText } from '@/components/StoredTime';
 import { EncounterGate, useOpen } from './EncounterGate';
@@ -64,7 +64,7 @@ export function EncounterWindow({ winId, norawat }: { winId: string; norawat?: s
                   label={t('emr.w4.short')}
                   onClick={() => open('emr-diagnostics', { norawat: nr })}
                 />
-                <AskAi tag={tag} />
+                <AskAssistant tag={tag} />
               </>
             }
           >
@@ -76,7 +76,9 @@ export function EncounterWindow({ winId, norawat }: { winId: string; norawat?: s
               actions={
                 <>
                   <EditAction label={t('emr.edit.newCppt')} icon="plus" />
-                  <AskAi tag={{ ...tag, id: `enc:${nr}:cppt`, kind: 'section', section: 'cppt' }} />
+                  <AskAssistant
+                    tag={{ ...tag, id: `enc:${nr}:cppt`, kind: 'section', section: 'cppt' }}
+                  />
                 </>
               }
             >

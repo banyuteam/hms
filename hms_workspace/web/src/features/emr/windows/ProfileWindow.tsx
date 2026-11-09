@@ -18,7 +18,7 @@ import { facts as toFacts } from '@/api/select';
 import { RowList, Section, StateView, SummaryRow } from '../components/Blocks';
 import { IdentityStrip } from '../components/IdentityStrip';
 import { PayerHistory } from '../components/PayerHistory';
-import { AskAi, EditAction } from '../components/RecordActions';
+import { AskAssistant, EditAction } from '../components/RecordActions';
 import { RecordSearch } from '../components/RecordSearch';
 import { WindowPage } from '../components/WindowPage';
 import { StoredTime, useStoredText } from '@/components/StoredTime';
@@ -120,7 +120,7 @@ function Profile({ mrn }: { mrn: string }) {
           <>
             <EditAction label={t('emr.edit.profile')} />
             {/* The patient only: the user tags the visit to ask about (F-7). */}
-            <AskAi tag={{ id: `pt:${p.mrn}`, kind: 'patient', mrn: p.mrn }} />
+            <AskAssistant tag={{ id: `pt:${p.mrn}`, kind: 'patient', mrn: p.mrn }} />
           </>
         }
       >

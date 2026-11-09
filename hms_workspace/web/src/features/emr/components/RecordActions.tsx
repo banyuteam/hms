@@ -9,14 +9,17 @@ import { useCanEdit } from '@/state/auth';
 /** Below the compact container width the label stays for screen readers only. */
 const compactHidden = 'cq-compact:sr-only';
 
-/** "Ask AI" — tags this record/section into the app-shell assistant (Figma Action Chip, Style=AI). */
-export function AskAi({ tag, label }: { tag: AssistantTag; label?: string }) {
+/**
+ * "Ask the assistant" — tags this record/section into the app-shell assistant (Figma Action Chip, Style=AI colours).
+ * The assistant is rule-based and is not presented as AI (F-10).
+ */
+export function AskAssistant({ tag, label }: { tag: AssistantTag; label?: string }) {
   const { t } = useI18n();
   const { tag: add } = useAssistantActions();
   const text = label ?? t('emr.ai.ask');
   return (
     <Button variant="ai" onClick={() => add(tag)} aria-label={text}>
-      <Icon name="sparkles" size={16} />
+      <Icon name="assistant" size={16} />
       <span className={compactHidden}>{text}</span>
     </Button>
   );

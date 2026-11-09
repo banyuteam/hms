@@ -13,7 +13,7 @@ import {
 } from '../components/Blocks';
 import { BillCharges } from '../components/BillCharges';
 import { IdentityStrip } from '../components/IdentityStrip';
-import { AskAi } from '../components/RecordActions';
+import { AskAssistant } from '../components/RecordActions';
 import { WindowPage } from '../components/WindowPage';
 import { StoredTime, useStoredText } from '@/components/StoredTime';
 import { EncounterGate, useOpen, type EncounterView } from './EncounterGate';
@@ -287,7 +287,7 @@ function ViewerBody({
               {t('emr.viewer.all')}
             </Button>
           )}
-          <AskAi tag={tag} />
+          <AskAssistant tag={tag} />
         </>
       }
     >

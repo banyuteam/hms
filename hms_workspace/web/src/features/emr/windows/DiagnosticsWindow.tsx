@@ -3,7 +3,7 @@ import { Button } from '@/components/Button';
 import { labs, medicationGiven, prescriptions, radiology, vitals, VITAL_KEYS } from '@/api/select';
 import { DataTable, NotAvailable, Section, TextBlock } from '../components/Blocks';
 import { IdentityStrip } from '../components/IdentityStrip';
-import { AskAi, OpenWindow } from '../components/RecordActions';
+import { AskAssistant, OpenWindow } from '../components/RecordActions';
 import { WindowPage } from '../components/WindowPage';
 import { StoredTime } from '@/components/StoredTime';
 import { EncounterGate, useOpen } from './EncounterGate';
@@ -57,7 +57,7 @@ export function DiagnosticsWindow({ winId, norawat }: { winId: string; norawat?:
                   label={t('emr.w3.short')}
                   onClick={() => open('emr-encounter', { norawat: nr })}
                 />
-                <AskAi tag={tag} />
+                <AskAssistant tag={tag} />
               </>
             }
           >
@@ -67,7 +67,9 @@ export function DiagnosticsWindow({ winId, norawat }: { winId: string; norawat?:
               icon="flask"
               count={labRows.length}
               actions={
-                <AskAi tag={{ ...tag, id: `enc:${nr}:labs`, kind: 'section', section: 'labs' }} />
+                <AskAssistant
+                  tag={{ ...tag, id: `enc:${nr}:labs`, kind: 'section', section: 'labs' }}
+                />
               }
             >
               {labRows.length === 0 ? (

@@ -3,23 +3,30 @@ import { emrApi } from '@/api/emrApi';
 import { emrKeys } from '@/api/hooks';
 import { Button } from '@/components/Button';
 import { Icon } from '@/components/Icon';
-import { StatusPill } from '@/components/StatusPill';
 import { RecordSearch } from '@/features/emr/components/RecordSearch';
 import { cn } from '@/lib/cn';
 import { resourceCache } from '@/lib/resource';
 import { formatTime } from '@/locales/format';
 import { useI18n, type Translate } from '@/locales/I18nProvider';
 import { useAssistant, useAssistantActions, type ChatMessage } from '@/state/assistant';
-import { viewFinding } from './claimView';
-import type { AssistantTag, ReplyLine } from './rules';
+import { ClaimResult } from './ClaimResult';
+import {
+  sectionTopic,
+  subjectOf,
+  TOPICS,
+  type AssistantTag,
+  type ReplyLine,
+  type Subject,
+  type Topic,
+} from './rules';
 
 const chipX =
   'inline-grid cursor-pointer place-items-center rounded-full border-0 bg-transparent p-0 text-inherit focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-line-focus';
 const chip =
-  'type-caption-strong inline-flex items-center gap-4 rounded-full border border-ai-border bg-ai-bg py-2 pr-4 pl-8 text-ai-fg [font-variant-numeric:tabular-nums] data-[kind=file]:border-line data-[kind=file]:bg-hover data-[kind=file]:text-ink-secondary';
+  'type-caption-strong inline-flex items-center gap-4 rounded-full border border-ai-border bg-ai-bg py-2 pr-4 pl-8 text-ai-fg [font-variant-numeric:tabular-nums] data-[subject=true]:border-ai-accent data-[subject=true]:bg-surface';
+const chipPick =
+  'cursor-pointer rounded-full border-0 bg-transparent p-0 text-inherit focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-line-focus';
 const hint = 'type-caption m-0 text-ink-muted';
-
-const ACCEPT = ['application/pdf', 'image/*', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.txt'];
 
 export function tagLabel(t: Translate, tag: AssistantTag): string {
   const base =
@@ -30,30 +37,19 @@ export function tagLabel(t: Translate, tag: AssistantTag): string {
 function Line({ line }: { line: ReplyLine }) {
   const { t } = useI18n();
   if ('raw' in line) return <li className="[font-variant-numeric:tabular-nums]">{line.raw}</li>;
-  if ('id' in line && line.id === 'emr.ai.reply.source')
+  if ('claim' in line) return <ClaimResult evaluation={line.claim} />;
+  if (line.id === 'emr.ai.reply.source')
     return (
       <li className="type-caption text-ink-muted [font-variant-numeric:tabular-nums]">
         {t(line.id, line.values)}
       </li>
     );
-  if ('id' in line && line.id === 'emr.ai.reply.disclaimer')
+  if (line.id === 'emr.ai.reply.disclaimer')
     return (
       <li className="type-caption mt-4 border-t border-ai-border pt-4 text-ink-muted">
         {t(line.id)}
       </li>
     );
-  if ('finding' in line) {
-    const v = viewFinding(t, line.finding);
-    return (
-      <li className="flex flex-col gap-2 border-b border-ai-border py-4 last:border-b-0">
-        <span className="flex items-center justify-between gap-8">
-          <span>{v.label}</span>
-          <StatusPill status={v.pill}>{v.state}</StatusPill>
-        </span>
-        {v.note && <span className="type-caption text-ink-muted">{v.note}</span>}
-      </li>
-    );
-  }
   return <li>{t(line.id, line.values)}</li>;
 }
 
@@ -74,8 +70,8 @@ function Checking() {
 
 /**
  * One chat bubble. The user's question sits on the right (primary colour) with the context it was asked about quoted on
- * top; the assistant answers on the left in the AI colours with its avatar and name, so a machine reply is never mistaken
- * for record data. Both end with the time (HH:mm, Asia/Jakarta).
+ * top; the assistant answers on the left in the assistant colours with its avatar and name, so a machine reply is never
+ * mistaken for record data. Both end with the time (HH:mm, Asia/Jakarta).
  */
 function Bubble({ message: m }: { message: ChatMessage }) {
   const { t, locale } = useI18n();
@@ -112,7 +108,9 @@ function Bubble({ message: m }: { message: ChatMessage }) {
             ))}
           </ul>
         )}
-        <p className="type-body m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{m.text}</p>
+        <p className="type-body m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">
+          {m.topic ? t(`emr.ai.topic.${m.topic}`) : m.text}
+        </p>
         {time}
       </li>
     );
@@ -120,7 +118,7 @@ function Bubble({ message: m }: { message: ChatMessage }) {
   return (
     <li className="flex max-w-[90%] items-end gap-8 self-start" data-role="assistant">
       <span className="grid size-icon-lg flex-none place-items-center rounded-full bg-ai-solid text-ink-on-action">
-        <Icon name="sparkles" size={16} />
+        <Icon name="assistant" size={16} />
       </span>
       <div className="type-body flex min-w-0 flex-col gap-4 rounded-lg rounded-bl-sm border border-ai-border bg-ai-bg px-12 py-8 text-ink">
         <span className="type-caption-strong text-ai-fg">{t('emr.ai.assistant')}</span>
@@ -139,17 +137,43 @@ function Bubble({ message: m }: { message: ChatMessage }) {
 }
 
 /**
- * App-shell AI assistant (tier 1 = rule-based, read-only, no medical advice). Closed = a rail button on the
- * right edge (always discoverable), docked = side panel, maximized = full work area with a left "tag data" pane.
- * Everything lives in memory and is wiped on logout; attachments are listed, never read or uploaded yet.
+ * Guided questions about the subject visit: one button per topic, the tagged section's topic first. With several visits
+ * tagged and none chosen, it says to choose one instead (F-9).
+ */
+function Topics({ subject, onAsk }: { subject: Subject; onAsk: (topic: Topic) => void }) {
+  const { t } = useI18n();
+  if (subject.kind === 'ambiguous') return <p className={hint}>{t('emr.ai.chooseVisitHint')}</p>;
+  if (subject.kind !== 'visit') return null;
+  const suggested = sectionTopic(subject.tag);
+  const order: Topic[] = suggested
+    ? [suggested, ...TOPICS.filter((x) => x !== suggested)]
+    : [...TOPICS];
+  const label = t('emr.ai.topics', { label: tagLabel(t, subject.tag) });
+  return (
+    <div className="flex flex-col gap-4" role="group" aria-label={label}>
+      <p className={hint}>{label}</p>
+      <div className="flex flex-wrap gap-4">
+        {order.map((topic) => (
+          <Button key={topic} variant="ai" onClick={() => onAsk(topic)}>
+            {t(`emr.ai.topic.${topic}`)}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * App-shell assistant (rule-based, read-only, no medical advice; not presented as AI, F-10). Closed = a rail button on
+ * the right edge (always discoverable), docked = side panel, maximized = full work area with a left "tag data" pane.
+ * Everything lives in memory and is wiped on logout.
  */
 export function AssistantPanel() {
   const { t } = useI18n();
-  const { mode, tags, messages, attachments } = useAssistant();
-  const { setMode, tag, untag, attach, detach, send } = useAssistantActions();
+  const { mode, tags, subject: chosen, messages } = useAssistant();
+  const { setMode, tag, untag, choose, send, ask } = useAssistantActions();
   const [draft, setDraft] = useState('');
   const logRef = useRef<HTMLDivElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
 
   useEffect(() => {
@@ -166,7 +190,7 @@ export function AssistantPanel() {
           onClick={() => setMode('docked')}
           aria-label={t('emr.ai.openPanel')}
         >
-          <Icon name="sparkles" />
+          <Icon name="assistant" />
           <span className="type-caption-strong [writing-mode:vertical-rl]">
             {t('emr.ai.title')}
           </span>
@@ -175,6 +199,9 @@ export function AssistantPanel() {
     );
   }
 
+  const subject = subjectOf(tags, chosen);
+  // Choosing only matters when the tags name more than one visit.
+  const pickable = new Set(tags.filter((x) => x.kind !== 'patient').map((x) => x.norawat)).size > 1;
   const tagEncounter = (norawat: string, mrn?: string | null) => {
     void resourceCache.prefetch(emrKeys.journey(norawat), () => emrApi.getJourney(norawat));
     tag({ id: `enc:${norawat}`, kind: 'encounter', norawat, mrn: mrn ?? undefined });
@@ -202,7 +229,7 @@ export function AssistantPanel() {
       aria-label={t('emr.ai.title')}
     >
       <header className="flex min-h-titlebar items-center gap-8 border-b border-ai-border bg-ai-bg pr-8 pl-12 text-ai-fg">
-        <Icon name="sparkles" size={16} />
+        <Icon name="assistant" size={16} />
         <h2 className="type-title-md m-0 text-ink">{t('emr.ai.title')}</h2>
         <div className="ml-auto flex">
           <Button
@@ -238,7 +265,7 @@ export function AssistantPanel() {
               {messages.length === 0 && (
                 <li className="m-auto flex max-w-[80%] flex-col items-center gap-8 rounded-lg bg-surface p-16 text-center">
                   <span className="grid size-control place-items-center rounded-full bg-ai-bg text-ai-fg">
-                    <Icon name="sparkles" size={20} />
+                    <Icon name="assistant" size={20} />
                   </span>
                   <p className="type-body m-0 text-ink-secondary">{t('emr.ai.empty')}</p>
                 </li>
@@ -252,41 +279,43 @@ export function AssistantPanel() {
           {mode === 'docked' && tagPicker}
 
           <div className="flex flex-col gap-6">
-            {(tags.length > 0 || attachments.length > 0) && (
+            {tags.length > 0 && (
               <ul
                 className="m-0 flex list-none flex-wrap gap-4 p-0"
                 aria-label={t('emr.ai.context')}
               >
-                {tags.map((tg) => (
-                  <li key={tg.id} className={chip}>
-                    <span>{tagLabel(t, tg)}</span>
-                    <button
-                      type="button"
-                      className={chipX}
-                      onClick={() => untag(tg.id)}
-                      aria-label={t('emr.ai.untag', { label: tagLabel(t, tg) })}
-                    >
-                      <Icon name="x" size={16} />
-                    </button>
-                  </li>
-                ))}
-                {attachments.map((a) => (
-                  <li key={a.name} className={chip} data-kind="file">
-                    <Icon name="paperclip" size={16} />
-                    <span>{a.name}</span>
-                    <button
-                      type="button"
-                      className={chipX}
-                      onClick={() => detach(a.name)}
-                      aria-label={t('emr.ai.detach', { name: a.name })}
-                    >
-                      <Icon name="x" size={16} />
-                    </button>
-                  </li>
-                ))}
+                {tags.map((tg) => {
+                  const label = tagLabel(t, tg);
+                  const isSubject = subject.kind === 'visit' && subject.tag.id === tg.id;
+                  return (
+                    <li key={tg.id} className={chip} data-subject={pickable && isSubject}>
+                      {pickable && tg.kind !== 'patient' ? (
+                        <button
+                          type="button"
+                          className={chipPick}
+                          aria-pressed={isSubject}
+                          aria-label={t('emr.ai.subject', { label })}
+                          onClick={() => choose(tg.id)}
+                        >
+                          {label}
+                        </button>
+                      ) : (
+                        <span>{label}</span>
+                      )}
+                      <button
+                        type="button"
+                        className={chipX}
+                        onClick={() => untag(tg.id)}
+                        aria-label={t('emr.ai.untag', { label })}
+                      >
+                        <Icon name="x" size={16} />
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             )}
-            {attachments.length > 0 && <p className={hint}>{t('emr.ai.attachNote')}</p>}
+            <Topics subject={subject} onAsk={ask} />
             <form
               className="flex items-end gap-8"
               onSubmit={(e) => {
@@ -313,39 +342,14 @@ export function AssistantPanel() {
                   }}
                 />
               </div>
-              <div className="flex gap-4">
-                {/* Metadata only: the files are never read or uploaded (no assistant backend yet). */}
-                <input
-                  ref={fileRef}
-                  type="file"
-                  multiple
-                  accept={ACCEPT.join(',')}
-                  className="hidden"
-                  tabIndex={-1}
-                  aria-hidden="true"
-                  onChange={(e) => {
-                    const list = e.target.files;
-                    if (list && list.length > 0)
-                      attach([...list].map((f) => ({ name: f.name, type: f.type, size: f.size })));
-                    e.target.value = '';
-                  }}
-                />
-                <Button
-                  variant="ghost"
-                  aria-label={t('emr.ai.attach')}
-                  onClick={() => fileRef.current?.click()}
-                >
-                  <Icon name="paperclip" size={16} />
-                </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  disabled={!draft.trim()}
-                  aria-label={t('emr.ai.send')}
-                >
-                  <Icon name="send" size={16} />
-                </Button>
-              </div>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={!draft.trim()}
+                aria-label={t('emr.ai.send')}
+              >
+                <Icon name="send" size={16} />
+              </Button>
             </form>
           </div>
         </div>

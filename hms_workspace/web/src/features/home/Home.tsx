@@ -87,7 +87,7 @@ export function Home() {
             ))}
             <li className="col-span-full">
               <ModuleCard
-                icon="sparkles"
+                icon="assistant"
                 tone="ai"
                 layout="row"
                 title={t('emr.ai.title')}

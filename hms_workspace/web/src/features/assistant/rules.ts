@@ -1,6 +1,6 @@
 import type { EncounterJourney } from '@/api/journey';
 import { facts, labs, prescriptions } from '@/api/select';
-import type { ClaimErrorKind, ClaimEvaluation, ClaimFinding } from '@/api/claimApi';
+import type { ClaimErrorKind, ClaimEvaluation } from '@/api/claimApi';
 
 /**
  * Rule-based assistant (deterministic, no language model; ADR-SVC-006). Topic detection and read-back run here: it reads
@@ -29,7 +29,8 @@ export type AssistantTag =
 export type ReplyLine =
   | { id: string; values?: Record<string, string | number> }
   | { raw: string }
-  | { finding: ClaimFinding };
+  /** The server's claim-readiness evaluation, shown as one structured result (`ClaimResult`). */
+  | { claim: ClaimEvaluation };
 
 export interface Reply {
   intent: Intent;
@@ -38,27 +39,68 @@ export interface Reply {
   evaluate?: string;
 }
 
+/** What the assistant can be asked about a visit, in the order the quick-action buttons show them. */
+export const TOPICS = [
+  'claim',
+  'summary',
+  'diagnoses',
+  'procedures',
+  'labs',
+  'medications',
+] as const;
+export type Topic = (typeof TOPICS)[number];
+
 export type Intent =
+  | Topic
   | 'refuse'
   | 'needTag'
   | 'needVisit'
+  | 'chooseVisit'
   | 'notLoaded'
-  | 'summary'
-  | 'diagnoses'
-  | 'procedures'
-  | 'labs'
-  | 'medications'
-  | 'claim'
   | 'help';
+
+/** The topic a tagged section stands for (F-8); sections without one (CPPT, radiology, billing) leave it to the text. */
+const SECTION_TOPICS: Readonly<Record<string, Topic>> = {
+  diagnoses: 'diagnoses',
+  labs: 'labs',
+  lab: 'labs',
+  claim: 'claim',
+  prescription: 'medications',
+};
+
+export function sectionTopic(tag: AssistantTag | undefined): Topic | undefined {
+  return tag?.kind === 'section' && tag.section ? SECTION_TOPICS[tag.section] : undefined;
+}
+
+export type Subject =
+  | { kind: 'visit'; tag: Extract<AssistantTag, { norawat: string }> }
+  | { kind: 'patientOnly'; mrn: string }
+  | { kind: 'ambiguous'; visits: number }
+  | { kind: 'none' };
+
+/**
+ * The visit a question is about, never guessed (F-9; root CLAUDE.md §9). The visit tag the user chose, if it is still
+ * tagged; otherwise the only tagged visit (several tags of one visit count once, the latest wins so its section applies).
+ * With several different visits and no choice, the user has to choose.
+ */
+export function subjectOf(tags: readonly AssistantTag[], chosen?: string): Subject {
+  const visits = tags.filter(
+    (t): t is Extract<AssistantTag, { norawat: string }> => t.kind !== 'patient',
+  );
+  const picked = chosen ? visits.find((t) => t.id === chosen) : undefined;
+  if (picked) return { kind: 'visit', tag: picked };
+  const distinct = new Set(visits.map((t) => t.norawat)).size;
+  if (distinct === 1) return { kind: 'visit', tag: visits[visits.length - 1]! };
+  if (distinct > 1) return { kind: 'ambiguous', visits: distinct };
+  const patient = [...tags].reverse().find((t) => t.kind === 'patient');
+  return patient ? { kind: 'patientOnly', mrn: patient.mrn } : { kind: 'none' };
+}
 
 /** Requests for advice, diagnosis or treatment decisions (EN + ID). Checked before anything else. */
 const ADVICE =
   /\b(should (i|we|he|she|the patient)|recommend|what (dose|drug|treatment)|which (drug|treatment|antibiotic)|diagnose|prognosis|is it safe|safe to|increase|decrease|stop the|start the|sarankan|rekomendasi|sebaiknya|harus (diberi|minum|dirawat)|dosis (yang|berapa)|obat apa|terapi apa|diagnosisnya apa|aman(kah)? untuk)\b/i;
 
-const INTENTS: [
-  Exclude<Intent, 'refuse' | 'needTag' | 'needVisit' | 'notLoaded' | 'help'>,
-  RegExp,
-][] = [
+const INTENTS: [Topic, RegExp][] = [
   ['claim', /\b(claim|klaim|bpjs|casemix|resume|ina-?cbg|readiness|kelengkapan)\b/i],
   ['diagnoses', /\b(diagnos\w*|icd-?10|dx)\b/i],
   ['procedures', /\b(procedure\w*|tindakan|icd-?9\w*|operasi|surgery)\b/i],
@@ -67,31 +109,59 @@ const INTENTS: [
   ['summary', /\b(summar\w*|ringkas\w*|overview|riwayat|timeline)\b/i],
 ];
 
-export function detectIntent(text: string): Intent {
+export function detectIntent(text: string): Topic | 'refuse' | 'help' {
   if (ADVICE.test(text)) return 'refuse';
   return INTENTS.find(([, re]) => re.test(text))?.[0] ?? 'help';
 }
 
+type JourneyOf = (norawat: string) => EncounterJourney | undefined;
+
+/**
+ * Answers typed text. Advice is refused first. Text without a topic takes the topic of the tagged section it is asked
+ * about, if that section has one (F-8); otherwise it gets the help text.
+ */
 export function reply(
   text: string,
   tags: readonly AssistantTag[],
-  journeyOf: (norawat: string) => EncounterJourney | undefined,
+  journeyOf: JourneyOf,
+  chosen?: string,
 ): Reply {
   const intent = detectIntent(text);
   if (intent === 'refuse') return { intent, lines: [{ id: 'emr.ai.reply.refuse' }] };
-  if (intent === 'help') return { intent, lines: [{ id: 'emr.ai.reply.help' }] };
+  const subject = subjectOf(tags, chosen);
+  const topic =
+    intent === 'help' ? sectionTopic(subject.kind === 'visit' ? subject.tag : undefined) : intent;
+  if (!topic) return { intent: 'help', lines: [{ id: 'emr.ai.reply.help' }] };
+  return answer(topic, subject, journeyOf);
+}
 
+/** Answers a quick-action topic (no text to interpret). */
+export function ask(
+  topic: Topic,
+  tags: readonly AssistantTag[],
+  journeyOf: JourneyOf,
+  chosen?: string,
+): Reply {
+  return answer(topic, subjectOf(tags, chosen), journeyOf);
+}
+
+function answer(intent: Topic, subject: Subject, journeyOf: JourneyOf): Reply {
   // Only a tagged visit (encounter or section) names a visit; a patient tag never stands in for one.
-  const norawat = [...tags].reverse().find((t) => t.kind !== 'patient')?.norawat;
-  if (!norawat) {
-    const patient = [...tags].reverse().find((t) => t.kind === 'patient');
-    return patient
-      ? {
-          intent: 'needVisit',
-          lines: [{ id: 'emr.ai.reply.needVisit', values: { mrn: patient.mrn } }],
-        }
-      : { intent: 'needTag', lines: [{ id: 'emr.ai.reply.needTag' }] };
+  switch (subject.kind) {
+    case 'patientOnly':
+      return {
+        intent: 'needVisit',
+        lines: [{ id: 'emr.ai.reply.needVisit', values: { mrn: subject.mrn } }],
+      };
+    case 'ambiguous':
+      return {
+        intent: 'chooseVisit',
+        lines: [{ id: 'emr.ai.reply.chooseVisit', values: { n: subject.visits } }],
+      };
+    case 'none':
+      return { intent: 'needTag', lines: [{ id: 'emr.ai.reply.needTag' }] };
   }
+  const norawat = subject.tag.norawat;
   // The server reads the visit itself; nothing needs to be loaded in the browser.
   if (intent === 'claim') return { intent, lines: [], evaluate: norawat };
   const j = journeyOf(norawat);
@@ -147,7 +217,10 @@ export function reply(
   return { intent, lines };
 }
 
-/** The answer to a claim question from the server's evaluation: which visit, which rule set, then every finding. */
+/**
+ * The answer to a claim question from the server's evaluation: which visit, which rule set, then the structured result
+ * (every finding, grouped; `ClaimResult`).
+ */
 export function claimLines(norawat: string, e: ClaimEvaluation): ReplyLine[] {
   const lines: ReplyLine[] = [
     { id: 'emr.ai.reply.source', values: { norawat } },
@@ -155,8 +228,7 @@ export function claimLines(norawat: string, e: ClaimEvaluation): ReplyLine[] {
   ];
   if (e.status === 'not_applicable') lines.push({ id: 'emr.claim.notApplicable' });
   else {
-    for (const finding of e.findings) lines.push({ finding });
-    if (e.status === 'partial') lines.push({ id: 'emr.claim.partial' });
+    lines.push({ claim: e });
     lines.push({ id: 'emr.claim.scope' });
   }
   lines.push({ id: 'emr.ai.reply.disclaimer' });
