@@ -11,6 +11,9 @@ scripts/migrate.sh --database hms --plan    # expect no 'pending' lines after a 
 ```
 
 ## Release step (migrations)
+0. If a pending migration needs a new group role (its header says "Requires group role ..."; e.g. 0006 needs
+   `hms_assistant_rw`), re-run the bootstrap on the target first. It is safe to re-run and changes no password unless
+   `HMS_*_PASSWORD` is set.
 1. `scripts/migrate.* --plan` against the target; review pending versions.
 2. Back up (below) unless the target is disposable.
 3. `scripts/migrate.*` once, from one place (never from every service replica).

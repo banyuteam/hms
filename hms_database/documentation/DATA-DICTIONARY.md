@@ -23,6 +23,15 @@ definitions with `\d+ schema.table` in psql.
 | `iam.sessions` | 0005 | one session | `id_hash` (SHA-256 of token) | no token stored |
 | `iam.signin_attempts` | 0005 | lockout counter | `account_key_hash` | no identifier stored |
 | `iam.effective_permissions` (view) | 0005 | permission in force | - | single definition of "granted now" |
+| `assistant.evaluation_receipts` | 0006 | one claim-readiness evaluation returned to a user | `evaluation_id` | append-only; no encounter; 30 days unless referenced |
+| `assistant.evaluation_receipt_results` | 0006 | one rule result of a receipt | (`evaluation_id`, `rule_id`) | rule codes and results only |
+| `assistant.feedback` | 0006 | one version of one user's feedback on a finding or answer | `id` (UUIDv7); one current item per user, evaluation and target | append-only versions; 12 months |
+| `assistant.feedback_comments` | 0006 | optional comment of a feedback version | `feedback_id` | **restricted** free text, 1 to 200 characters; 90 days |
+| `assistant.interaction_events` | 0006 | one usage event | (`user_id`, `event_id`) | schema v1; no text or identifiers; 90 days |
+| `assistant.monthly_counts` | 0006 | month × facility × metric × dimensions | `id`; dimensions unique | no user ids; 12 months |
+| `assistant.feedback_summary_monthly` (view) | 0006 | aggregate | - | groups below 5 suppressed; reporting |
+| `assistant.usage_summary_monthly` (view) | 0006 | aggregate | - | groups below 5 suppressed; reporting |
 
 Details: [platform](../schemas/platform/README.md), [audit](../schemas/audit/README.md),
-[eventing](../schemas/eventing/README.md), [integration](../schemas/integration/README.md), [iam](../schemas/iam/README.md).
+[eventing](../schemas/eventing/README.md), [integration](../schemas/integration/README.md), [iam](../schemas/iam/README.md),
+[assistant](../schemas/assistant/README.md).

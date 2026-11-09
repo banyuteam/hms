@@ -54,7 +54,8 @@ $$;
 -- without the expected comment belongs to something else and is never taken over.
 --
 -- Group roles (NOLOGIN, shared by every HMS database on the cluster, referenced by migrations in GRANTs):
---   hms_platform_rw, hms_iam_rw, hms_eventing_rw, hms_integration_rw, hms_audit_append, hms_audit_read, hms_report_read
+--   hms_platform_rw, hms_iam_rw, hms_eventing_rw, hms_integration_rw, hms_assistant_rw, hms_audit_append,
+--   hms_audit_read, hms_report_read
 -- Per-database roles (<prefix>_*):
 --   owner      NOLOGIN; owns the database and every object in it
 --   migrator   LOGIN;   may SET ROLE to owner (no inherited rights); runs migrations only
@@ -74,6 +75,7 @@ BEGIN
             ('hms_iam_rw',             false, 'hms_database:group:iam read/write',                 -1),
             ('hms_eventing_rw',        false, 'hms_database:group:eventing outbox/receipts',       -1),
             ('hms_integration_rw',     false, 'hms_database:group:integration polling state',      -1),
+            ('hms_assistant_rw',       false, 'hms_database:group:assistant feedback and usage',   -1),
             ('hms_audit_append',       false, 'hms_database:group:audit append-only writer',       -1),
             ('hms_audit_read',         false, 'hms_database:group:audit reader',                   -1),
             ('hms_report_read',        false, 'hms_database:group:reporting reader',               -1),
@@ -105,7 +107,7 @@ BEGIN
 
     -- Memberships. The migrator gets no inherited rights: it acts only after SET ROLE <owner>.
     EXECUTE format('GRANT %I TO %I WITH INHERIT FALSE, SET TRUE', prefix || '_owner', prefix || '_migrator');
-    EXECUTE format('GRANT hms_platform_rw, hms_iam_rw, hms_eventing_rw, hms_integration_rw, hms_audit_append TO %I WITH INHERIT TRUE, SET FALSE',
+    EXECUTE format('GRANT hms_platform_rw, hms_iam_rw, hms_eventing_rw, hms_integration_rw, hms_assistant_rw, hms_audit_append TO %I WITH INHERIT TRUE, SET FALSE',
                    prefix || '_runtime');
     EXECUTE format('GRANT hms_audit_read TO %I WITH INHERIT TRUE, SET FALSE', prefix || '_auditor');
     EXECUTE format('GRANT hms_report_read TO %I WITH INHERIT TRUE, SET FALSE', prefix || '_reporting');

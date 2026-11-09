@@ -11,6 +11,7 @@ cluster does not imply shared write access: other projects use APIs, events or a
 | `eventing` | Active (0003) | Transactional outbox, consumer receipts | `hms_services` producers, relay, consumers | `hms_services` | `hms_eventing_rw` | confidential |
 | `integration` | Active (0004) | Legacy polling checkpoints, leases, run history | `hms_services` legacy polling adapter | `hms_services` | `hms_integration_rw` | confidential |
 | `iam` | Active (0005) | Users, external identity links, roles, permissions, scoped grants, sessions, lockout | `hms_services` IAM module | `hms_services`, audit reviewers (not sessions) | `hms_iam_rw`, `hms_audit_read` | confidential |
+| `assistant` | Active (0006) | Claim-readiness evaluation receipts, feedback, comments, usage events and monthly counts (ADR-SVC-008) | `hms_services` assistant module | `hms_services`; reporting: aggregate views only | `hms_assistant_rw`, `hms_report_read` | confidential; comments restricted |
 
 Proposed, not created (need an approved capability with owner, classification and consumers first):
 `security`, `workflow`, `ai_platform`, `notification`, `licensing`, `ui_platform`, `readmodel`, `patient`,
