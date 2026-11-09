@@ -33,6 +33,7 @@ const spacing = {
   'assistant-panel': size('assistant-panel'),
   'viewer-media': size('viewer-media'),
   search: size('search'),
+  'search-results': size('search-results'),
 };
 
 const color = (name: string) => `var(--hms-color-${name})`;

@@ -458,4 +458,39 @@ describe('AssistantPanel', () => {
       expect(within(panel).queryByRole('form', { name: 'Feedback on this answer' })).toBeNull();
     });
   });
+
+  describe('tagging a visit by no_rawat', () => {
+    async function searchInPanel() {
+      renderPanel();
+      await userEvent.click(screen.getByRole('button', { name: /open/i }));
+      const panel = screen.getByRole('complementary', { name: PANEL });
+      await userEvent.type(
+        within(panel).getByRole('searchbox', { name: 'Tag a visit (no_rawat)' }),
+        '2026/',
+      );
+      const results = await within(panel).findByRole('list', { name: /result/i });
+      return { panel, results };
+    }
+
+    it('docked: the results scroll inside a fixed height, so they cannot push the composer out of the panel', async () => {
+      const { panel, results } = await searchInPanel();
+      expect(results).toHaveClass('max-h-search-results', 'overflow-y-auto');
+      // The composer below the results stays in the panel and usable.
+      expect(within(panel).getByRole('textbox', { name: 'Message' })).toBeVisible();
+      await userEvent.click(within(results).getAllByRole('button')[0]!);
+      expect(within(panel).getByRole('list', { name: 'Tagged context' })).toBeInTheDocument();
+    });
+
+    it('maximized: the search pane scrolls as a whole, the list keeps its full height', async () => {
+      const { panel } = await searchInPanel();
+      await userEvent.click(within(panel).getByRole('button', { name: /maximi/i }));
+      // The picker moves to the side pane (a new search box).
+      await userEvent.type(
+        within(panel).getByRole('searchbox', { name: 'Tag a visit (no_rawat)' }),
+        '2026/',
+      );
+      const results = await within(panel).findByRole('list', { name: /result/i });
+      expect(results).not.toHaveClass('max-h-search-results');
+    });
+  });
 });

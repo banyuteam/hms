@@ -185,4 +185,5 @@
   --hms-size-assistant-panel: 400px; /* AGREED: docked AI panel */
   --hms-size-viewer-media: 240px; /* AGREED: min height of the image area in the radiology viewer */
   --hms-size-search: 640px; /* from code: TopBar search max width */
+  --hms-size-search-results: 240px; /* PROPOSED 2026-11-09: result list height where space is short (docked assistant); it scrolls beyond */
 }

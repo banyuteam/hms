@@ -211,9 +211,12 @@ export function AssistantPanel() {
     setDraft('');
   };
 
+  // Docked, the picker shares a short column with the conversation and the composer: its results scroll inside a fixed
+  // height so they never push the chips, topics and message box out of the panel. Maximized, its pane scrolls instead.
   const tagPicker = (
-    <div className="flex">
+    <div className="flex flex-none">
       <RecordSearch
+        scrollResults={mode === 'docked'}
         label={t('emr.ai.tagSearch')}
         onPick={(pick) =>
           pick.type === 'encounter' && tagEncounter(pick.item.no_rawat, pick.item.no_rkm_medis)
@@ -251,7 +254,8 @@ export function AssistantPanel() {
             {tagPicker}
           </div>
         )}
-        <div className="flex min-w-0 flex-1 flex-col gap-8 p-12 group-data-[mode=maximized]/panel:mx-auto group-data-[mode=maximized]/panel:max-w-home-content">
+        {/* On a very short screen the column scrolls rather than painting past the panel over the dock. */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-8 overflow-y-auto p-12 group-data-[mode=maximized]/panel:mx-auto group-data-[mode=maximized]/panel:max-w-home-content">
           <div
             ref={logRef}
             className="min-h-0 flex-1 overflow-auto rounded-md border border-line-subtle bg-canvas p-12 focus-visible:focus-ring"
@@ -278,7 +282,7 @@ export function AssistantPanel() {
 
           {mode === 'docked' && tagPicker}
 
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-none flex-col gap-6">
             {tags.length > 0 && (
               <ul
                 className="m-0 flex list-none flex-wrap gap-4 p-0"
