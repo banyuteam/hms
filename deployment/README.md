@@ -29,14 +29,14 @@ postgres ─▶ db-bootstrap ─▶ db-migrate ─▶ org-setup ─▶ hms-servi
 
 1. Settings: copy `deployment/.env.example` to `deployment/.env` and fill in `LEGACY_DB_NAME` and `LEGACY_DB_USER`
    (the SELECT-only Khanza account). A Khanza on this machine is `LEGACY_DB_HOST=host.docker.internal`.
-2. Secrets: create the six files in `deployment/secrets/dev/`. Generate the three PostgreSQL passwords and put the
+2. Secrets: create the seven files in `deployment/secrets/dev/`. Generate the four PostgreSQL passwords and put the
    Khanza account password and the two Khanza AES keys in the other three (no trailing newline needed):
 
    ```powershell
    # Windows PowerShell 5.1 or PowerShell 7, from the workspace root
    $d = 'deployment\secrets\dev'; New-Item -ItemType Directory -Force $d | Out-Null
    $rng = [Security.Cryptography.RNGCryptoServiceProvider]::new()
-   foreach ($f in 'postgres_superuser_password','hms_migrator_password','hms_runtime_password') {
+   foreach ($f in 'postgres_superuser_password','hms_migrator_password','hms_runtime_password','hms_legacy_bridge_password') {
      $b = [byte[]]::new(24); $rng.GetBytes($b)
      [IO.File]::WriteAllText("$PWD\$d\$f", (($b | ForEach-Object { $_.ToString('x2') }) -join ''))
    }
@@ -49,7 +49,7 @@ postgres ─▶ db-bootstrap ─▶ db-migrate ─▶ org-setup ─▶ hms-servi
    ```bash
    # bash (Linux/macOS)
    d=deployment/secrets/dev; mkdir -p "$d"
-   for f in postgres_superuser_password hms_migrator_password hms_runtime_password; do
+   for f in postgres_superuser_password hms_migrator_password hms_runtime_password hms_legacy_bridge_password; do
      openssl rand -hex 24 | tr -d '\n' > "$d/$f"; done
    for f in legacy_db_password legacy_login_id_key legacy_login_password_key; do
      read -rsp "Value for $f: " v; printf '%s' "$v" > "$d/$f"; echo; done

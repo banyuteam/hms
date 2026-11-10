@@ -65,3 +65,7 @@ FROM clinical.resource_versions WHERE resource_type = 'Observation' AND resource
 - Orders (ServiceRequest), specimens, care plans, family history and immunizations.
 - Department (Organization) references.
 - FHIR XHTML narrative.
+
+**Layer separation (0021, ADR-ROOT-002):** every record table here has `record_origin` (`native` | `legacy`) and a
+layer guard. A table belongs to a record domain (`integration.record_domain_tables`); the domain's authority for the
+organization decides whether the native runtime or the legacy bridge may write it (SQLSTATE `HM001` otherwise).

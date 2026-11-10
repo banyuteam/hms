@@ -5,6 +5,8 @@
 #   docker compose -f deployment/compose.yaml down              # stop (add -v to delete the dev database)
 #
 # Start order: postgres -> db-bootstrap -> db-migrate -> org-setup -> hms-services -> hms-web.
+# Optional profile legacy-bridge (ADR-ROOT-002): add `--profile legacy-bridge` to `up` to also start the legacy bridge
+# worker, which maps Khanza patients into HMS as hms_meta_legacy_bridge.
 # The database superuser is used only by db-bootstrap. Migrations run once as hms_meta_migrator; hms-services runs as
 # hms_meta_runtime (ADR-DB-002). Passwords and keys are mounted files under ${HMS_SECRETS_DIR}, never env values.
 # The legacy HMS (Khanza MySQL) stays external and read-only: hms-services reaches it with a SELECT-only account.
@@ -63,7 +65,7 @@ services:
   # Creates the database and roles (re-runnable). The only job that uses the superuser.
   db-bootstrap:
     <<: *db-job
-    secrets: [postgres_superuser_password, hms_migrator_password, hms_runtime_password]
+    secrets: [postgres_superuser_password, hms_migrator_password, hms_runtime_password, hms_legacy_bridge_password]
     environment:
       HMS_DATABASE_NAME: ${HMS_DATABASE_NAME:-hms}
     command:
@@ -74,6 +76,7 @@ services:
         PGPASSWORD="$$(cat /run/secrets/postgres_superuser_password)" \
         HMS_MIGRATOR_PASSWORD="$$(cat /run/secrets/hms_migrator_password)" \
         HMS_RUNTIME_PASSWORD="$$(cat /run/secrets/hms_runtime_password)" \
+        HMS_LEGACY_BRIDGE_PASSWORD="$$(cat /run/secrets/hms_legacy_bridge_password)" \
           bash /hms_database/scripts/bootstrap.sh --host postgres --database "$$HMS_DATABASE_NAME"
 
   # Applies pending migrations once (ledger and checksums, ADR-DB-001), as hms_meta_migrator.
@@ -160,6 +163,45 @@ services:
     mem_limit: 512m
     cpus: 1.0
 
+  # Legacy bridge worker (ADR-ROOT-002, ADR-SVC-010): reads Khanza `pasien` SELECT-only and maps it into the canonical
+  # patient record while the organization's patient domain has legacy authority (set it first: hms_database RUNBOOK).
+  # Its own database login, never the runtime's. No HTTP port; progress is in integration.sync_runs and its log.
+  legacy-bridge:
+    image: ${HMS_SERVICES_IMAGE:-local/hms-services:dev}
+    <<: *hardening
+    profiles: [legacy-bridge]
+    depends_on:
+      org-setup:
+        condition: service_completed_successfully
+    secrets: [hms_legacy_bridge_password, legacy_db_password]
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: ${HMS_DATABASE_NAME:-hms}
+      DATABASE_USER: hms_meta_legacy_bridge
+      DATABASE_PASSWORD_FILE: /run/secrets/hms_legacy_bridge_password
+      DATABASE_SSLMODE: disable   # private development network only
+      APP_ENV: development
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      HMS_ORGANIZATION_CODE: ${HMS_ORGANIZATION_CODE:?Set HMS_ORGANIZATION_CODE in deployment/.env}
+      HMS_FACILITY_CODE: ${HMS_FACILITY_CODE:?Set HMS_FACILITY_CODE in deployment/.env}
+      LEGACY_DB_HOST: ${LEGACY_DB_HOST:?Set LEGACY_DB_HOST in deployment/.env}
+      LEGACY_DB_PORT: ${LEGACY_DB_PORT:-3306}
+      LEGACY_DB_NAME: ${LEGACY_DB_NAME:?Set LEGACY_DB_NAME in deployment/.env}
+      LEGACY_DB_USER: ${LEGACY_DB_USER:?Set LEGACY_DB_USER (SELECT-only account) in deployment/.env}
+      LEGACY_DB_PASSWORD_FILE: /run/secrets/legacy_db_password
+      BRIDGE_BATCH_SIZE: ${BRIDGE_BATCH_SIZE:-500}
+      BRIDGE_BATCH_PAUSE_MS: ${BRIDGE_BATCH_PAUSE_MS:-1000}
+      BRIDGE_INTERVAL_SECONDS: ${BRIDGE_INTERVAL_SECONDS:-300}
+    command: ["legacy-bridge"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [hms-private]
+    init: true
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.5
+
   hms-web:
     build:
       context: ../hms_workspace/web
@@ -201,6 +243,8 @@ secrets:
     file: ${HMS_SECRETS_DIR:-./secrets/dev}/hms_migrator_password
   hms_runtime_password:
     file: ${HMS_SECRETS_DIR:-./secrets/dev}/hms_runtime_password
+  hms_legacy_bridge_password:
+    file: ${HMS_SECRETS_DIR:-./secrets/dev}/hms_legacy_bridge_password
   legacy_db_password:
     file: ${HMS_SECRETS_DIR:-./secrets/dev}/legacy_db_password
   legacy_login_id_key:

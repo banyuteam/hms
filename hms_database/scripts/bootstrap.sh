@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Creates the HMS database, its roles and baseline privileges (bootstrap/bootstrap.psql). Run once per database as a
 # PostgreSQL superuser; psql prompts for the superuser password and for the new migrator/runtime passwords.
-# CI may set HMS_MIGRATOR_PASSWORD / HMS_RUNTIME_PASSWORD (and HMS_AUDITOR_PASSWORD / HMS_REPORTING_PASSWORD) instead.
+# CI may set HMS_MIGRATOR_PASSWORD / HMS_RUNTIME_PASSWORD (and HMS_LEGACY_BRIDGE_PASSWORD / HMS_AUDITOR_PASSWORD /
+# HMS_REPORTING_PASSWORD) instead.
 #
 #   scripts/bootstrap.sh [--host H] [--port P] [--superuser U] [--maintenance-db D] [--database hms] [--role-prefix X]
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"

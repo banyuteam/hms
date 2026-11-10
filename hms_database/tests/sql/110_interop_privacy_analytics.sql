@@ -10,6 +10,7 @@ INSERT INTO iam.users (id, organization_id, display_name) VALUES
 SELECT set_config('hms.organization_id', '00000000-0000-7000-8000-00000000000a', true) AS hms_ignored,
        set_config('hms.actor_user_id', '00000000-0000-7000-8000-0000000000c1', true) AS hms_ignored2,
        set_config('hms.change_reason', '', true) AS hms_ignored3 \gset
+SELECT pg_temp.set_authority('00000000-0000-7000-8000-00000000000a') AS hms_ignored \gset
 INSERT INTO patient.patients (id, organization_id, administrative_gender, birth_date) VALUES
     ('00000000-0000-7000-8000-0000000000d1', '00000000-0000-7000-8000-00000000000a', 'female', DATE '1990-05-01');
 INSERT INTO patient.names (organization_id, patient_id, text) VALUES
@@ -33,22 +34,27 @@ INSERT INTO privacy.processing_activities (code, name, purpose, legal_basis, dat
 DO $$
 DECLARE
     rt  text := pg_temp.r('runtime');
+    br  text := pg_temp.r('legacy_bridge');
     org text := '00000000-0000-7000-8000-00000000000a';
     d1  text := '00000000-0000-7000-8000-0000000000d1';
     sub uuid;
     h   record;
 BEGIN
-    -- Legacy crosswalk: one active link per legacy key and resource type; never deleted.
-    PERFORM pg_temp.exec_as(rt, format($q$INSERT INTO integration.legacy_record_links (id, organization_id, source_system, source_entity,
+    -- Legacy crosswalk: written by the legacy bridge only (0021); one active link per legacy key and resource type;
+    -- never deleted.
+    PERFORM pg_temp.expect_error(rt, format($q$INSERT INTO integration.legacy_record_links (organization_id, source_system, source_entity,
+        source_key, resource_type, resource_id) VALUES (%L, 'legacy-hms', 'pasien', 'TEST-RM-0009', 'Patient', %L)$q$, org, d1),
+                                 '42501', 'the native runtime cannot write the crosswalk');
+    PERFORM pg_temp.exec_as(br, format($q$INSERT INTO integration.legacy_record_links (id, organization_id, source_system, source_entity,
         source_key, resource_type, resource_id) VALUES ('00000000-0000-7000-8000-000000000101', %L, 'legacy-hms', 'pasien', 'TEST-RM-0001',
         'Patient', %L)$q$, org, d1));
-    PERFORM pg_temp.expect_error(rt, format($q$INSERT INTO integration.legacy_record_links (organization_id, source_system, source_entity,
+    PERFORM pg_temp.expect_error(br, format($q$INSERT INTO integration.legacy_record_links (organization_id, source_system, source_entity,
         source_key, resource_type, resource_id) VALUES (%L, 'legacy-hms', 'pasien', 'TEST-RM-0001', 'Patient', %L)$q$, org, d1),
                                  '23505', 'one active link per legacy key');
-    PERFORM pg_temp.expect_error(rt, $q$UPDATE integration.legacy_record_links SET status = 'superseded'$q$, '23514',
+    PERFORM pg_temp.expect_error(br, $q$UPDATE integration.legacy_record_links SET status = 'superseded'$q$, '23514',
                                  'superseding a link needs a reason');
-    PERFORM pg_temp.expect_error(rt, $q$DELETE FROM integration.legacy_record_links$q$, '42501', 'legacy links are not deleted');
-    PERFORM pg_temp.expect_error(rt, format($q$INSERT INTO integration.legacy_record_links (organization_id, source_system, source_entity,
+    PERFORM pg_temp.expect_error(br, $q$DELETE FROM integration.legacy_record_links$q$, '42501', 'legacy links are not deleted');
+    PERFORM pg_temp.expect_error(br, format($q$INSERT INTO integration.legacy_record_links (organization_id, source_system, source_entity,
         source_key, resource_type, resource_id) VALUES (%L, 'unknown-system', 'pasien', 'x', 'Patient', %L)$q$, org, d1),
                                  '23503', 'source system must be registered');
 

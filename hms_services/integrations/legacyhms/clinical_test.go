@@ -40,7 +40,7 @@ func TestClinicalStatementsAreFixedReadOnlySelects(t *testing.T) {
 			t.Errorf("statement outside the allowlist: %s", q)
 		}
 	}
-	if len(c.Statements()) != 6+MaxSearchWords {
+	if len(c.Statements()) != 7+MaxSearchWords {
 		t.Errorf("unexpected statement count %d", len(c.Statements()))
 	}
 }
@@ -56,6 +56,7 @@ func TestClinicalSendsOnlyListedStatementsWithEscapedWords(t *testing.T) {
 	_, _ = c.PatientEncounters(ctx, "000001", "", 100)
 	_, _ = c.SearchEncounters(ctx, "2026/10", 25)
 	_, _ = c.PayerVisits(ctx, "000001", 501)
+	_, _ = c.PatientScan(ctx, "000001", 500)
 	if _, err := c.SearchPatients(ctx, make([]string, MaxSearchWords+1), 25); err == nil {
 		t.Error("too many words accepted")
 	}
@@ -80,5 +81,8 @@ func TestClinicalSendsOnlyListedStatementsWithEscapedWords(t *testing.T) {
 	}
 	if a := rec.sent[4].args; a[0] != "000001" || a[1] != 501 {
 		t.Errorf("payer visit args: %v", a)
+	}
+	if a := rec.sent[5].args; a[0] != "000001" || a[1] != 500 {
+		t.Errorf("patient scan args: %v", a)
 	}
 }

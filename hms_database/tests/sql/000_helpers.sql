@@ -44,3 +44,21 @@ BEGIN
     RAISE EXCEPTION 'FAIL: %: expected SQLSTATE %, but the statement succeeded', p_label, p_sqlstate;
 END
 $$;
+
+-- Gives every record domain of an organization one authority (ADR-ROOT-002), as the cutover procedure does, so the
+-- layer guard lets the native layer ('native') or the legacy bridge ('legacy') write. Keeps the caller's context.
+CREATE FUNCTION pg_temp.set_authority(p_org text, p_authority text DEFAULT 'native') RETURNS void LANGUAGE plpgsql AS $$
+DECLARE
+    u text := current_setting('hms.actor_user_id', true);
+    s text := current_setting('hms.actor_service', true);
+    o text := current_setting('hms.organization_id', true);
+BEGIN
+    PERFORM set_config('hms.actor_user_id', '', true), set_config('hms.actor_service', 'test-fixture', true),
+            set_config('hms.organization_id', p_org, true);
+    INSERT INTO integration.domain_authority (organization_id, domain, authority, decision_reference)
+    SELECT p_org::uuid, d.code, p_authority, 'test fixture' FROM integration.record_domains d
+    ON CONFLICT (organization_id, domain) DO NOTHING;
+    PERFORM set_config('hms.actor_user_id', coalesce(u, ''), true), set_config('hms.actor_service', coalesce(s, ''), true),
+            set_config('hms.organization_id', coalesce(o, ''), true);
+END
+$$;

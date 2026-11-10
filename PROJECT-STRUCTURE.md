@@ -70,6 +70,9 @@ hms/
 │   ├── PROJECT-OWNERSHIP.md
 │   ├── .claude/skills/
 │   ├── core/                                # Go runtime and domain orchestration
+│   ├── canonical/                           # canonical record store shared by both write layers (ADR-ROOT-002)
+│   ├── native/                              # native transaction layer: HMS commands and canonical reads
+│   ├── legacybridge/                        # legacy bridge: SELECT-only Khanza -> versioned mapping -> canonical
 │   ├── platform/
 │   │   ├── configuration/
 │   │   ├── iam/

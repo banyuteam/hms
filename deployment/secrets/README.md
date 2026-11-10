@@ -1,6 +1,6 @@
 # Development secret files
 
-Everything in this folder except this README and `.gitkeep` is git-ignored. `compose.yaml` reads six files from
+Everything in this folder except this README and `.gitkeep` is git-ignored. `compose.yaml` reads seven files from
 `secrets/dev/` (or `HMS_SECRETS_DIR`), one value per file, no trailing spaces:
 
 | File | Value |
@@ -8,6 +8,7 @@ Everything in this folder except this README and `.gitkeep` is git-ignored. `com
 | `postgres_superuser_password` | Password of the container's `postgres` superuser (used only by `db-bootstrap`) |
 | `hms_migrator_password` | Password set for `hms_meta_migrator` (used only by `db-migrate`) |
 | `hms_runtime_password` | Password set for `hms_meta_runtime` (`org-setup`, `hms-services`) |
+| `hms_legacy_bridge_password` | Password set for `hms_meta_legacy_bridge` (`legacy-bridge` worker, profile `legacy-bridge`) |
 | `legacy_db_password` | Password of the SELECT-only Khanza account |
 | `legacy_login_id_key` | Khanza AES key for `user.id_user` |
 | `legacy_login_password_key` | Khanza AES key for `user.password` |

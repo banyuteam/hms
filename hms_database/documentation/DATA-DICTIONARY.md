@@ -55,10 +55,14 @@ definitions with `\d+ schema.table` in psql.
 | `knowledge.archetypes` / `templates` / `template_archetypes` / `template_bindings` | 0014 | openEHR artifact / binding | `id` | semantic map path -> column / FHIR / concept |
 | `knowledge.fhir_profiles` | 0014 | one profile version | `id`, (`canonical_url`, `version`) | e.g. SATUSEHAT R4 profiles |
 | `integration.external_systems` | 0016 | one external system | `code` | `legacy-hms`, `satusehat`, `pacs` |
-| `integration.legacy_record_links` | 0016 | legacy row -> canonical record | `id`; active unique legacy key | Khanza never written |
+| `integration.legacy_record_links` | 0016, 0021 | legacy row -> canonical record | `id`; active unique legacy key per organization | bridge-only; `mapping_version`; Khanza never written |
 | `integration.external_resource_ids` | 0016 | external id of a record | `id` | SATUSEHAT resource ids |
 | `integration.outbound_submissions` | 0016 | one submission of a version | `id`, `submission_id`, idempotency key | payload hash only |
 | `integration.validation_results` | 0016 | one profile validation | `id` | append-only; no values |
+| `integration.record_domains` | 0021 | one record domain (unit of cutover) | `code` | 16 domains, e.g. `patient`, `encounter` |
+| `integration.record_domain_tables` | 0021 | one canonical record table | `table_name` | child tables in their parent's domain |
+| `integration.domain_authority` | 0021 | authority of a domain for an organization | `id`; (`organization_id`, `domain`) | `legacy`/`cutover`/`native`; versioned; owner-only |
+| `integration.bridge_issues` | 0021 | one problem with a legacy row | `id`; one open per key, reason, field | keys and reason codes only |
 | `imaging.studies` / `series` | 0017 | DICOM study / series | `id`; UIDs unique per organization | images stay in PACS |
 | `readmodel.clinical_timeline` | 0018 | latest version of one resource | (`resource_type`, `resource_id`) | derived, rebuildable |
 | `readmodel.patient_summaries` | 0018 | one patient banner | `patient_id` | derived, rebuildable |

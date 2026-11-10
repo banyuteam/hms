@@ -82,7 +82,8 @@ BEGIN
     WHERE c.relkind IN ('r', 'p')
       AND (n.nspname = ANY (record_schemas)
            OR (n.nspname = 'integration' AND c.relname IN ('legacy_record_links', 'external_resource_ids',
-                                                           'outbound_submissions', 'validation_results')))
+                                                           'outbound_submissions', 'validation_results',
+                                                           'domain_authority', 'bridge_issues')))
       AND EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attname = 'organization_id' AND NOT a.attisdropped)
       AND NOT (c.relrowsecurity AND EXISTS (SELECT 1 FROM pg_policy pol WHERE pol.polrelid = c.oid AND pol.polname = 'tenant_isolation'));
     PERFORM pg_temp.ok(offender IS NULL, 'tenant tables without row-level security: ' || coalesce(offender, ''));
@@ -91,8 +92,47 @@ BEGIN
     SELECT string_agg(n.nspname || '.' || c.relname, ', ') INTO offender
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname IN ('patient', 'workforce', 'clinical', 'imaging', 'privacy') AND c.relkind IN ('r', 'p')
-      AND (has_table_privilege(p || '_runtime', c.oid, 'DELETE') OR has_table_privilege(p || '_runtime', c.oid, 'TRUNCATE'));
-    PERFORM pg_temp.ok(offender IS NULL, 'record tables the runtime may delete from: ' || coalesce(offender, ''));
+      AND (has_table_privilege(p || '_runtime', c.oid, 'DELETE') OR has_table_privilege(p || '_runtime', c.oid, 'TRUNCATE')
+           OR has_table_privilege(p || '_legacy_bridge', c.oid, 'DELETE')
+           OR has_table_privilege(p || '_legacy_bridge', c.oid, 'TRUNCATE'));
+    PERFORM pg_temp.ok(offender IS NULL, 'record tables the runtime or bridge may delete from: ' || coalesce(offender, ''));
+
+    -- Layer separation (ADR-ROOT-002): every versioned record table is in a domain, records its origin and is guarded;
+    -- a child table is in its parent's domain (they cut over together).
+    SELECT string_agg(n.nspname || '.' || c.relname, ', ') INTO offender
+    FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname IN ('patient', 'workforce', 'clinical', 'imaging') AND c.relkind = 'r'
+      AND EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid = c.oid AND t.tgfoid = 'hms_meta.capture_version'::regproc)
+      AND NOT (EXISTS (SELECT 1 FROM integration.record_domain_tables d WHERE d.table_name = n.nspname || '.' || c.relname)
+               AND EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attname = 'record_origin' AND NOT a.attisdropped)
+               AND EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid = c.oid AND t.tgfoid = 'hms_meta.guard_record_layer'::regproc
+                                                       AND t.tgenabled = 'O'));
+    PERFORM pg_temp.ok(offender IS NULL, 'record tables without domain, origin or layer guard: ' || coalesce(offender, ''));
+    SELECT string_agg(child.table_name, ', ') INTO offender
+    FROM pg_trigger t
+    JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN integration.record_domain_tables child ON child.table_name = n.nspname || '.' || c.relname
+    JOIN integration.record_domain_tables parent
+      ON parent.table_name = split_part(encode(t.tgargs, 'escape'), '\000', 1)
+    WHERE t.tgfoid = 'hms_meta.touch_parent'::regproc AND child.domain <> parent.domain;
+    PERFORM pg_temp.ok(offender IS NULL, 'child tables outside their parent''s domain: ' || coalesce(offender, ''));
+    PERFORM pg_temp.ok(NOT has_table_privilege(p || '_runtime', 'integration.domain_authority', 'INSERT')
+                       AND NOT has_table_privilege(p || '_runtime', 'integration.domain_authority', 'UPDATE')
+                       AND NOT has_table_privilege(p || '_legacy_bridge', 'integration.domain_authority', 'INSERT')
+                       AND NOT has_table_privilege(p || '_legacy_bridge', 'integration.domain_authority', 'UPDATE'),
+                          'domain authority is changed by the owner only');
+    SELECT string_agg(x.t, ', ') INTO offender
+    FROM unnest(ARRAY['integration.legacy_record_links', 'integration.poll_checkpoints', 'integration.poll_leases',
+                      'integration.sync_runs', 'integration.bridge_issues']) AS x(t)
+    WHERE has_table_privilege(p || '_runtime', x.t, 'INSERT')
+       OR has_any_column_privilege(p || '_runtime', x.t, 'UPDATE') AND x.t <> 'integration.bridge_issues';
+    PERFORM pg_temp.ok(offender IS NULL, 'bridge state the native runtime may write: ' || coalesce(offender, ''));
+    SELECT string_agg(x.t, ', ') INTO offender
+    FROM unnest(ARRAY['integration.outbound_submissions', 'integration.external_resource_ids', 'iam.users',
+                      'iam.role_assignments', 'privacy.disclosures', 'readmodel.clinical_timeline']) AS x(t)
+    WHERE to_regclass(x.t) IS NOT NULL
+      AND (has_table_privilege(p || '_legacy_bridge', x.t, 'INSERT') OR has_any_column_privilege(p || '_legacy_bridge', x.t, 'UPDATE'));
+    PERFORM pg_temp.ok(offender IS NULL, 'native-only tables the bridge may write: ' || coalesce(offender, ''));
 
     -- Every table with a version column is versioned by trigger and refuses DELETE even for the owner.
     SELECT string_agg(n.nspname || '.' || c.relname, ', ') INTO offender
@@ -109,8 +149,10 @@ BEGIN
     FROM pg_namespace n
     WHERE to_regclass(n.nspname || '.resource_versions') IS NOT NULL
       AND (has_table_privilege(p || '_runtime', n.nspname || '.resource_versions', 'INSERT')
-           OR has_table_privilege(p || '_runtime', n.nspname || '.resource_versions', 'UPDATE'));
-    PERFORM pg_temp.ok(offender IS NULL, 'version history writable by the runtime: ' || coalesce(offender, ''));
+           OR has_table_privilege(p || '_runtime', n.nspname || '.resource_versions', 'UPDATE')
+           OR has_table_privilege(p || '_legacy_bridge', n.nspname || '.resource_versions', 'INSERT')
+           OR has_table_privilege(p || '_legacy_bridge', n.nspname || '.resource_versions', 'UPDATE'));
+    PERFORM pg_temp.ok(offender IS NULL, 'version history writable by the runtime or bridge: ' || coalesce(offender, ''));
 
     -- Readers: reporting sees terminology, knowledge and pseudonymized analytics only; auditors no clinical content.
     PERFORM pg_temp.ok(has_table_privilege(p || '_reporting', 'analytics.encounter_facts', 'SELECT'), 'reporting reads analytics');

@@ -1,0 +1,94 @@
+openapi: 3.1.0
+info:
+  title: HMS Patient Records API — canonical patients (native transaction layer)
+  version: 1.0.0
+  description: |
+    The canonical patient record in HMS (ADR-ROOT-002, ADR-SVC-010). A record is created either by HMS (this API, once
+    the organization's patient domain has native authority) or by the legacy bridge, which maps patients from the
+    legacy HMS while the domain still has legacy authority. Both read the same way here; `origin` says which layer
+    created the record. This API never reads or writes the legacy HMS: the legacy read-through API (clinical-read-v1,
+    keyed by MRN) is separate.
+    Requires a session (auth-v1) and the listed permission at the session facility; state-changing requests also pass
+    the auth-v1 same-origin checks. Creations and reads are audited (patient.record.create, patient.record.read); a
+    read whose audit event cannot be written returns 503 and no data.
+    Errors use the auth-v1 envelope; codes: invalid_request (400), unauthenticated (401), forbidden (403), not_found (404),
+    domain_not_native (409), identifier_in_use (409), service_unavailable (503).
+servers:
+  - url: /api/v1
+paths:
+  /patient-records:
+    post:
+      summary: Register a patient in HMS (patient.register)
+      description: |
+        Accepted only when the organization's patient domain has native authority; before the cutover the answer is
+        409 domain_not_native and registration stays in the legacy HMS. Send a client-generated `id` to make retries
+        safe: a retry with the same id returns the existing record with 200 instead of creating a second patient.
+        The medical record number is not accepted from clients (its native allocation is an open decision).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Registration' }
+      responses:
+        '201':
+          description: Created
+          headers: { Location: { schema: { type: string } } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/PatientRecord' } } }
+        '200':
+          description: A retry with an id already registered in this organization; the existing record
+          content: { application/json: { schema: { $ref: '#/components/schemas/PatientRecord' } } }
+        '400': { description: invalid_request (the message says which rule) }
+        '409': { description: domain_not_native (registration still runs in the legacy HMS) or identifier_in_use }
+  /patient-records/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      summary: A canonical patient of the caller's organization, native or mapped from the legacy HMS (patient.read)
+      responses:
+        '200': { description: Patient, content: { application/json: { schema: { $ref: '#/components/schemas/PatientRecord' } } } }
+        '404': { description: not_found (also for another organization's patient) }
+components:
+  schemas:
+    Identifier:
+      type: object
+      required: [system, value]
+      additionalProperties: false
+      properties:
+        system:
+          type: string
+          enum:
+            - https://fhir.kemkes.go.id/id/nik
+            - https://fhir.kemkes.go.id/id/paspor
+            - https://fhir.kemkes.go.id/id/kk
+        value: { type: string, minLength: 1, maxLength: 100, description: 'NIK: 16 digits; 9999999999999999 (no NIK) is refused' }
+    Registration:
+      type: object
+      required: [name, gender]
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid, description: Optional client-generated id (lowercase) for safe retries }
+        name: { type: string, minLength: 1, maxLength: 200, description: Official name; whitespace is collapsed }
+        gender: { type: string, enum: [male, female, other, unknown] }
+        birth_date: { type: string, format: date, description: 'From 1900-01-01, not in the future' }
+        birth_place: { type: string, maxLength: 200 }
+        identifiers: { type: array, maxItems: 5, items: { $ref: '#/components/schemas/Identifier' }, description: One per system }
+    IdentifierView:
+      type: object
+      required: [system, value, masked]
+      properties:
+        system: { type: string, description: 'Also urn:hms:id:mrn (medical record number), never masked' }
+        value: { type: string, description: 'NIK, passport and family card numbers are masked except the last 4 characters' }
+        masked: { type: boolean }
+    PatientRecord:
+      type: object
+      required: [id, version, origin, active, name, gender, birth_date, birth_place, identifiers]
+      properties:
+        id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1, description: Grows by one per transaction that changed the record }
+        origin: { type: string, enum: [native, legacy], description: Layer that created the record }
+        active: { type: boolean }
+        name: { type: string }
+        gender: { type: string, enum: [male, female, other, unknown] }
+        birth_date: { type: [string, 'null'], format: date }
+        birth_place: { type: [string, 'null'] }
+        identifiers: { type: array, items: { $ref: '#/components/schemas/IdentifierView' } }

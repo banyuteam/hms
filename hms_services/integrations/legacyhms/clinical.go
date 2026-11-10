@@ -75,6 +75,7 @@ type Clinical struct {
 	qPatientEncounters string
 	qEncounterSearch   string
 	qPayerVisits       string
+	qPatientScan       string
 }
 
 func NewClinical(db RowsQuerier) *Clinical {
@@ -92,6 +93,8 @@ func NewClinical(db RowsQuerier) *Clinical {
 			"r.`stts`, r.`kd_pj`, pj.`png_jawab` FROM `reg_periksa` r LEFT JOIN `penjab` pj ON pj.`kd_pj` = r.`kd_pj` " +
 			"WHERE r.`no_rkm_medis` = ? ORDER BY r.`tgl_registrasi` DESC, r.`jam_reg` DESC, r.`no_rawat` DESC LIMIT ?",
 	}
+	// The legacy bridge's snapshot scan (ADR-SVC-010): primary-key range in key order, bounded by the batch size.
+	c.qPatientScan = "SELECT " + patientCols + " FROM `pasien` WHERE `no_rkm_medis` > ? ORDER BY `no_rkm_medis` LIMIT ?"
 	for n := 1; n <= MaxSearchWords; n++ {
 		conds := make([]string, n)
 		for i := range conds {
@@ -105,7 +108,7 @@ func NewClinical(db RowsQuerier) *Clinical {
 
 // Statements returns every SQL statement this reader can send.
 func (c *Clinical) Statements() []string {
-	s := []string{c.qPatient, c.qIdentifiers, c.qEncounter, c.qPatientEncounters, c.qEncounterSearch, c.qPayerVisits}
+	s := []string{c.qPatient, c.qIdentifiers, c.qEncounter, c.qPatientEncounters, c.qEncounterSearch, c.qPayerVisits, c.qPatientScan}
 	return append(s, c.qPatientSearch[1:]...)
 }
 
@@ -121,6 +124,27 @@ func (c *Clinical) Patient(ctx context.Context, mrn string) (PatientRow, error) 
 		&p.Email, &p.Address, &p.PayerCode, &p.MembershipNo, &p.Employer, &p.Relationship, &p.ResponsibleName,
 		&p.ResponsibleOccupation, &p.ResponsibleAddress)
 	return p, notFoundAs(err, ErrNotFound)
+}
+
+// PatientScan returns up to limit patients whose MRN sorts after `after` ("" = from the first), in MRN order.
+func (c *Clinical) PatientScan(ctx context.Context, after string, limit int) ([]PatientRow, error) {
+	rows, err := c.db.Query(ctx, c.qPatientScan, after, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []PatientRow
+	for rows.Next() {
+		var p PatientRow
+		if err := rows.Scan(&p.MRN, &p.Name, &p.Sex, &p.BirthPlace, &p.BirthDate, &p.BloodType, &p.MaritalStatus,
+			&p.Religion, &p.Education, &p.Occupation, &p.FirstRegistered, &p.MotherName, &p.NIK, &p.Phone, &p.Email,
+			&p.Address, &p.PayerCode, &p.MembershipNo, &p.Employer, &p.Relationship, &p.ResponsibleName,
+			&p.ResponsibleOccupation, &p.ResponsibleAddress); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
 
 func (c *Clinical) Identifiers(ctx context.Context, mrn string) (IdentifierRow, error) {

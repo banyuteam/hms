@@ -38,7 +38,7 @@ jobs:
 
       - name: Generate role passwords for this run
         run: |
-          for name in MIGRATOR_PASSWORD RUNTIME_PASSWORD; do
+          for name in MIGRATOR_PASSWORD RUNTIME_PASSWORD LEGACY_BRIDGE_PASSWORD; do
             value="$(openssl rand -hex 24)"
             echo "::add-mask::$value"
             echo "$name=$value" >> "$GITHUB_ENV"
@@ -49,7 +49,7 @@ jobs:
         run: |
           docker run --rm --network host -v "$GITHUB_WORKSPACE/hms_database:/hms_database:ro" \
             -e PGPASSWORD="$SUPERUSER_PASSWORD" -e HMS_MIGRATOR_PASSWORD="$MIGRATOR_PASSWORD" \
-            -e HMS_RUNTIME_PASSWORD="$RUNTIME_PASSWORD" \
+            -e HMS_RUNTIME_PASSWORD="$RUNTIME_PASSWORD" -e HMS_LEGACY_BRIDGE_PASSWORD="$LEGACY_BRIDGE_PASSWORD" \
             postgres:18 bash /hms_database/scripts/bootstrap.sh --host 127.0.0.1 --database hms
 
       - name: Migrate (plan, apply, re-apply must be a no-op)
@@ -92,6 +92,7 @@ jobs:
         run: |
           export HMS_TEST_DATABASE_URL="postgres://hms_meta_runtime:${RUNTIME_PASSWORD}@127.0.0.1:5432/hms?sslmode=disable"
           export HMS_TEST_ADMIN_DATABASE_URL="postgres://postgres:${SUPERUSER_PASSWORD}@127.0.0.1:5432/hms?sslmode=disable"
+          export HMS_TEST_BRIDGE_DATABASE_URL="postgres://hms_meta_legacy_bridge:${LEGACY_BRIDGE_PASSWORD}@127.0.0.1:5432/hms?sslmode=disable"
           go test -count=1 -v ./... 2>&1 | tee go-test.log
           status="${PIPESTATUS[0]}"
           grep -E '^(ok|FAIL|---)' go-test.log | grep -v -- '--- PASS' || true
@@ -134,8 +135,8 @@ jobs:
       - name: Validate compose files
         run: |
           mkdir -p deployment/secrets/dev
-          for f in postgres_superuser_password hms_migrator_password hms_runtime_password legacy_db_password \
-                   legacy_login_id_key legacy_login_password_key; do
+          for f in postgres_superuser_password hms_migrator_password hms_runtime_password hms_legacy_bridge_password \
+                   legacy_db_password legacy_login_id_key legacy_login_password_key; do
             printf 'ci-placeholder' > "deployment/secrets/dev/$f"
           done
           cp deployment/.env.example deployment/.env
@@ -159,6 +160,12 @@ jobs:
           test "$(docker image inspect -f '{{.Config.User}}' hms-services:ci)" = "nonroot:nonroot"
           set +e
           out="$(docker run --rm --read-only --cap-drop ALL hms-services:ci serve 2>&1)"; status=$?
+          set -e
+          echo "$out"
+          test "$status" -ne 0
+          echo "$out" | grep -q 'invalid configuration'
+          set +e
+          out="$(docker run --rm --read-only --cap-drop ALL hms-services:ci legacy-bridge 2>&1)"; status=$?
           set -e
           echo "$out"
           test "$status" -ne 0

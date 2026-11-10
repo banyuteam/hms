@@ -57,7 +57,8 @@ Native mobile apps are separate native applications with deliberately selected w
 The existing Banyumanik 2 HMS interface is the baseline. Preserve its branding, visual language, tokens, established module screens and working behavior. The AppShell is an architectural integration around existing screens, not a mandate to redesign them.
 
 ## Data authority
-- New transactional writes: `hms_services` business workflows using `hms_database` persistence.
+- New transactional writes: `hms_services` business workflows using `hms_database` persistence (native layer).
+- Legacy data into the canonical record: the legacy bridge, per domain until that domain's cutover (ADR-ROOT-002).
 - Legacy historical reads: controlled read-only adapters.
 - Clinical Read Models: query projections, not independent write authorities.
 - Assistant: read/reasoning interface governed by service authorization; not a source of truth.

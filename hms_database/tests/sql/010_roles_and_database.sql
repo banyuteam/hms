@@ -8,17 +8,18 @@ DECLARE
     r   text;
 BEGIN
     PERFORM pg_temp.ok((SELECT count(*) FROM pg_roles
-                           WHERE rolname IN (p || '_owner', p || '_migrator', p || '_runtime', p || '_auditor', p || '_reporting')
+                           WHERE rolname IN (p || '_owner', p || '_migrator', p || '_runtime', p || '_legacy_bridge',
+                                             p || '_auditor', p || '_reporting')
                              AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolreplication
-                             AND NOT rolbypassrls) = 5,
-                          'the five per-database roles exist without elevated attributes');
+                             AND NOT rolbypassrls) = 6,
+                          'the six per-database roles exist without elevated attributes');
     PERFORM pg_temp.ok((SELECT count(*) FROM pg_roles
                            WHERE rolname IN ('hms_platform_rw', 'hms_iam_rw', 'hms_eventing_rw', 'hms_integration_rw',
                                              'hms_audit_append', 'hms_audit_read', 'hms_report_read',
                                              'hms_terminology_rw', 'hms_workforce_rw', 'hms_patient_rw', 'hms_clinical_rw',
-                                             'hms_readmodel_rw', 'hms_privacy_rw')
-                             AND NOT rolcanlogin AND NOT rolsuper) = 13,
-                          'the thirteen group roles exist and cannot log in');
+                                             'hms_readmodel_rw', 'hms_privacy_rw', 'hms_legacy_bridge')
+                             AND NOT rolcanlogin AND NOT rolsuper) = 14,
+                          'the fourteen group roles exist and cannot log in');
     PERFORM pg_temp.ok(NOT (SELECT rolcanlogin FROM pg_roles WHERE rolname = p || '_owner'), 'owner cannot log in');
     PERFORM pg_temp.ok((SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = current_database()) = p || '_owner',
                           'database is owned by the owner role');
@@ -48,8 +49,22 @@ BEGIN
     PERFORM pg_temp.ok(NOT pg_has_role(p || '_runtime', p || '_owner', 'MEMBER'), 'runtime is not a member of owner');
     PERFORM pg_temp.ok(NOT pg_has_role(p || '_runtime', 'hms_audit_read', 'MEMBER'), 'runtime cannot read the audit trail');
 
+    -- The legacy bridge (ADR-ROOT-002) is a separate login with only the canonical record groups and its marker; the
+    -- native runtime is never a member of the marker.
+    PERFORM pg_temp.ok((SELECT array_agg(g.rolname ORDER BY g.rolname) FROM pg_auth_members m
+                           JOIN pg_roles g ON g.oid = m.roleid JOIN pg_roles u ON u.oid = m.member
+                           WHERE u.rolname = p || '_legacy_bridge')
+                          = ARRAY['hms_clinical_rw', 'hms_eventing_rw', 'hms_legacy_bridge', 'hms_patient_rw',
+                                  'hms_workforce_rw']::name[],
+                          'legacy bridge is a member of exactly its five groups');
+    PERFORM pg_temp.ok(NOT pg_has_role(p || '_runtime', 'hms_legacy_bridge', 'MEMBER'), 'runtime is not the legacy bridge');
+    PERFORM pg_temp.ok(NOT pg_has_role(p || '_legacy_bridge', 'hms_iam_rw', 'MEMBER')
+                       AND NOT pg_has_role(p || '_legacy_bridge', 'hms_integration_rw', 'MEMBER')
+                       AND NOT pg_has_role(p || '_legacy_bridge', p || '_owner', 'MEMBER'),
+                          'legacy bridge has no iam, native integration or owner rights');
+
     -- No login role can create anything.
-    FOREACH r IN ARRAY ARRAY[p || '_migrator', p || '_runtime', p || '_auditor', p || '_reporting'] LOOP
+    FOREACH r IN ARRAY ARRAY[p || '_migrator', p || '_runtime', p || '_legacy_bridge', p || '_auditor', p || '_reporting'] LOOP
         PERFORM pg_temp.ok(NOT has_database_privilege(r, current_database(), 'CREATE'), r || ' cannot create schemas');
         PERFORM pg_temp.ok(NOT has_database_privilege(r, current_database(), 'TEMPORARY'), r || ' cannot create temp tables');
         FOR s IN SELECT nspname FROM pg_namespace
@@ -70,6 +85,11 @@ BEGIN
                                   WHERE d.datname = current_database() AND u.rolname = p || '_runtime'
                                     AND 'statement_timeout=30s' = ANY (s.setconfig) AND 'lock_timeout=5s' = ANY (s.setconfig)),
                           'runtime has statement and lock timeouts');
+    PERFORM pg_temp.ok(EXISTS (SELECT 1 FROM pg_db_role_setting s JOIN pg_database d ON d.oid = s.setdatabase
+                                  JOIN pg_roles u ON u.oid = s.setrole
+                                  WHERE d.datname = current_database() AND u.rolname = p || '_legacy_bridge'
+                                    AND 'statement_timeout=30s' = ANY (s.setconfig) AND 'lock_timeout=5s' = ANY (s.setconfig)),
+                          'legacy bridge has statement and lock timeouts');
     PERFORM pg_temp.ok(EXISTS (SELECT 1 FROM pg_db_role_setting s JOIN pg_database d ON d.oid = s.setdatabase
                                   JOIN pg_roles u ON u.oid = s.setrole
                                   WHERE d.datname = current_database() AND u.rolname = p || '_reporting'

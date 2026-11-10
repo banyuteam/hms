@@ -3,6 +3,10 @@
 //	hms-services [-env-file FILE] serve
 //	hms-services [-env-file FILE] setup-organization -org-code RSUB2 -org-name "..." -facility-code RSUB2-MAIN \
 //	             -facility-name "..." -timezone Asia/Jakarta
+//	hms-services [-env-file FILE] legacy-bridge [-once]
+//
+// serve is the native transaction layer (and the legacy read-through slices); legacy-bridge is the separate legacy
+// bridge worker with its own database login (ADR-ROOT-002). Neither starts with the other's database credentials.
 //
 // Configuration comes from the environment (see .env.example); -env-file loads KEY=VALUE lines for local
 // development, with real environment variables taking precedence.
@@ -32,10 +36,13 @@ import (
 
 	"hms/services/assistant"
 	"hms/services/assistant/rules"
+	"hms/services/canonical/recordtx"
 	"hms/services/clinical"
 	"hms/services/core/config"
 	"hms/services/core/httpx"
 	"hms/services/integrations/legacyhms"
+	"hms/services/legacybridge/patientsync"
+	nativepatient "hms/services/native/patient"
 	"hms/services/platform/audit"
 	"hms/services/platform/iam"
 	"hms/services/platform/tenancy"
@@ -61,13 +68,15 @@ func run(args []string) error {
 	}
 	rest := global.Args()
 	if len(rest) == 0 {
-		return errors.New("usage: hms-services [-env-file FILE] serve | healthcheck | setup-organization | check-legacy-key | check-clinical-read | check-bill-sources | inventory-legacy-schema | bootstrap-admin")
+		return errors.New("usage: hms-services [-env-file FILE] serve | legacy-bridge | healthcheck | setup-organization | check-legacy-key | check-clinical-read | check-bill-sources | inventory-legacy-schema | bootstrap-admin")
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	switch rest[0] {
 	case "serve":
 		return serve(ctx, lookup)
+	case "legacy-bridge":
+		return legacyBridge(ctx, lookup, rest[1:])
 	case "healthcheck":
 		return healthcheck(ctx, lookup)
 	case "setup-organization":
@@ -99,6 +108,9 @@ func serve(ctx context.Context, lookup config.Lookup) error {
 		return err
 	}
 	defer pool.Close()
+	if err := recordtx.CheckLayerRole(ctx, pool, false); err != nil {
+		return err
+	}
 	orgID, facilityID, err := tenancy.Resolve(ctx, pool, cfg.OrganizationCode, cfg.FacilityCode)
 	if errors.Is(err, tenancy.ErrNotFound) {
 		return fmt.Errorf("organization %s / facility %s not found or inactive: run `hms-services setup-organization` first",
@@ -154,6 +166,7 @@ func serve(ctx context.Context, lookup config.Lookup) error {
 	clinical.NewHandler(clinicalReader, store, handler, loc, logger).Register(mux)
 	tariffs.NewHandler(legacyhms.NewTariff(legacyhms.RowsQuerierFor(legacyDB)), store, handler, logger).Register(mux)
 	assistant.NewHandler(clinicalReader, store, handler, loc, logger).Register(mux)
+	nativepatient.NewHandler(nativepatient.NewService(pool), handler, logger).Register(mux)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -185,6 +198,59 @@ func serve(ctx context.Context, lookup config.Lookup) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+// legacyBridge runs the legacy bridge worker for patients (ADR-SVC-010): Khanza `pasien`, SELECT-only, into the
+// canonical patient record while the organization's patient domain has legacy authority. It connects as the legacy
+// bridge login and refuses the runtime's. -once runs a single batch (operations, tests) and prints its counts.
+func legacyBridge(ctx context.Context, lookup config.Lookup, args []string) error {
+	fs := flag.NewFlagSet("legacy-bridge", flag.ContinueOnError)
+	once := fs.Bool("once", false, "run one batch and exit")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	cfg, err := config.LoadBridge(lookup)
+	if err != nil {
+		return err
+	}
+	logger := newLogger(cfg.LogLevel)
+	pool, err := openPostgres(ctx, cfg.Database)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	if err := recordtx.CheckLayerRole(ctx, pool, true); err != nil {
+		return err
+	}
+	orgID, _, err := tenancy.Resolve(ctx, pool, cfg.OrganizationCode, cfg.FacilityCode)
+	if errors.Is(err, tenancy.ErrNotFound) {
+		return fmt.Errorf("organization %s / facility %s not found or inactive", cfg.OrganizationCode, cfg.FacilityCode)
+	}
+	if err != nil {
+		return fmt.Errorf("resolve organization: %w", err)
+	}
+	legacyDB, err := legacyhms.Open(cfg.Legacy)
+	if err != nil {
+		return err
+	}
+	defer legacyDB.Close()
+	w, err := patientsync.New(pool, legacyhms.NewClinical(legacyhms.RowsQuerierFor(legacyDB)), patientsync.Options{
+		OrganizationID: orgID, OrganizationCode: cfg.OrganizationCode, Batch: cfg.Batch, Logger: logger,
+	})
+	if err != nil {
+		return err
+	}
+	if *once {
+		st, err := w.RunBatch(ctx)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("%s: observed %d, created %d, updated %d, unchanged %d, rejected %d, not applied %d, pass complete %t\n",
+			w.Stream(), st.Observed, st.Created, st.Updated, st.Unchanged, st.Rejected, st.NotApplied, st.CycleComplete)
+		return nil
+	}
+	logger.Info("legacy bridge started", "stream", w.Stream(), "batch", cfg.Batch, "interval", cfg.Interval.String())
+	return w.Run(ctx, cfg.Pause, cfg.Interval)
 }
 
 // readiness reports whether both databases answer; it names the failing dependency but no details.
@@ -362,6 +428,7 @@ func permissionRegistry() []iam.PermissionDef {
 	all := append([]iam.PermissionDef{}, iam.Registry...)
 	all = append(all, clinical.Permissions...)
 	all = append(all, tariffs.Permissions...)
+	all = append(all, nativepatient.Permissions...)
 	return append(all, assistant.Permissions...)
 }
 

@@ -1,7 +1,10 @@
 # Schema `integration`
 
-- Migrations: `0004_integration_polling_state.sql`; `0016_integration_interoperability.sql` (ADR-DB-004)
-- Writer: `hms_services` legacy read-polling adapter (`hms_integration_rw`)
+- Migrations: `0004_integration_polling_state.sql`; `0016_integration_interoperability.sql` (ADR-DB-004);
+  `0021_layer_separation.sql` (ADR-ROOT-002, ADR-DB-006)
+- Writers: the legacy bridge (`hms_legacy_bridge`: polling state, crosswalk, bridge issues); `hms_services` native
+  integrations (`hms_integration_rw`: external ids, outbound submissions, validation results, closing bridge issues);
+  the owner only (`domain_authority`, via the RUNBOOK cutover procedure)
 - Classification: confidential (cursors may hold legacy business keys such as encounter numbers)
 - Policy: `standards/security/legacy-read-only-policy.md`. The legacy MySQL source is never written; its polling
   state lives here.
@@ -44,6 +47,31 @@ Tenant row-level security applies to these tables: workers set `hms.organization
 - `validation_results`: append-only FHIR profile validation outcome per resource version. Issues are recorded as
   severity, code and expression only, never values.
 
+## Layer separation (0021)
+- `record_domains`, `record_domain_tables`: the 16 record domains (units of cutover) and the domain of each canonical
+  record table. A child table is in its parent's domain.
+- `domain_authority`: per organization and domain, `legacy` (only the bridge writes), `cutover` (nobody) or `native`
+  (only HMS writes). Versioned (`integration.resource_versions`), tenant-isolated, changed by the owner only, moves
+  legacy → cutover → native or cutover → legacy, each with `hms.change_reason`. The layer guard on every record table
+  refuses other writers with SQLSTATE `HM001`; read the authority in a transaction:
+  ```sql
+  SELECT authority FROM integration.domain_authority
+  WHERE domain = 'patient' AND organization_id = current_setting('hms.organization_id')::uuid;
+  ```
+- `bridge_issues`: legacy rows the bridge could not map fully (`rejected`, `partial`) and legacy changes after the
+  domain's cutover (`not_applied`), by key, legacy column and reason code, never values. One open issue per key,
+  reason and column; the bridge counts repeats and resolves issues that disappear:
+  ```sql
+  INSERT INTO integration.bridge_issues AS i (organization_id, source_system, source_entity, source_key, source_field,
+         kind, reason_code, mapping_version, source_row_sha256) VALUES (...)
+  ON CONFLICT (organization_id, source_system, source_entity, source_key, reason_code, source_field) WHERE status = 'open'
+  DO UPDATE SET last_seen_at = now(), seen_count = i.seen_count + 1;
+  ```
+  Stewards accept an issue (`status = 'accepted'`, closer and note required) through `hms_services`.
+- `legacy_record_links.mapping_version`: the mapping (name/number) that last wrote the record. The active-link rule
+  is per organization (keys repeat across organizations).
+- Polling state, the crosswalk and bridge issues are written by the bridge login only; the native runtime reads them.
+
 ## Not decided yet
-The legacy import (Khanza → native record) and its reconciliation, captured-state snapshots and reconciliation tables (need the legacy schema inventory and PHI classification first),
-run-history retention.
+Deletion detection for legacy tables without tombstones (periodic key reconciliation), run-history retention, the
+stewardship API for bridge issues.

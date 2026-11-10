@@ -1,11 +1,16 @@
--- integration polling state: checkpoints, leases, runs (migration 0004). Rolled back.
+-- integration polling state: checkpoints, leases, runs (migration 0004), written by the legacy bridge only
+-- (migration 0021). Rolled back.
 BEGIN;
 
 DO $$
 DECLARE
-    rt  text := pg_temp.r('runtime');
+    rt  text := pg_temp.r('legacy_bridge');
     v   record;
 BEGIN
+    PERFORM pg_temp.expect_error(pg_temp.r('runtime'), $q$INSERT INTO integration.poll_checkpoints (stream_name, source_system)
+                                                         VALUES ('test.native', 'legacy-hms')$q$, '42501',
+                                 'the native runtime cannot write polling state');
+
     -- Checkpoint with optimistic concurrency.
     PERFORM pg_temp.exec_as(rt, $q$
         INSERT INTO integration.poll_checkpoints (stream_name, source_system, updated_at)

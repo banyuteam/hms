@@ -9,8 +9,10 @@
 -- Inputs (psql -v):  dbname       database to create (default hms)
 --                    role_prefix  prefix of the per-database roles (default hms_meta)
 -- Optional environment (CI only, see ADR-DB-002): HMS_MIGRATOR_PASSWORD, HMS_RUNTIME_PASSWORD,
---                    HMS_AUDITOR_PASSWORD, HMS_REPORTING_PASSWORD. Without them psql prompts for the migrator and
---                    runtime passwords when those roles have none (\password: hashed client-side before sending).
+--                    HMS_LEGACY_BRIDGE_PASSWORD, HMS_AUDITOR_PASSWORD, HMS_REPORTING_PASSWORD. Without them psql
+--                    prompts for the migrator and runtime passwords when those roles have none (\password: hashed
+--                    client-side before sending); the bridge, auditor and reporting logins stay without a password
+--                    (cannot sign in) until one is set.
 \set ON_ERROR_STOP on
 SET client_min_messages = warning;
 
@@ -25,6 +27,7 @@ SET client_min_messages = warning;
 \set owner_role :role_prefix _owner
 \set migrator_role :role_prefix _migrator
 \set runtime_role :role_prefix _runtime
+\set legacy_bridge_role :role_prefix _legacy_bridge
 \set auditor_role :role_prefix _auditor
 \set reporting_role :role_prefix _reporting
 
@@ -57,10 +60,14 @@ $$;
 --   hms_platform_rw, hms_iam_rw, hms_eventing_rw, hms_integration_rw, hms_audit_append, hms_audit_read, hms_report_read,
 --   and for the clinical record (ADR-DB-004): hms_terminology_rw, hms_workforce_rw, hms_patient_rw, hms_clinical_rw,
 --   hms_readmodel_rw, hms_privacy_rw
+--   and for the layer separation (ADR-ROOT-002, ADR-DB-006): hms_legacy_bridge, the marker of the legacy bridge.
+--   Only the bridge login is a member; the database lets members write only domains whose authority is legacy, and
+--   everyone else only domains whose authority is native.
 -- Per-database roles (<prefix>_*):
 --   owner      NOLOGIN; owns the database and every object in it
 --   migrator   LOGIN;   may SET ROLE to owner (no inherited rights); runs migrations only
---   runtime    LOGIN;   hms_services runtime: DML through group roles, no DDL
+--   runtime    LOGIN;   hms_services runtime (native transaction layer): DML through group roles, no DDL
+--   legacy_bridge LOGIN; hms_services legacy bridge worker: SELECT-only Khanza in, canonical records out
 --   auditor    LOGIN;   read-only audit review
 --   reporting  LOGIN;   read-only reporting
 DO $$
@@ -85,9 +92,11 @@ BEGIN
             ('hms_audit_append',       false, 'hms_database:group:audit append-only writer',       -1),
             ('hms_audit_read',         false, 'hms_database:group:audit reader',                   -1),
             ('hms_report_read',        false, 'hms_database:group:reporting reader',               -1),
+            ('hms_legacy_bridge',      false, 'hms_database:group:legacy bridge writer marker',    -1),
             (prefix || '_owner',       false, 'hms_database:' || db || ':owner',                   -1),
             (prefix || '_migrator',    true,  'hms_database:' || db || ':migrator',                 3),
             (prefix || '_runtime',     true,  'hms_database:' || db || ':runtime',                 50),
+            (prefix || '_legacy_bridge', true, 'hms_database:' || db || ':legacy bridge',            5),
             (prefix || '_auditor',     true,  'hms_database:' || db || ':auditor',                  5),
             (prefix || '_reporting',   true,  'hms_database:' || db || ':reporting',               10)
         ) AS t(name, can_login, purpose, conn_limit)
@@ -117,6 +126,14 @@ BEGIN
                    'hms_terminology_rw, hms_workforce_rw, hms_patient_rw, hms_clinical_rw, hms_readmodel_rw, '
                    'hms_privacy_rw TO %I WITH INHERIT TRUE, SET FALSE',
                    prefix || '_runtime');
+    -- The bridge gets the canonical record groups and its marker, never iam, platform, privacy, read models or the
+    -- integration group of the native runtime (outbound submissions). The runtime is never a member of the marker.
+    EXECUTE format('GRANT hms_legacy_bridge, hms_workforce_rw, hms_patient_rw, hms_clinical_rw, hms_eventing_rw '
+                   'TO %I WITH INHERIT TRUE, SET FALSE', prefix || '_legacy_bridge');
+    IF EXISTS (SELECT 1 FROM pg_auth_members m
+               WHERE m.roleid = 'hms_legacy_bridge'::regrole AND m.member = (prefix || '_runtime')::regrole) THEN
+        EXECUTE format('REVOKE hms_legacy_bridge FROM %I', prefix || '_runtime');
+    END IF;
     EXECUTE format('GRANT hms_audit_read TO %I WITH INHERIT TRUE, SET FALSE', prefix || '_auditor');
     EXECUTE format('GRANT hms_report_read TO %I WITH INHERIT TRUE, SET FALSE', prefix || '_reporting');
 END
@@ -150,8 +167,9 @@ DECLARE
 BEGIN
     -- Nobody connects or creates temporary tables unless granted; nobody uses the public schema.
     EXECUTE format('REVOKE ALL ON DATABASE %I FROM PUBLIC', db);
-    EXECUTE format('GRANT CONNECT ON DATABASE %I TO %I, %I, %I, %I', db,
-                   prefix || '_migrator', prefix || '_runtime', prefix || '_auditor', prefix || '_reporting');
+    EXECUTE format('GRANT CONNECT ON DATABASE %I TO %I, %I, %I, %I, %I', db,
+                   prefix || '_migrator', prefix || '_runtime', prefix || '_legacy_bridge', prefix || '_auditor',
+                   prefix || '_reporting');
     REVOKE ALL ON SCHEMA public FROM PUBLIC;
 
     -- Functions are not executable by PUBLIC unless a migration grants EXECUTE explicitly.
@@ -162,6 +180,10 @@ BEGIN
     EXECUTE format('ALTER ROLE %I IN DATABASE %I SET statement_timeout = %L', prefix || '_runtime', db, '30s');
     EXECUTE format('ALTER ROLE %I IN DATABASE %I SET lock_timeout = %L', prefix || '_runtime', db, '5s');
     EXECUTE format('ALTER ROLE %I IN DATABASE %I SET idle_in_transaction_session_timeout = %L', prefix || '_runtime', db, '60s');
+
+    EXECUTE format('ALTER ROLE %I IN DATABASE %I SET statement_timeout = %L', prefix || '_legacy_bridge', db, '30s');
+    EXECUTE format('ALTER ROLE %I IN DATABASE %I SET lock_timeout = %L', prefix || '_legacy_bridge', db, '5s');
+    EXECUTE format('ALTER ROLE %I IN DATABASE %I SET idle_in_transaction_session_timeout = %L', prefix || '_legacy_bridge', db, '60s');
 
     EXECUTE format('ALTER ROLE %I IN DATABASE %I SET lock_timeout = %L', prefix || '_migrator', db, '10s');
     EXECUTE format('ALTER ROLE %I IN DATABASE %I SET idle_in_transaction_session_timeout = %L', prefix || '_migrator', db, '5min');
@@ -177,6 +199,7 @@ $$;
 -- 5. Passwords ---------------------------------------------------------------------------------------------------
 \getenv hms_migrator_password HMS_MIGRATOR_PASSWORD
 \getenv hms_runtime_password HMS_RUNTIME_PASSWORD
+\getenv hms_legacy_bridge_password HMS_LEGACY_BRIDGE_PASSWORD
 \getenv hms_auditor_password HMS_AUDITOR_PASSWORD
 \getenv hms_reporting_password HMS_REPORTING_PASSWORD
 
@@ -196,6 +219,9 @@ FROM pg_authid WHERE rolname IN (:'migrator_role', :'runtime_role') \gset
   \echo 'Set the password for' :runtime_role '(hms_services runtime):'
   \password :runtime_role
 \endif
+\if :{?hms_legacy_bridge_password}
+  ALTER ROLE :"legacy_bridge_role" PASSWORD :'hms_legacy_bridge_password';
+\endif
 \if :{?hms_auditor_password}
   ALTER ROLE :"auditor_role" PASSWORD :'hms_auditor_password';
 \endif
@@ -204,6 +230,7 @@ FROM pg_authid WHERE rolname IN (:'migrator_role', :'runtime_role') \gset
 \endif
 \unset hms_migrator_password
 \unset hms_runtime_password
+\unset hms_legacy_bridge_password
 \unset hms_auditor_password
 \unset hms_reporting_password
 
@@ -215,6 +242,7 @@ SELECT r.rolname AS role, r.rolcanlogin AS login, r.rolinherit AS inherit, r.rol
        coalesce((SELECT string_agg(g.rolname || CASE WHEN m.set_option THEN ' (set)' ELSE '' END, ', ' ORDER BY g.rolname)
                  FROM pg_auth_members m JOIN pg_roles g ON g.oid = m.roleid WHERE m.member = r.oid), '') AS member_of
 FROM pg_roles r JOIN pg_authid a ON a.oid = r.oid
-WHERE r.rolname IN (:'owner_role', :'migrator_role', :'runtime_role', :'auditor_role', :'reporting_role')
+WHERE r.rolname IN (:'owner_role', :'migrator_role', :'runtime_role', :'legacy_bridge_role', :'auditor_role',
+                    :'reporting_role')
 ORDER BY r.rolname;
 \echo 'Bootstrap complete. Next: run scripts/migrate as' :migrator_role

@@ -73,3 +73,11 @@ New. On an existing cluster: run the bootstrap with a superuser; it creates only
   `<p>_runtime`.
 - Re-run the bootstrap before migration 0006.
 - Alternative 4 (row-level security) is now decided for tenant-scoped clinical tables (ADR-DB-005).
+
+**Amendment 2026-11-10 (ADR-ROOT-002, ADR-DB-006):**
+- A sixth per-database login, `<p>_legacy_bridge`, runs the legacy bridge worker. It is a member of
+  `hms_workforce_rw`, `hms_patient_rw`, `hms_clinical_rw`, `hms_eventing_rw` and the new marker group
+  `hms_legacy_bridge`, nothing else. Its password comes from `HMS_LEGACY_BRIDGE_PASSWORD` (optional; without it the
+  login cannot sign in). It has the runtime's timeouts.
+- `<p>_runtime` is never a member of `hms_legacy_bridge` (the bootstrap revokes it if found).
+- Re-run the bootstrap before migration 0021.

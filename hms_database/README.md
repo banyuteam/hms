@@ -57,13 +57,14 @@ Resulting roles (prefix `hms_meta` by default; a second database on the same ser
 |---|---|---|
 | `hms_meta_owner` | no | Owns the database and all objects |
 | `hms_meta_migrator` | yes | Runs migrations (SET ROLE `hms_meta_owner`); nothing else |
-| `hms_meta_runtime` | yes | `hms_services` runtime connection: DML only, no DDL |
+| `hms_meta_runtime` | yes | `hms_services` runtime connection (native transaction layer): DML only, no DDL |
+| `hms_meta_legacy_bridge` | yes | `hms_services legacy-bridge` worker (ADR-ROOT-002, ADR-DB-006): canonical record groups and bridge state only; password from `HMS_LEGACY_BRIDGE_PASSWORD` or `\password hms_meta_legacy_bridge` |
 | `hms_meta_auditor` | yes | Read-only audit review (set a password with `\password hms_meta_auditor` when needed) |
 | `hms_meta_reporting` | yes | Read-only reporting (`\password hms_meta_reporting` when needed) |
 
 ## Writing a migration
 
-1. Next free number: `migrations/0021_short_name.sql` (lowercase snake case).
+1. Next free number: `migrations/0022_short_name.sql` (lowercase snake case).
 2. Header comment: purpose, owner/writer, classification, online-safety, rollback/fix-forward.
 3. Schema-qualify every object; name constraints (`pk_`, `fk_`, `uq_`, `ck_`, `idx_`, `trg_`); `timestamptz` for
    instants; `uuidv7()` defaults for externally referenced ids.
@@ -72,14 +73,16 @@ Resulting roles (prefix `hms_meta` by default; a second database on the same ser
 5. No `BEGIN`/`COMMIT` and no `SET ROLE`: the runner wraps each file in a transaction as the owner.
 6. Add tests in `tests/sql/`, update `schemas/<schema>/README.md` and `documentation/DATA-DICTIONARY.md`.
    Clinical record tables use `hms_meta.enable_versioned_record(...)` (versioning, history, no delete, tenant RLS) and
-   carry `organization_id`, `version`, `created_at`, `updated_at` and `last_xact_id` (ADR-DB-005).
+   carry `organization_id`, `version`, `created_at`, `updated_at` and `last_xact_id` (ADR-DB-005). Those in
+   `patient`, `workforce`, `clinical` and `imaging` also call `hms_meta.enable_record_domain(table, domain)` (layer
+   guard and `record_origin`, ADR-DB-006); a child table goes in its parent's domain.
 7. Never edit a migration once it has been applied anywhere shared: the runner rejects changed checksums. Fix forward.
 
 ## Open items
 
 - CI pipeline (`.github/workflows/ci.yml`, ephemeral PostgreSQL 18 service: bootstrap -> migrate --plan -> migrate ->
   migrate --plan must show nothing pending -> tests) is written but has not had its first run. The same sequence passed
-  locally on 2026-11-09 against a fresh PostgreSQL 18.6 cluster (20 migrations, all 12 test files).
+  locally on 2026-11-10 against a fresh PostgreSQL 18.6 cluster (21 migrations, all 13 test files).
 - Root `deployment/compose.yaml` now runs bootstrap (superuser) and migrations (`hms_meta_migrator`) as one-shot jobs
   and `hms-services` as `hms_meta_runtime`; passwords are mounted secret files. Not yet run with Docker.
 - `hms_services` sign-in (ADR-SVC-001) connects as `hms_meta_runtime` and uses `iam`, `audit` and `platform`; it

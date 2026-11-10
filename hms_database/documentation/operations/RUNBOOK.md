@@ -19,6 +19,8 @@ scripts/migrate.sh --database hms --plan    # expect no 'pending' lines after a 
 ## Passwords
 - Change a login password: `psql -U postgres -d hms -c "\password hms_meta_runtime"` (hashed before it is sent).
 - Enable auditor/reporting logins: `\password hms_meta_auditor`, `\password hms_meta_reporting`.
+- Enable the legacy bridge login (only where the bridge runs): `\password hms_meta_legacy_bridge`, or re-run the
+  bootstrap with `HMS_LEGACY_BRIDGE_PASSWORD`.
 - Never commit passwords; local tools may use a pgpass file outside the repository.
 
 ## Audit trail verification
@@ -76,6 +78,52 @@ SELECT * FROM audit.verify_anchors();   -- no rows
   `SELECT relname, pg_size_pretty(pg_total_relation_size(oid)) FROM pg_class WHERE relname = 'resource_versions';`.
 - Plan partitioning and archiving before tables reach a size that slows vacuum or backup. Not built yet; needs
   measurements.
+
+## Domain authority and cutover (ADR-ROOT-002, ADR-DB-006)
+Every canonical record write needs the domain's authority for the organization: `legacy` (only the legacy bridge
+writes), `cutover` (nobody) or `native` (only HMS writes). Without a row, nobody writes the domain. Only the owner
+changes authority; run these as `hms_meta_migrator` after `SET ROLE hms_meta_owner`, with an approval reference.
+
+**Initial authority** (once per organization; `legacy` for a hospital running the legacy HMS, `native` for one
+without):
+```sql
+BEGIN;
+SET ROLE hms_meta_owner;
+SELECT set_config('hms.organization_id', '<organization uuid>', true),
+       set_config('hms.actor_user_id', '<approver iam.users id>', true);
+INSERT INTO integration.domain_authority (organization_id, domain, authority, decision_reference)
+SELECT '<organization uuid>', code, 'legacy', '<approval reference>' FROM integration.record_domains;
+COMMIT;
+```
+
+**Cutover of one domain** (e.g. `patient`):
+1. Readiness: the bridge has completed a full pass (`integration.sync_runs` succeeded with `pass_complete` in its
+   log); no open `rejected` issues remain unaccepted
+   (`SELECT kind, reason_code, count(*) FROM integration.bridge_issues WHERE status = 'open' GROUP BY 1, 2`); counts
+   reconcile with the legacy HMS; the native slice is released and users are trained.
+2. Start the window (nobody writes; close the legacy screens for data entry):
+   ```sql
+   BEGIN; SET ROLE hms_meta_owner;
+   SELECT set_config('hms.organization_id', '<org>', true), set_config('hms.actor_user_id', '<approver>', true),
+          set_config('hms.change_reason', '<why, plan reference>', true);
+   UPDATE integration.domain_authority SET authority = 'cutover', decision_reference = '<approval>'
+   WHERE organization_id = '<org>' AND domain = 'patient';
+   COMMIT;
+   ```
+3. Let the bridge run one more pass; it now reports instead of writing (`not_applied` issues).
+4. Commit the cutover with the same statement and `authority = 'native'`, or abort with `authority = 'legacy'`.
+   `native` is final: later problems are fixed forward in HMS.
+5. Afterwards, watch `not_applied` issues: they mean someone still changes the domain in the legacy HMS.
+
+History of every change: `SELECT * FROM integration.resource_versions WHERE resource_type = 'DomainAuthority'`.
+
+## Legacy bridge operations
+- Runs as `hms-services legacy-bridge` with the `hms_meta_legacy_bridge` login and the SELECT-only legacy account;
+  one batch at a time per stream (lease with fencing), so a second instance waits.
+- Progress: `SELECT * FROM integration.poll_checkpoints` (cursor, last error class) and
+  `SELECT status, count(*) FROM integration.sync_runs WHERE stream_name = '<stream>' GROUP BY 1`.
+- Re-map everything after a mapping change: release the new mapping version; the row hash includes it.
+- Never fix a bridged record in the legacy database from HMS, and never write the crosswalk by hand.
 
 ## Disaster recovery (requirements; production procedure not verified yet)
 Permenkes 24/2022 requires:

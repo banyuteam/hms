@@ -1,12 +1,17 @@
 # Schema `patient`
 
-- Migration: `0010_patient.sql` (ADR-DB-004, ADR-DB-005); `consents.encounter_id` added by 0011
-- Writer: `hms_services` patient module (`hms_patient_rw`)
+- Migration: `0010_patient.sql` (ADR-DB-004, ADR-DB-005); `consents.encounter_id` added by 0011; `record_origin` and
+  the layer guard by 0021 (ADR-ROOT-002, ADR-DB-006)
+- Writers: `hms_services` native patient module (`hms_patient_rw`, runtime login) once the organization's `patient`
+  domain is `native`; the legacy bridge (bridge login) while it is `legacy`. Never both (domain `consent` likewise).
 - Readers: `hms_services` only
 - Classification: restricted (specific personal data, UU 27/2022 Pasal 4)
 
-This is the master patient index and consent of one organization (the tenant). It is native HMS data: Khanza
-`pasien` rows are linked through `integration.legacy_record_links`, never mirrored.
+This is the master patient index and consent of one organization (the tenant). It is the canonical record: patients
+registered in HMS and patients mapped from Khanza `pasien` by the legacy bridge live here in the same shape.
+`record_origin` (`native` | `legacy`) says which layer created a row; the crosswalk
+`integration.legacy_record_links` gives a mapped patient's legacy key and mapping version. The medical record number
+is the identifier `urn:hms:id:mrn` (unique per organization).
 
 ## Tables (versioned records, tenant row-level security, no deletes)
 - `patients`:

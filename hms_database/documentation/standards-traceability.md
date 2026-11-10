@@ -2,7 +2,7 @@
 
 This file maps each requirement to the database control that meets it and the test that proves it.
 - **Interpretations and sources:** `standards/healthcare/clinical-data-standards.md`.
-- **Design:** ADR-DB-004 and ADR-DB-005.
+- **Design:** ADR-DB-004, ADR-DB-005 and, for the native/legacy layers, ADR-ROOT-002 and ADR-DB-006.
 - **Status:** "Runtime" means hms_services must enforce it, and "Ops" means it is a deployment or operations control.
 
 | Requirement | Control | Where | Test / status |
@@ -26,6 +26,8 @@ This file maps each requirement to the database control that meets it and the te
 | UU 27/2022 Pasal 34: DPIA | DPIA reference required for active specific-data processing | `privacy.processing_activities` | `110` |
 | UU 27/2022 Pasal 46: breach notice 3x24h | Incident process, scoping from audit/disclosures | Workstream 3 | Open |
 | Tenant isolation (root §6) | Row-level security `tenant_isolation`, fail closed | every tenant table | `020`, `090` |
+| Legacy read-only, separate identities (root §7, §14) | Legacy bridge login and marker role; bridge-only state; layer guard and domain authority (one writer per domain); per-organization crosswalk | `integration.domain_authority`, `hms_meta.guard_record_layer`, `integration.legacy_record_links`, `bridge_issues` | `010`, `020`, `060`, `110`, `120` |
+| Pasal 29-30 across systems: no silent overwrite | Legacy changes after cutover reported, not applied; mapped rows keep key and mapping version | `integration.bridge_issues` (`not_applied`), `legacy_record_links.mapping_version` | `120`; Go `TestPGBridgeMapsLegacyPatientsUntilCutover` |
 | Patient safety: no cross-patient references | Composite `(id, patient_id)` keys; entry trigger | `clinical.*`, `imaging.*` | `100` |
 | FHIR R4 invariants (con-3/4/5, ait-1/2, obs-6) | CHECK constraints | `clinical.conditions`, `allergy_intolerances`, `observations` | `100` |
 | Terminology provenance | Releases with checksum, licence, approval, immutable | `terminology.*` | `080` |

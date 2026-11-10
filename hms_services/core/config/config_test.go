@@ -81,3 +81,33 @@ func TestSecretFilesAndRedaction(t *testing.T) {
 		t.Error("NAME and NAME_FILE together must be refused")
 	}
 }
+
+func TestBridgeConfiguration(t *testing.T) {
+	get := func(over map[string]string) Lookup {
+		base := map[string]string{"HMS_ORGANIZATION_CODE": "RSUB2", "HMS_FACILITY_CODE": "RSUB2-MAIN", "DATABASE_PASSWORD": "bridge-secret",
+			"LEGACY_DB_HOST": "legacy.test.invalid", "LEGACY_DB_NAME": "khanza", "LEGACY_DB_USER": "readonly", "LEGACY_DB_PASSWORD": "legacy-secret"}
+		for k, v := range over {
+			if v == "-" {
+				delete(base, k)
+			} else {
+				base[k] = v
+			}
+		}
+		return func(n string) (string, bool) { v, ok := base[n]; return v, ok }
+	}
+	b, err := LoadBridge(get(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The bridge needs no HTTP, session or legacy sign-in settings, and connects as its own login by default.
+	if b.Database.User != "hms_meta_legacy_bridge" || b.Batch != 500 || b.Pause.Milliseconds() != 1000 || b.Interval.Seconds() != 300 ||
+		b.Legacy.MaxConns != 2 {
+		t.Errorf("unexpected bridge defaults: %+v", b)
+	}
+	_, err = LoadBridge(get(map[string]string{"LEGACY_DB_PASSWORD": "-", "BRIDGE_BATCH_SIZE": "9000", "APP_ENV": "production"}))
+	for _, want := range []string{"LEGACY_DB_PASSWORD", "BRIDGE_BATCH_SIZE", "DATABASE_SSLMODE"} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("expected a problem about %s, got %v", want, err)
+		}
+	}
+}

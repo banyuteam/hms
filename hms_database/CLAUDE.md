@@ -59,6 +59,12 @@ For material changes provide DDL/migration, constraints, indexes, sample queries
   - Reference patients/encounters with composite `(id, patient_id)` / `(id, organization_id)` keys.
   - Coded values are `(system, code, display)`, and the system must be registered in `terminology.code_systems`.
   - Never hard-code national code lists in migrations; load them as approved terminology releases.
+- Layer separation (ADR-ROOT-002, ADR-DB-006):
+  - Record tables in `patient`, `workforce`, `clinical`, `imaging` also call `hms_meta.enable_record_domain(table,
+    domain)`; a child table goes in its parent's domain.
+  - Only the owner changes `integration.domain_authority` (RUNBOOK procedure); the legacy bridge login alone writes
+    polling state, the crosswalk and bridge issues. Tests give their organization an authority with
+    `pg_temp.set_authority`.
   - Keep `standards/healthcare/clinical-data-standards.md` and `documentation/standards-traceability.md` current.
 
 ## Runtime policy and UI metadata

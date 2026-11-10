@@ -11,6 +11,7 @@ INSERT INTO iam.users (id, organization_id, display_name) VALUES
 SELECT set_config('hms.organization_id', '00000000-0000-7000-8000-00000000000a', true) AS hms_ignored,
        set_config('hms.actor_user_id', '00000000-0000-7000-8000-0000000000c1', true) AS hms_ignored2,
        set_config('hms.change_reason', '', true) AS hms_ignored3 \gset
+SELECT pg_temp.set_authority('00000000-0000-7000-8000-00000000000a') AS hms_ignored \gset
 INSERT INTO workforce.practitioners (id, organization_id, user_id, display_name) VALUES
     ('00000000-0000-7000-8000-0000000000f1', '00000000-0000-7000-8000-00000000000a', '00000000-0000-7000-8000-0000000000c1', 'dr. Test One'),
     ('00000000-0000-7000-8000-0000000000f2', '00000000-0000-7000-8000-00000000000a', NULL, 'dr. Test Two');

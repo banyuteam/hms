@@ -12,17 +12,21 @@ successful run; there is no ingress or TLS yet.
 
 | Path | Purpose |
 |---|---|
-| `cmd/hms-services` | Binary: `serve`, `setup-organization`, `check-legacy-key`, `check-clinical-read`, `check-bill-sources`, `inventory-legacy-schema` (metadata-only legacy schema inventory into `hms_database/legacy/schema-inventory/`), `bootstrap-admin` |
+| `cmd/hms-services` | Binary: `serve` (native layer), `legacy-bridge` (legacy bridge worker, own database login), `setup-organization`, `check-legacy-key`, `check-clinical-read`, `check-bill-sources`, `inventory-legacy-schema` (metadata-only legacy schema inventory into `hms_database/legacy/schema-inventory/`), `bootstrap-admin` |
 | `core/config` | Typed, validated environment configuration; secrets via `NAME` or `NAME_FILE`, redacted in logs |
 | `core/httpx` | Request IDs, security headers, access log, JSON errors, trusted-proxy client address, per-key rate limiter |
 | `integrations/legacyhms` | Read-only legacy HMS (Khanza): login check (4 fixed SELECTs), patient/encounter reads (10 fixed SELECTs), visit timeline and bill charges (one fixed SELECT per section), bill reconciliation check |
 | `clinical` | Patient and encounter read API (clinical-read-v1), visit timeline and bill (clinical-timeline-v1): mapping to HMS terms, masking, audit on every read |
+| `canonical/recordtx`, `canonical/patient` | Shared canonical record store of both write layers (ADR-ROOT-002): transaction context, refusal classification, domain authority, canonical Patient |
+| `native/patient` | Native transaction layer: patient registration and canonical patient read (patient-records-v1, ADR-SVC-010); never touches the legacy HMS |
+| `legacybridge/patientsync` | Legacy bridge: Khanza `pasien` (SELECT-only) mapped with `legacy-hms.pasien/1` into the canonical patient while the domain is legacy; crosswalk, issues, leases, checkpoints |
+| `core/archtest` | Test that the native layer, the bridge and the canonical store do not import each other |
 | `platform/iam` | Sign-in, sessions, authorization middleware; PostgreSQL store on schema `iam` |
 | `platform/audit` | Writes `audit.audit_events` |
 | `platform/tenancy` | Organization/facility resolution and setup |
 | `tariffs` | Tariff book API (tariff-book-v1): legacy master price tables, read-only |
 | `assistant`, `assistant/rules` | Assistant rule evaluation (assistant-v1, ADR-SVC-006): deterministic rule sets in Go (no language model), first `claim-readiness` v1 over the visit timeline |
-| `contracts/api/auth-v1.openapi.yaml`, `iam-admin-v1.openapi.yaml`, `clinical-read-v1.openapi.yaml`, `clinical-timeline-v1.openapi.yaml`, `tariff-book-v1.openapi.yaml`, `assistant-v1.openapi.yaml` | API contracts |
+| `contracts/api/auth-v1.openapi.yaml`, `iam-admin-v1.openapi.yaml`, `clinical-read-v1.openapi.yaml`, `clinical-timeline-v1.openapi.yaml`, `tariff-book-v1.openapi.yaml`, `assistant-v1.openapi.yaml`, `patient-records-v1.openapi.yaml` | API contracts |
 | `documentation/architecture/ADR-SVC-00*.md` | Design and decisions (sign-in, IAM administration, clinical read, visit timeline and bill, tariff book, assistant evaluation, BPJS bridging read) |
 
 Endpoints: `POST /api/v1/auth/sign-in`, `GET /api/v1/auth/session`, `POST /api/v1/auth/sign-out`, the IAM
@@ -100,8 +104,13 @@ go test ./...                                   # unit and HTTP tests, no databa
 # PostgreSQL integration tests (development/CI database only: they leave synthetic rows and audit events)
 $env:HMS_TEST_DATABASE_URL = 'postgres://hms_meta_runtime:<pw>@127.0.0.1:5432/hms?sslmode=disable'
 $env:HMS_TEST_ADMIN_DATABASE_URL = 'postgres://<superuser>:<pw>@127.0.0.1:5432/hms?sslmode=disable'
-go test -count=1 -run TestPG ./platform/iam/ ./clinical/
+$env:HMS_TEST_BRIDGE_DATABASE_URL = 'postgres://hms_meta_legacy_bridge:<pw>@127.0.0.1:5432/hms?sslmode=disable'
+go test -count=1 -run TestPG ./...
 ```
+
+On 2026-11-10 all eight `TestPG*` tests (including `TestPGNativeRegistration` and
+`TestPGBridgeMapsLegacyPatientsUntilCutover`) passed against a fresh PostgreSQL 18.6 database built by
+`hms_database` bootstrap + migrations `0001`–`0021`.
 
 All six `TestPG*` tests passed on 2026-11-09 against a fresh PostgreSQL 18.6 database built by `hms_database`
 bootstrap + migrations `0001`–`0005`. CI runs them on every push and fails if any are skipped.

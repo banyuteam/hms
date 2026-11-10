@@ -12,6 +12,8 @@ INSERT INTO iam.users (id, organization_id, display_name, status) VALUES
     ('00000000-0000-7000-8000-0000000000c2', '00000000-0000-7000-8000-00000000000b', 'Test Clerk B', 'active'),
     ('00000000-0000-7000-8000-0000000000c3', '00000000-0000-7000-8000-00000000000a', 'Test Suspended A', 'suspended');
 INSERT INTO terminology.code_systems (uri, name, publisher, scope) VALUES ('urn:hms:test:religion', 'Test religion', 'Test', 'local');
+SELECT pg_temp.set_authority('00000000-0000-7000-8000-00000000000a') AS hms_ignored,
+       pg_temp.set_authority('00000000-0000-7000-8000-00000000000b') AS hms_ignored2 \gset
 
 -- Transaction context as hms_services sets it.
 CREATE FUNCTION pg_temp.ctx(p_org text, p_user text, p_reason text DEFAULT '') RETURNS void LANGUAGE sql AS $$

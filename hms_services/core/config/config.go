@@ -106,7 +106,7 @@ func Load(get Lookup) (*Config, error) {
 		LogLevel:         strings.ToLower(p.str("LOG_LEVEL", "info")),
 		OrganizationCode: p.required("HMS_ORGANIZATION_CODE"),
 		FacilityCode:     p.required("HMS_FACILITY_CODE"),
-		Database:         p.database(),
+		Database:         p.database("hms_meta_runtime"),
 		Legacy: LegacyDatabase{
 			Host:     p.required("LEGACY_DB_HOST"),
 			Port:     p.integer("LEGACY_DB_PORT", 3306, 1, 65535),
@@ -195,19 +195,19 @@ func Load(get Lookup) (*Config, error) {
 // LoadDatabase reads only the DATABASE_* settings, for commands that need nothing else.
 func LoadDatabase(get Lookup) (Database, error) {
 	p := parser{get: get}
-	d := p.database()
+	d := p.database("hms_meta_runtime")
 	if len(p.problems) > 0 {
 		return Database{}, errors.New("invalid configuration:\n  " + strings.Join(p.problems, "\n  "))
 	}
 	return d, nil
 }
 
-func (p *parser) database() Database {
+func (p *parser) database(defaultUser string) Database {
 	d := Database{
 		Host:     p.str("DATABASE_HOST", "127.0.0.1"),
 		Port:     p.integer("DATABASE_PORT", 5432, 1, 65535),
 		Name:     p.str("DATABASE_NAME", "hms"),
-		User:     p.str("DATABASE_USER", "hms_meta_runtime"),
+		User:     p.str("DATABASE_USER", defaultUser),
 		Password: p.secret("DATABASE_PASSWORD", true),
 		SSLMode:  p.str("DATABASE_SSLMODE", "prefer"),
 		MaxConns: p.integer("DATABASE_MAX_CONNS", 10, 1, 50),
@@ -218,6 +218,60 @@ func (p *parser) database() Database {
 		p.fail("DATABASE_SSLMODE is not a PostgreSQL sslmode")
 	}
 	return d
+}
+
+// Bridge is the configuration of the legacy bridge worker (`hms-services legacy-bridge`, ADR-SVC-010). It connects
+// to PostgreSQL as the legacy bridge login (default hms_meta_legacy_bridge), never as the runtime, and to the legacy
+// HMS with the SELECT-only account. It needs no HTTP, session or legacy sign-in settings.
+type Bridge struct {
+	Env              Env
+	LogLevel         string
+	OrganizationCode string
+	FacilityCode     string
+	Database         Database
+	Legacy           LegacyDatabase
+	Batch            int           // BRIDGE_BATCH_SIZE rows per batch
+	Pause            time.Duration // BRIDGE_BATCH_PAUSE_MS between batches of a pass (source load)
+	Interval         time.Duration // BRIDGE_INTERVAL_SECONDS between passes
+}
+
+// LoadBridge reads and validates the legacy bridge configuration.
+func LoadBridge(get Lookup) (*Bridge, error) {
+	p := parser{get: get}
+	b := &Bridge{
+		Env:              Env(p.str("APP_ENV", "development")),
+		LogLevel:         strings.ToLower(p.str("LOG_LEVEL", "info")),
+		OrganizationCode: p.required("HMS_ORGANIZATION_CODE"),
+		FacilityCode:     p.required("HMS_FACILITY_CODE"),
+		Database:         p.database("hms_meta_legacy_bridge"),
+		Legacy: LegacyDatabase{
+			Host:     p.required("LEGACY_DB_HOST"),
+			Port:     p.integer("LEGACY_DB_PORT", 3306, 1, 65535),
+			Name:     p.required("LEGACY_DB_NAME"),
+			User:     p.required("LEGACY_DB_USER"),
+			Password: p.secret("LEGACY_DB_PASSWORD", true),
+			Timeout:  time.Duration(p.integer("LEGACY_DB_TIMEOUT_SECONDS", 5, 1, 60)) * time.Second,
+			MaxConns: p.integer("LEGACY_DB_MAX_CONNS", 2, 1, 5),
+		},
+		Batch:    p.integer("BRIDGE_BATCH_SIZE", 500, 1, 5000),
+		Pause:    time.Duration(p.integer("BRIDGE_BATCH_PAUSE_MS", 1000, 0, 60000)) * time.Millisecond,
+		Interval: time.Duration(p.integer("BRIDGE_INTERVAL_SECONDS", 300, 5, 86400)) * time.Second,
+	}
+	if b.OrganizationCode != "" && !code.MatchString(b.OrganizationCode) {
+		p.fail("HMS_ORGANIZATION_CODE must be an uppercase code")
+	}
+	switch b.Env {
+	case Development, Test, Production:
+	default:
+		p.fail("APP_ENV must be development, test or production")
+	}
+	if b.Env == Production && b.Database.SSLMode != "verify-full" && b.Database.SSLMode != "verify-ca" {
+		p.fail("DATABASE_SSLMODE must be verify-full or verify-ca in production")
+	}
+	if len(p.problems) > 0 {
+		return nil, errors.New("invalid configuration:\n  " + strings.Join(p.problems, "\n  "))
+	}
+	return b, nil
 }
 
 // SecureCookies reports whether the session cookie is HTTPS-only (always, unless the origin is plain HTTP in

@@ -19,3 +19,7 @@ hms_services retrieves them via DICOMweb (QIDO-RS search, WADO-RS retrieve) usin
 
 A radiology report is `clinical.diagnostic_reports` with `imaging_study_id` (same patient). For FHIR exchange the study
 UID becomes `identifier.system = urn:dicom:uid`, `value = urn:oid:<uid>`.
+
+**Layer separation (0021, ADR-ROOT-002):** every record table here has `record_origin` (`native` | `legacy`) and a
+layer guard. A table belongs to a record domain (`integration.record_domain_tables`); the domain's authority for the
+organization decides whether the native runtime or the legacy bridge may write it (SQLSTATE `HM001` otherwise).
