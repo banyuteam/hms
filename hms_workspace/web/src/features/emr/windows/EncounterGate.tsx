@@ -9,12 +9,12 @@ import {
   type WindowKind,
   type WindowParams,
 } from '@/state/home';
-import { useJourney, usePatientProfile } from '@/api/hooks';
+import { useJourney, usePatientAllergies, usePatientProfile } from '@/api/hooks';
 import { AuditSubjectProvider } from '@/audit/subject';
 import type { EncounterJourney } from '@/api/journey';
 import { facts as toFacts, type EncounterFacts } from '@/api/select';
 import { StateView } from '../components/Blocks';
-import type { IdentityPerson } from '../components/IdentityStrip';
+import type { AllergyStatus, IdentityPerson } from '../components/IdentityStrip';
 import { RecordSearch } from '../components/RecordSearch';
 
 export interface EncounterView {
@@ -23,9 +23,26 @@ export interface EncounterView {
   person: IdentityPerson;
 }
 
+/**
+ * The patient's allergies for the identity strip. Not permitted (403: the session has no clinical access) gives
+ * `undefined`, so nothing is shown; any other failure is a visible warning, never silence.
+ */
+export function usePatientAllergyStatus(mrn: string | null | undefined): AllergyStatus | undefined {
+  const q = usePatientAllergies(mrn);
+  if (!mrn) return undefined;
+  if (q.data) return { state: 'ready', entries: q.data.entries, truncated: q.data.truncated };
+  if (q.error) {
+    return q.error instanceof ApiError && q.error.status === 403
+      ? undefined
+      : { state: 'unavailable' };
+  }
+  return { state: 'loading' };
+}
+
 /** Patient identity for the strip; same cache key as W1 so the data is shared and cleared on sign-out. */
 export function usePerson(mrn: string | null | undefined): IdentityPerson | null {
   const q = usePatientProfile(mrn ?? '');
+  const allergies = usePatientAllergyStatus(mrn);
   if (!mrn) return null;
   const p = q.data;
   return {
@@ -36,6 +53,7 @@ export function usePerson(mrn: string | null | undefined): IdentityPerson | null
     sex: p?.sex && p.sex !== 'unknown' ? p.sex : null,
     // Loaded data wins over a later refetch error; until then, empty fields are "loading"/"unavailable", not absent.
     status: p ? 'ready' : q.error ? 'unavailable' : q.isPending ? 'loading' : 'ready',
+    allergies,
   };
 }
 
@@ -134,6 +152,7 @@ export function EncounterGate({
           birthDate: null,
           ageYears: null,
           sex: null,
+          allergies: undefined,
         },
       })}
     </AuditSubjectProvider>

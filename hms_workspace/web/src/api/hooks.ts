@@ -13,6 +13,7 @@ export const emrKeys = {
   encounters: (mrn: string) => ['emr', 'encounters', mrn] as const,
   encounterPages: (mrn: string) => ['emr', 'encounter-pages', mrn] as const,
   payers: (mrn: string) => ['emr', 'payers', mrn] as const,
+  allergies: (mrn: string) => ['emr', 'allergies', mrn] as const,
   search: (q: string) => ['emr', 'search', q] as const,
   patients: (q: string) => ['emr', 'patients', q] as const,
   profile: (mrn: string) => ['patient', 'profile', mrn] as const,
@@ -88,4 +89,12 @@ export function usePayerHistory(mrn: string | undefined) {
 export function useEncounterSearch(query: string) {
   const q = query.trim();
   return useResource(emrKeys.search(q), () => emrApi.findEncounters(q), { enabled: q.length >= 3 });
+}
+
+/** Every allergy written on any of the patient's visits (identity strip and Profile special notes). */
+export function usePatientAllergies(mrn: string | null | undefined) {
+  const id = mrn ?? '';
+  return useResource(emrKeys.allergies(id), () => emrApi.getPatientAllergies(id), {
+    enabled: Boolean(mrn),
+  });
 }

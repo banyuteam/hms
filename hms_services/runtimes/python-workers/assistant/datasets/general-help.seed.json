@@ -1,0 +1,269 @@
+{
+  "$comment": "Seed training dataset for the assistant, slice 1: general help only (how to use HMS). No patient data anywhere: not in patterns, responses or tests. Format per intent: tag, patterns (example user messages, Indonesian and English), responses (answer text per language), context_set ('' = needs no attached record). 'review' says where the answer comes from: 'from_app' = written from what the HMS web app shows today (owner to confirm the wording), 'needs_owner' = the hospital must supply the facts. 'test' is a held-out set: never train on it; use it to measure level 1 before a release. Not active until approved by the owner or an IAM administrator; then it is loaded as an assistant knowledge release.",
+  "dataset": "hms-assistant.general-help",
+  "version": "0.1.0",
+  "status": "approved",
+  "approval": { "approved_by": "erfanhuda (owner)", "approved_at": "2026-11-10", "note": "Approved in the HMS workspace session of 2026-11-10. help.contact_support stays out of the release until its facts (unit, extension, hours) replace the TODO." },
+  "languages": ["id", "en"],
+  "intents": [
+    {
+      "tag": "greeting",
+      "patterns": [
+        "halo", "hai", "hallo", "hi", "hello", "selamat pagi", "selamat siang", "selamat sore", "selamat malam",
+        "pagi", "permisi", "assalamualaikum", "good morning", "hey there", "halo asisten"
+      ],
+      "responses": [
+        { "lang": "id", "text": "Halo! Saya asisten HMS. Saya bisa membantu cara memakai HMS, atau membacakan rekam kunjungan yang Anda tandai." },
+        { "lang": "en", "text": "Hello! I am the HMS assistant. I can help you use HMS, or read back a visit record you tag." }
+      ],
+      "context_set": "",
+      "review": "from_app"
+    },
+    {
+      "tag": "thanks",
+      "patterns": [
+        "terima kasih", "makasih", "makasi", "trims", "thx", "thanks", "thank you", "terimakasih banyak",
+        "oke makasih", "sip terima kasih", "mantap terima kasih", "thank you so much", "ok thanks", "tengkyu"
+      ],
+      "responses": [
+        { "lang": "id", "text": "Sama-sama. Ada lagi yang bisa saya bantu?" },
+        { "lang": "en", "text": "You're welcome. Anything else I can help with?" }
+      ],
+      "context_set": "",
+      "review": "from_app"
+    },
+    {
+      "tag": "goodbye",
+      "patterns": [
+        "dah", "sampai jumpa", "bye", "goodbye", "see you", "selesai", "sudah cukup", "itu saja", "cukup dulu",
+        "nanti lagi", "that's all", "done for now", "keluar dari chat", "udah itu aja"
+      ],
+      "responses": [
+        { "lang": "id", "text": "Baik. Panel asisten bisa dibuka lagi kapan saja dari jendela mana pun." },
+        { "lang": "en", "text": "All right. You can open the assistant panel again from any window." }
+      ],
+      "context_set": "",
+      "review": "from_app"
+    },
+    {
+      "tag": "capabilities",
+      "patterns": [
+        "apa yang bisa kamu lakukan", "kamu bisa apa", "fitur asisten apa saja", "bisa bantu apa", "fungsi asisten ini apa",
+        "asisten ini untuk apa", "cara pakai asisten", "bantuan", "help", "what can you do", "how do I use the assistant",
+        "what are you for", "menu bantuan", "apa saja yang bisa ditanyakan", "kamu siapa", "who are you"
+      ],
+      "responses": [
+        { "lang": "id", "text": "Saya bisa: (1) menjelaskan cara memakai HMS, misalnya masuk, membuka modul, atau mengganti bahasa; (2) membacakan rekam kunjungan yang Anda tandai: ringkasan, diagnosis (ICD-10), prosedur (ICD-9-CM), hasil lab yang ditandai, obat, dan kesiapan klaim. Saya tidak memberi saran medis, diagnosis, atau rekomendasi terapi." },
+        { "lang": "en", "text": "I can (1) explain how to use HMS, such as signing in, opening modules or changing the language, and (2) read back a visit you tag: summary, diagnoses (ICD-10), procedures (ICD-9-CM), flagged lab results, medications and claim readiness. I do not give medical advice, diagnoses or treatment recommendations." }
+      ],
+      "context_set": "",
+      "review": "from_app"
+    },
+    {
+      "tag": "help.sign_in",
+      "patterns": [
+        "cara masuk hms", "bagaimana cara login", "login pakai apa", "masuk pakai akun apa", "user id nya apa",
+        "pakai password khanza?", "apakah password sama dengan khanza", "akun hms saya apa", "how do I log in",
+        "which username do I use", "sign in with what account", "is it the same password as khanza", "cara login aplikasi",
+        "login hms gimana", "username dan password apa"
+      ],
+      "responses": [
+        { "lang": "id", "text": "Masuk dengan ID pengguna dan kata sandi Khanza Anda sendiri; HMS tidak punya kata sandi terpisah. Hanya dokter atau pegawai yang aktif di Khanza yang bisa masuk." },
+        { "lang": "en", "text": "Sign in with your own Khanza user ID and password; HMS has no separate password. Only doctors or employees who are active in Khanza can sign in." }
+      ],
+      "context_set": "",
+      "review": "from_app"
+    },
+    {
+      "tag": "help.sign_in_failed",
+      "patterns": [
+        "tidak bisa login", "gagal masuk", "login gagal terus", "password salah terus", "kata sandi salah", "akun terkunci",
+        "terlalu banyak percobaan", "kenapa tidak bisa masuk", "akun saya ditangguhkan", "can't log in", "login failed",
+        "my account is locked", "too many attempts", "wrong password message", "gak bisa masuk hms"
+      ],
+      "responses": [
+        { "lang": "id", "text": "Periksa ID pengguna dan kata sandi Khanza Anda; hanya dokter atau pegawai yang aktif yang bisa masuk. Setelah terlalu banyak percobaan gagal, tunggu beberapa menit lalu coba lagi. Jika akun HMS Anda ditangguhkan atau masalah berlanjut, hubungi IT." },
+        { "lang": "en", "text": "Check your Khanza user ID and password; only active doctors or employees can sign in. After too many failed attempts, wait a few minutes and try again. If your HMS account is suspended or the problem continues, contact IT." }
+      ],
+      "context_set": "",
+      "review": "from_app"
+    },
+    {
+      "tag": "help.no_access",
+      "patterns": [
+        "kenapa saya tidak punya akses", "tidak ada izin", "menu tidak muncul", "modul tidak bisa dibuka", "akses ditolak",
+        "anda tidak memiliki izin", "baru pertama login tidak bisa apa-apa", "minta akses ke siapa", "cara dapat peran",
+        "why can't I see this", "permission denied", "I have no access", "how do I get a role", "forbidden error", "kok menunya kosong"
+      ],
+      "responses": [
+        { "lang": "id", "text": "Akses di HMS diberikan lewat peran. Saat pertama kali masuk, akun Anda belum punya peran, jadi belum bisa melakukan apa pun. Minta administrator IAM rumah sakit memberi peran yang sesuai tugas Anda." },
+        { "lang": "en", "text": "Access in HMS comes from roles. When you first sign in, your account has no role yet, so it cannot do anything. Ask the hospital's IAM administrator to grant the role that fits your work." }
+      ],
+      "context_set": "",
+      "review": "from_app"
+    },
+    {
+      "tag": "help.session_ended",
+      "patterns": [
+        "kenapa saya keluar sendiri", "tiba-tiba logout", "sesi berakhir", "sesi habis", "kok ke-logout", "jendela tertutup semua",
+        "kenapa harus login lagi", "berapa lama sesi aktif", "why was I logged out", "session expired", "session ended",
+        "my windows closed", "how long does the session last", "keluar otomatis", "tutup tab langsung logout"
+      ],
+      "responses": [
+        { "lang": "id", "text": "Demi keamanan data pasien, sesi berakhir jika tidak aktif beberapa saat atau jika tab ditutup, dan semua jendela yang terbuka ikut ditutup. Sebelum berakhir muncul peringatan 'Sesi akan berakhir'; pilih 'Tetap masuk' untuk melanjutkan. Setelah berakhir, masuk lagi." },
+        { "lang": "en", "text": "To protect patient data, the session ends after a period without activity or when the tab is closed, and all open windows close with it. Before it ends, a 'Your session is about to end' warning appears; choose 'Stay signed in' to continue. After it ends, sign in again." }
+      ],
+      "context_set": "",
+      "review": "from_app"
+    },
+    {
+      "tag": "help.open_module",
+      "patterns": [
+        "cara membuka profil pasien", "cara buka modul", "di mana menu tagihan", "buka jendela baru", "cara membuka resep",
+        "menu lab di mana", "cara buka penampil radiologi", "pindah jendela", "jendela yang terbuka di mana", "how do I open a module",
+        "where is billing", "open a new window", "switch windows", "where is the lab viewer", "buka modul tarif"
+      ],
+      "responses": [
+        { "lang": "id", "text": "Buka modul dari 'Peluncur modul' di bilah atas, atau tombol 'Buka modul' di dok bawah. Setiap modul terbuka sebagai jendela, dan jendela yang terbuka tampil di dok bawah ('Jendela terbuka') untuk berpindah." },
+        { "lang": "en", "text": "Open a module from the module launcher in the top bar, or the 'Open module' button in the bottom dock. Each module opens as a window, and open windows are listed in the bottom dock so you can switch between them." }
+      ],
+      "context_set": "",
+      "review": "from_app"
+    },
+    {
+      "tag": "help.change_language",
+      "patterns": [
+        "ganti bahasa", "ubah bahasa ke inggris", "bahasa indonesia", "cara ganti ke english", "tampilan bahasa inggris",
+        "change language", "switch to english", "switch to indonesian", "set language", "aplikasi pakai bahasa inggris",
+        "english please", "bahasa apa saja", "ubah bahasa aplikasi"
+      ],
+      "responses": [
+        { "lang": "id", "text": "Pilih 'Bahasa' di bilah atas untuk berganti antara Bahasa Indonesia dan English." },
+        { "lang": "en", "text": "Choose 'Language' in the top bar to switch between Bahasa Indonesia and English." }
+      ],
+      "context_set": "",
+      "review": "from_app"
+    },
+    {
+      "tag": "help.attach_visit",
+      "patterns": [
+        "cara menandai kunjungan", "bagaimana tag kunjungan", "cara pilih pasien untuk asisten", "asisten tidak tahu pasiennya",
+        "cara memasukkan no rawat", "tandai no rawat", "hapus tanda kunjungan", "kenapa harus pilih chip", "how do I tag a visit",
+        "how does the assistant know the patient", "attach a visit", "remove a tag", "choose which visit", "cara kasih konteks ke asisten",
+        "kenapa asisten minta tandai kunjungan"
+      ],
+      "responses": [
+        { "lang": "id", "text": "Tandai kunjungan dengan 'Tanya asisten' di jendela kunjungan, atau cari no. rawat di panel asisten. Kunjungan yang ditandai tampil sebagai chip; hapus dengan tombol di chip. Jika beberapa kunjungan ditandai, pilih chip yang dimaksud. Saya tidak pernah memilihkan kunjungan atau memakai jendela yang sedang terbuka sebagai konteks." },
+        { "lang": "en", "text": "Tag a visit with 'Ask assistant' in its window, or search its encounter number in the assistant panel. Tagged visits show as chips; remove one with its button. If several visits are tagged, pick the chip you mean. I never choose a visit for you or use the window you have open as context." }
+      ],
+      "context_set": "",
+      "review": "from_app"
+    },
+    {
+      "tag": "help.record_questions",
+      "patterns": [
+        "apa yang bisa ditanyakan tentang kunjungan", "pertanyaan apa untuk rekam medis", "bisa baca rekam medis?",
+        "bisa lihat diagnosis?", "bisa tampilkan obat pasien?", "asisten bisa baca lab?", "what can I ask about a visit",
+        "can you read the record", "can you show diagnoses", "can you list medications", "topik apa saja", "bisa ringkas kunjungan?"
+      ],
+      "responses": [
+        { "lang": "id", "text": "Setelah menandai kunjungan, tanyakan: ringkasan, diagnosis (ICD-10), prosedur (ICD-9-CM), hasil lab yang ditandai lab, obat, atau kesiapan klaim. Setiap jawaban menyebut sumbernya dan hanya berisi apa yang tercatat, bukan saran medis." },
+        { "lang": "en", "text": "After tagging a visit, ask for its summary, diagnoses (ICD-10), procedures (ICD-9-CM), lab results flagged by the lab, medications or claim readiness. Every answer names its source and only shows what is recorded; it is not medical advice." }
+      ],
+      "context_set": "",
+      "review": "from_app"
+    },
+    {
+      "tag": "help.claim_readiness",
+      "patterns": [
+        "apa itu kesiapan klaim", "kesiapan klaim artinya apa", "cek kelengkapan klaim itu apa", "apakah klaim pasti diterima",
+        "checklist klaim lengkap berarti diterima bpjs?", "siapa yang memeriksa kesiapan klaim", "what is claim readiness",
+        "does a complete checklist mean the claim is accepted", "who checks claim readiness", "arti hasil cek klaim",
+        "kenapa klaim tidak dinilai", "claim readiness meaning"
+      ],
+      "responses": [
+        { "lang": "id", "text": "Kesiapan klaim adalah pemeriksaan internal yang dijalankan server atas data kunjungan BPJS (SEP) yang tercatat. Daftar periksa yang lengkap berarti siap diajukan menurut aturan internal, bukan jaminan klaim diterima BPJS atau penjamin lain." },
+        { "lang": "en", "text": "Claim readiness is an internal check the server runs on the visit's recorded BPJS data (SEP). A complete checklist means ready to submit under the internal rules; it does not guarantee that BPJS or another payer accepts the claim." }
+      ],
+      "context_set": "",
+      "review": "from_app"
+    },
+    {
+      "tag": "help.contact_support",
+      "patterns": [
+        "hubungi IT", "nomor IT berapa", "minta bantuan teknis", "lapor error", "aplikasi error ke siapa", "helpdesk",
+        "ada masalah dengan hms", "contact IT", "report a bug", "who do I call for help", "IT support number", "ekstensi IT",
+        "jam layanan IT"
+      ],
+      "responses": [
+        { "lang": "id", "text": "TODO(owner): siapa yang dihubungi untuk masalah HMS (unit, nomor ekstensi, jam layanan, dan cara melapor)." },
+        { "lang": "en", "text": "TODO(owner): who to contact about HMS problems (unit, extension number, service hours and how to report)." }
+      ],
+      "context_set": "",
+      "review": "needs_owner"
+    },
+    {
+      "tag": "safety.advice_refusal",
+      "patterns": [
+        "obat apa yang sebaiknya diberikan", "berapa dosis yang tepat", "boleh minum obat ini?", "perlukah dirawat?",
+        "sebaiknya terapi apa", "apakah aman untuk pasien hamil", "harus diberi antibiotik?", "what dose should I give",
+        "should we stop the medication", "which antibiotic is best", "is it safe to discharge", "recommend a treatment",
+        "diagnose this patient", "saran pengobatan dong", "rekomendasi terapi"
+      ],
+      "responses": [
+        { "lang": "id", "text": "Saya tidak dapat memberi saran medis, diagnosis, atau rekomendasi terapi. Keputusan klinis ada pada dokter yang merawat. Saya dapat menampilkan isi rekam kunjungan yang ditandai." },
+        { "lang": "en", "text": "I cannot give medical advice, diagnoses or treatment recommendations. Clinical decisions belong to the treating doctor. I can show what is recorded in a tagged visit." }
+      ],
+      "context_set": "",
+      "review": "from_app"
+    },
+    {
+      "tag": "out_of_scope",
+      "patterns": [
+        "cuaca hari ini", "ceritakan lelucon", "siapa presiden indonesia", "buatkan puisi", "resep masakan", "skor bola semalam",
+        "terjemahkan ke bahasa jepang", "what's the weather", "tell me a joke", "write me a poem", "what is bitcoin price",
+        "help me with my homework", "rekomendasi film", "jam berapa sekarang"
+      ],
+      "responses": [
+        { "lang": "id", "text": "Maaf, saya hanya membantu pemakaian HMS dan membacakan rekam kunjungan yang ditandai." },
+        { "lang": "en", "text": "Sorry, I only help with using HMS and reading back tagged visit records." }
+      ],
+      "context_set": "",
+      "review": "from_app"
+    }
+  ],
+  "test": [
+    { "text": "selamat pagi asisten", "tag": "greeting" },
+    { "text": "hai, ada orang?", "tag": "greeting" },
+    { "text": "makasih ya", "tag": "thanks" },
+    { "text": "thanks a lot", "tag": "thanks" },
+    { "text": "oke sudah selesai", "tag": "goodbye" },
+    { "text": "bye bye", "tag": "goodbye" },
+    { "text": "kamu bisa bantu apa saja?", "tag": "capabilities" },
+    { "text": "what can this assistant do", "tag": "capabilities" },
+    { "text": "login hms pakai akun khanza ya?", "tag": "help.sign_in" },
+    { "text": "what do I sign in with", "tag": "help.sign_in" },
+    { "text": "saya gagal login terus", "tag": "help.sign_in_failed" },
+    { "text": "it says too many attempts", "tag": "help.sign_in_failed" },
+    { "text": "saya tidak bisa membuka modul tagihan", "tag": "help.no_access" },
+    { "text": "I need access to the lab module", "tag": "help.no_access" },
+    { "text": "kenapa sesi saya habis", "tag": "help.session_ended" },
+    { "text": "I got signed out by myself", "tag": "help.session_ended" },
+    { "text": "di mana membuka modul resep", "tag": "help.open_module" },
+    { "text": "how to open the patient profile", "tag": "help.open_module" },
+    { "text": "ganti ke bahasa inggris dong", "tag": "help.change_language" },
+    { "text": "change the language to indonesian", "tag": "help.change_language" },
+    { "text": "bagaimana menandai kunjungan pasien", "tag": "help.attach_visit" },
+    { "text": "how do I pick a visit for the assistant", "tag": "help.attach_visit" },
+    { "text": "asisten bisa jawab soal apa tentang kunjungan", "tag": "help.record_questions" },
+    { "text": "can you show lab results of a visit", "tag": "help.record_questions" },
+    { "text": "maksud kesiapan klaim apa", "tag": "help.claim_readiness" },
+    { "text": "if all checks pass will BPJS pay", "tag": "help.claim_readiness" },
+    { "text": "mau lapor masalah aplikasi", "tag": "help.contact_support" },
+    { "text": "who is the IT contact", "tag": "help.contact_support" },
+    { "text": "dosis paracetamol berapa sebaiknya", "tag": "safety.advice_refusal" },
+    { "text": "should I start antibiotics", "tag": "safety.advice_refusal" },
+    { "text": "berita hari ini apa", "tag": "out_of_scope" },
+    { "text": "write a song for me", "tag": "out_of_scope" }
+  ]
+}

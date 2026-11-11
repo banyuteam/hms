@@ -1,0 +1,123 @@
+{
+  "$comment": "Rule-based assistant catalogue: the single source for what it recognises and how each answer is put together. Loaded and validated by catalogue.ts at startup (an invalid file fails loudly). Patterns are case-insensitive regular expressions (source-controlled, never user input). Reply ids are message keys in src/locales/{id,en}/emr.json. Behaviour that is code (choosing the visit, reading the record) is named here and implemented in rules.ts. Claim readiness is a domain rule evaluated by hms_services (ADR-SVC-006); only how its result is presented lives here.",
+  "version": "1.0.1",
+
+  "advice": {
+    "description": "Requests for advice, diagnosis or treatment decisions (EN + ID). Checked before anything else; always refused.",
+    "pattern": "\\b(should (i|we|he|she|the patient)|recommend|what (dose|drug|treatment)|which (drug|treatment|antibiotic)|diagnose|prognosis|is it safe|safe to|increase|decrease|stop the|start the|sarankan|rekomendasi|sebaiknya|harus (diberi|minum|dirawat)|boleh(kah)? (diberi|diberikan|minum|makan|dipakai|digunakan|dihentikan|dilanjutkan|pulang|dioperasi)|perlu(kah)? (dirawat|dioperasi|diberi|diberikan|minum|dihentikan)|dosis (yang|berapa)|obat apa|terapi apa|aman(kah)? untuk)\\b",
+    "flags": "i",
+    "reply": "emr.ai.reply.refuse"
+  },
+
+  "help": {
+    "description": "Text with no topic, asked about nothing that gives one.",
+    "reply": "emr.ai.reply.help"
+  },
+
+  "quickActions": {
+    "description": "Order of the topic buttons in the assistant panel (the tagged section's topic, if any, comes first).",
+    "order": ["claim", "summary", "diagnoses", "procedures", "labs", "medications"]
+  },
+
+  "intents": {
+    "description": "Topic detection for typed text: the first pattern that matches wins, in this order.",
+    "topics": [
+      {
+        "id": "claim",
+        "pattern": "\\b(claim|klaim|bpjs|casemix|resume|ina-?cbg|readiness|kelengkapan)\\b",
+        "flags": "i"
+      },
+      { "id": "diagnoses", "pattern": "\\b(diagnos\\w*|icd-?10|dx)\\b", "flags": "i" },
+      {
+        "id": "procedures",
+        "pattern": "\\b(procedure\\w*|tindakan|icd-?9\\w*|operasi|surgery)\\b",
+        "flags": "i"
+      },
+      { "id": "labs", "pattern": "\\b(lab\\w*)\\b", "flags": "i" },
+      {
+        "id": "medications",
+        "pattern": "\\b(medication\\w*|medicine\\w*|meds?|drug\\w*|obat|resep|prescri\\w*)\\b",
+        "flags": "i"
+      },
+      {
+        "id": "summary",
+        "pattern": "\\b(summar\\w*|ringkas\\w*|overview|riwayat|timeline)\\b",
+        "flags": "i"
+      }
+    ]
+  },
+
+  "sectionTopics": {
+    "description": "The topic a tagged section stands for, used when the text names none (F-8). Sections not listed (CPPT, radiology, billing) leave it to the text.",
+    "map": {
+      "diagnoses": "diagnoses",
+      "labs": "labs",
+      "lab": "labs",
+      "claim": "claim",
+      "prescription": "medications"
+    }
+  },
+
+  "subject": {
+    "description": "Which visit a question is about, never guessed (F-7, F-9; root CLAUDE.md §9). Code: subjectOf() in rules.ts. 1) The visit tag the user chose, if still tagged. 2) Otherwise the only tagged visit (several tags of one visit count once; the latest wins, so its section applies). 3) Several different visits and no choice: the user chooses. 4) Only a patient tag: a patient never stands in for a visit. 5) Nothing tagged.",
+    "replies": {
+      "patientOnly": { "intent": "needVisit", "reply": "emr.ai.reply.needVisit" },
+      "ambiguous": { "intent": "chooseVisit", "reply": "emr.ai.reply.chooseVisit" },
+      "none": { "intent": "needTag", "reply": "emr.ai.reply.needTag" }
+    }
+  },
+
+  "answers": {
+    "description": "Read-back answers about the chosen visit, from the visit record already loaded in the browser. Every answer starts with the source line and ends with the disclaimer. Rows come from a fixed set of record sources (rules.ts); 'format' fills {field} placeholders with the row's stored values ('' when not recorded). 'header' values name facts of the visit; 'whenEmpty' is the reply when there are no rows.",
+    "source": "emr.ai.reply.source",
+    "disclaimer": "emr.ai.reply.disclaimer",
+    "notLoaded": { "intent": "notLoaded", "reply": "emr.ai.reply.notLoaded" },
+    "topics": {
+      "summary": {
+        "header": {
+          "reply": "emr.ai.reply.summary",
+          "values": {
+            "setting": "careSetting",
+            "dpjp": "dpjp",
+            "los": "lengthOfStay",
+            "status": "dischargeOrVisitStatus"
+          }
+        },
+        "rows": { "source": "diagnoses", "limit": 3, "format": "{code} — {name}" }
+      },
+      "diagnoses": {
+        "rows": { "source": "diagnoses", "format": "{priority}. {code} — {name}" },
+        "whenEmpty": "emr.ai.reply.none"
+      },
+      "procedures": {
+        "rows": { "source": "codedProcedures", "format": "ICD-9-CM {code} — {name}" },
+        "whenEmpty": "emr.ai.reply.none"
+      },
+      "labs": {
+        "header": { "reply": "emr.ai.reply.labsFlagged", "values": { "n": "rowCount" } },
+        "rows": {
+          "source": "flaggedLabResults",
+          "format": "{item}: {value} {unit} ({range}) [{flag}]"
+        }
+      },
+      "medications": {
+        "rows": { "source": "prescriptionItems", "format": "{drug} — {instructions}" },
+        "whenEmpty": "emr.ai.reply.none"
+      }
+    }
+  },
+
+  "knowledge": {
+    "description": "General help from hms_services (assistant-v1 GET /assistant/knowledge/general-help: the approved general-help release, how to use HMS, no patient data). Matched deterministically (knowledge.ts: normalised whole words, longest example wins). Precedence (owner, 2026-11-10, general help on top): 1) general help: a strong match (the message equals an example, or contains an example of two or more words), else a weak match (a one-word example); 2) advice refusal; 3) the record-topic patterns; 4) the tagged section's topic; 5) help. General-help answers are approved static text, never advice; tags in refuseTags answer with the advice refusal, so there is one refusal text.",
+    "dataset": "hms-assistant.general-help",
+    "refuseTags": ["safety.advice_refusal"]
+  },
+
+  "claim": {
+    "description": "Claim readiness is evaluated by hms_services (POST /api/v1/assistant/rules/evaluate, assistant-v1, ADR-SVC-006); the server reads the visit itself. These are the lines that present its result.",
+    "ruleSet": "emr.ai.reply.claimRuleSet",
+    "notApplicable": "emr.claim.notApplicable",
+    "scope": "emr.claim.scope",
+    "errorPrefix": "emr.claim.error."
+  }
+}

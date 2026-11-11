@@ -142,7 +142,7 @@ describe('live sign-in through hms_services (auth-v1: Khanza user ID + password)
     await fill(user, ' D001 ', 'rahasia');
     await submit(user);
 
-    expect(await screen.findByText('LIVE DATA · dev')).toBeInTheDocument();
+    expect(await screen.findByText('Connected to Khanza')).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('dr. Test Synthetic');
     expect(sentSignIn()).toEqual({ user_id: 'D001', password: 'rahasia' });
     expect(callsTo('/api/v1/auth/sign-in')[0]![1]).toMatchObject({
@@ -169,7 +169,7 @@ describe('live sign-in through hms_services (auth-v1: Khanza user ID + password)
     expect(
       await screen.findByRole('button', { name: 'dr. Test Synthetic HMS staff — User menu' }),
     ).toBeInTheDocument();
-    expect(screen.queryByText('LIVE DATA · dev')).not.toBeInTheDocument();
+    expect(screen.queryByText('Connected to Khanza')).not.toBeInTheDocument();
     expect(screen.getAllByText('Staff · view only').length).toBeGreaterThan(0);
     expect(screen.queryByText('Open & edit')).not.toBeInTheDocument();
   });
@@ -196,7 +196,7 @@ describe('live sign-in through hms_services (auth-v1: Khanza user ID + password)
     renderApp('/login');
     await fill(user, 'D001', 'pw');
     await submit(user);
-    await screen.findByText('LIVE DATA · dev');
+    await screen.findByText('Connected to Khanza');
 
     server.api = () => error(401, 'unauthenticated');
     await act(async () => {
@@ -213,7 +213,7 @@ describe('page reload with a live session', () => {
     server.current = session();
     renderApp('/records');
     expect(screen.getByText('Checking your session…')).toBeInTheDocument();
-    expect(await screen.findByText('LIVE DATA · dev')).toBeInTheDocument();
+    expect(await screen.findByText('Connected to Khanza')).toBeInTheDocument();
     expect(screen.queryByLabelText('Khanza user ID')).not.toBeInTheDocument();
     expect(callsTo('/api/v1/auth/session')).toHaveLength(1);
   });
@@ -229,7 +229,7 @@ describe('page reload with a live session', () => {
     });
     renderApp('/records');
     expect(await screen.findByLabelText('Khanza user ID')).toBeInTheDocument();
-    expect(screen.queryByText('LIVE DATA · dev')).not.toBeInTheDocument();
+    expect(screen.queryByText('Connected to Khanza')).not.toBeInTheDocument();
     expect(callsTo('/api/v1/auth/session')).toHaveLength(1);
   });
 });

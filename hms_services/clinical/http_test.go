@@ -2,6 +2,7 @@ package clinical
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -28,6 +29,10 @@ type fakeReader struct {
 	// payer history
 	payerVisits []legacyhms.PayerVisitRow
 	gotLimit    int
+	// allergies and named encounter search
+	allergies []legacyhms.AllergyRow
+	namedHits []legacyhms.EncounterHitRow
+	searches  []string // "plain" or "named", per encounter search call
 }
 
 func (f *fakeReader) err() error {
@@ -76,7 +81,25 @@ func (f *fakeReader) PatientEncounters(_ context.Context, _, before string, limi
 }
 
 func (f *fakeReader) SearchEncounters(context.Context, string, int) ([]legacyhms.EncounterRow, error) {
-	return nil, f.err()
+	f.searches = append(f.searches, "plain")
+	var out []legacyhms.EncounterRow
+	for _, h := range f.namedHits {
+		out = append(out, h.EncounterRow)
+	}
+	return out, f.err()
+}
+
+func (f *fakeReader) SearchEncountersNamed(context.Context, string, int) ([]legacyhms.EncounterHitRow, error) {
+	f.searches = append(f.searches, "named")
+	return f.namedHits, f.err()
+}
+
+func (f *fakeReader) PatientAllergies(_ context.Context, _ string, limit int) ([]legacyhms.AllergyRow, error) {
+	f.gotLimit = limit
+	if len(f.allergies) > limit {
+		return f.allergies[:limit], f.err()
+	}
+	return f.allergies, f.err()
 }
 
 func (f *fakeReader) PayerVisits(_ context.Context, _ string, limit int) ([]legacyhms.PayerVisitRow, error) {
@@ -114,20 +137,51 @@ func (a *fakeAudit) WriteAudit(_ context.Context, ev audit.Event) error {
 	return nil
 }
 
+// fakeIAM is the IAM store as far as these handlers reach it: one active session and a fixed permission set.
+type fakeIAM struct {
+	iam.Store
+	perms    map[string]bool
+	failPerm string // checking this permission fails (store outage)
+}
+
+func (f *fakeIAM) Can(_ context.Context, _, permission, _ string) (bool, error) {
+	if permission == f.failPerm {
+		return false, errors.New("iam down")
+	}
+	return f.perms[permission], nil
+}
+
+func (f *fakeIAM) WriteAudit(context.Context, audit.Event) error { return nil }
+
+func (f *fakeIAM) LookupSession(context.Context, []byte) (iam.SessionRecord, bool, error) {
+	now := time.Now()
+	return iam.SessionRecord{User: iam.User{ID: "user-1", OrganizationID: "org-1", Status: "active"},
+		IdentityIssuer: "oidc:test", FacilityID: "fac-1", LastSeenAt: now, AbsoluteExpiresAt: now.Add(time.Hour)}, true, nil
+}
+
 type env struct {
 	h     *Handler
 	read  *fakeReader
 	audit *fakeAudit
+	iam   *fakeIAM
 }
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
 	loc, _ := time.LoadLocation("Asia/Jakarta")
 	u, _ := url.Parse("https://hms.test.invalid")
-	ih := iam.NewHandler(nil, iam.HTTPOptions{PublicOrigin: u})
-	e := &env{read: &fakeReader{}, audit: &fakeAudit{}}
-	e.h = NewHandler(e.read, e.audit, ih, loc, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	e := &env{read: &fakeReader{}, audit: &fakeAudit{}, iam: &fakeIAM{perms: map[string]bool{}}}
+	svc := iam.NewService(e.iam, nil, iam.Options{IdleTimeout: 15 * time.Minute, Logger: logger})
+	ih := iam.NewHandler(svc, iam.HTTPOptions{PublicOrigin: u})
+	e.h = NewHandler(e.read, e.audit, ih, loc, logger)
 	return e
+}
+
+func (e *env) grant(perms ...string) {
+	for _, p := range perms {
+		e.iam.perms[p] = true
+	}
 }
 
 // call invokes a handler as RequireSession/RequirePermission would after letting the request through.
@@ -351,5 +405,202 @@ func TestPayerHistoryTruncatesAndFailsClosed(t *testing.T) {
 	e.read.down = true
 	if w := call(e.h.patientPayers, "/", map[string]string{"mrn": "000001"}); w.Code != 503 || len(e.audit.events) != 0 {
 		t.Errorf("legacy outage: %d %+v", w.Code, e.audit.events)
+	}
+}
+
+func allergy(date, tm, number, source, text string) legacyhms.AllergyRow {
+	a := legacyhms.AllergyRow{Number: s(number), Source: s(source), Text: s(text)}
+	if date != "" {
+		a.Date, a.Time = s(date), s(tm)
+	}
+	return a
+}
+
+func TestAllergiesAcrossVisitsGroupedLatestFirst(t *testing.T) {
+	e := newEnv(t)
+	// As the reader returns them: newest first, undated (discharge summaries) last.
+	e.read.allergies = []legacyhms.AllergyRow{
+		allergy("2026-10-26", "08:15:00", "2026/10/26/000123", "pemeriksaan_ranap", "Amoxicillin"),
+		allergy("2026-09-01", "10:00:00", "2026/09/01/000010", "pemeriksaan_ralan", "amoxicillin"),
+		allergy("2026-08-14", "09:30:00", "2026/08/14/000051", "pemeriksaan_ralan", "  Amoxicillin "),
+		allergy("2026-07-01", "07:00:00", "2026/07/01/000002", "pemeriksaan_ralan", "Tidak ada"),
+		allergy("0000-00-00", "00:00:00", "2026/06/01/000001", "pemeriksaan_ralan", "Debu"),
+		allergy("", "", "2026/05/02/000009", "resume_pasien_ranap", "Seafood"),
+		allergy("", "", "2026/04/03/000004", "resume_pasien_ranap", "Amoxicillin"),
+		allergy("2026-03-01", "07:00:00", "2026/03/01/000001", "pemeriksaan_ralan", " -- "),
+	}
+	w := call(e.h.patientAllergies, "/api/v1/patients/000001/allergies", map[string]string{"mrn": "000001"})
+	if w.Code != 200 {
+		t.Fatalf("status %d", w.Code)
+	}
+	var got PatientAllergies
+	_ = json.Unmarshal(w.Body.Bytes(), &got)
+	var texts []string
+	for _, a := range got.Allergies {
+		texts = append(texts, a.Text)
+	}
+	if strings.Join(texts, "|") != "Amoxicillin|amoxicillin|Tidak ada|Debu|Seafood" || got.Truncated {
+		t.Fatalf("grouped by exact text, latest first, undated last: %q %v", texts, got.Truncated)
+	}
+	amox := got.Allergies[0]
+	if amox.TimesRecorded != 3 || amox.LastRecordedAt == nil || *amox.LastRecordedAt != "2026-10-26T08:15:00+07:00" ||
+		amox.LastEncounterNumber != "2026/10/26/000123" || amox.Source != "clinical_note_inpatient" {
+		t.Errorf("Amoxicillin: %+v", amox)
+	}
+	if lower := got.Allergies[1]; lower.TimesRecorded != 1 || lower.Source != "clinical_note_outpatient" {
+		t.Errorf("a different spelling is a separate entry: %+v", lower)
+	}
+	if debu := got.Allergies[3]; debu.LastRecordedAt != nil || debu.LastEncounterNumber != "2026/06/01/000001" {
+		t.Errorf("an invalid date is undated: %+v", debu)
+	}
+	if sea := got.Allergies[4]; sea.LastRecordedAt != nil || sea.Source != "discharge_summary" ||
+		sea.LastEncounterNumber != "2026/05/02/000009" {
+		t.Errorf("discharge summary entry: %+v", sea)
+	}
+	if !strings.Contains(w.Body.String(), `"last_recorded_at":null`) {
+		t.Errorf("undated is null, not omitted: %s", w.Body.String())
+	}
+	if e.read.gotLimit != MaxAllergyRows+1 {
+		t.Errorf("reads one more than the cap to detect truncation: %d", e.read.gotLimit)
+	}
+	ev := e.audit.events[0]
+	if ev.Action != "patient.allergies.read" || ev.ResourceType != "Patient" || ev.ResourceID != "000001" ||
+		ev.Detail["results"] != "5" || ev.Detail["entries"] != "8" || ev.Detail["truncated"] != "" ||
+		strings.Contains(strings.ToLower(fmtDetail(ev)), "amox") {
+		t.Errorf("audit holds counts only: %+v", ev)
+	}
+}
+
+func TestAllergiesTruncateAndFailClosed(t *testing.T) {
+	e := newEnv(t)
+	for i := 0; i <= MaxAllergyRows; i++ {
+		e.read.allergies = append(e.read.allergies, allergy("2026-01-01", "08:00:00", "2026/01/01/000001", "pemeriksaan_ralan", "Debu"))
+	}
+	w := call(e.h.patientAllergies, "/", map[string]string{"mrn": "000001"})
+	var got PatientAllergies
+	_ = json.Unmarshal(w.Body.Bytes(), &got)
+	if !got.Truncated || got.Allergies[0].TimesRecorded != MaxAllergyRows || e.audit.events[0].Detail["truncated"] != "entries" {
+		t.Errorf("truncation: %+v %+v", got.Truncated, e.audit.events[0])
+	}
+
+	e = newEnv(t)
+	w = call(e.h.patientAllergies, "/", map[string]string{"mrn": "999999"})
+	if w.Code != 200 || strings.TrimSpace(w.Body.String()) != `{"allergies":[],"truncated":false}` {
+		t.Errorf("unknown patient or nothing recorded is an empty list: %d %q", w.Code, w.Body.String())
+	}
+	if w := call(e.h.patientAllergies, "/", map[string]string{"mrn": "../etc"}); w.Code != 404 {
+		t.Errorf("malformed MRN: %d", w.Code)
+	}
+	e.audit.fail = true
+	e.read.allergies = []legacyhms.AllergyRow{allergy("2026-10-26", "08:15:00", "2026/10/26/000123", "pemeriksaan_ranap", "Amoxicillin")}
+	if w := call(e.h.patientAllergies, "/", map[string]string{"mrn": "000001"}); w.Code != 503 || strings.Contains(w.Body.String(), "Amox") {
+		t.Errorf("no audit, no data: %d %s", w.Code, w.Body.String())
+	}
+	e = newEnv(t)
+	e.read.down = true
+	if w := call(e.h.patientAllergies, "/", map[string]string{"mrn": "000001"}); w.Code != 503 || len(e.audit.events) != 0 {
+		t.Errorf("legacy outage: %d %+v", w.Code, e.audit.events)
+	}
+}
+
+func namedHit(number string, name *string) legacyhms.EncounterHitRow {
+	return legacyhms.EncounterHitRow{EncounterRow: legacyhms.EncounterRow{Number: s(number), MRN: s("000001"),
+		RegDate: s("2026-10-26"), RegTime: s("08:15:00"), CareSetting: s("Ralan")}, PatientName: name}
+}
+
+func TestEncounterSearchNamesOnlyWithPatientRead(t *testing.T) {
+	hits := []legacyhms.EncounterHitRow{namedHit("2026/10/26/000123", s(" Pasien Contoh ")), namedHit("2026/10/26/000122", nil)}
+
+	e := newEnv(t)
+	e.read.namedHits = hits
+	e.grant(PermEncounterRead)
+	w := call(e.h.searchEncounters, "/api/v1/encounters?q=2026/10/26", nil)
+	if w.Code != 200 || strings.Contains(w.Body.String(), "patient_name") || strings.Contains(w.Body.String(), "Pasien") ||
+		strings.Join(e.read.searches, ",") != "plain" {
+		t.Errorf("without patient.read no name is read or sent: %d %s %v", w.Code, w.Body.String(), e.read.searches)
+	}
+	if ev := e.audit.events[0]; ev.Action != "encounter.search" || ev.Detail["results"] != "2" || ev.Detail["names"] != "omitted" {
+		t.Errorf("audit: %+v", ev)
+	}
+
+	e = newEnv(t)
+	e.read.namedHits = hits
+	e.grant(PermEncounterRead, PermPatientRead)
+	w = call(e.h.searchEncounters, "/api/v1/encounters?q=2026/10/26", nil)
+	var got struct {
+		Encounters []EncounterHit `json:"encounters"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &got)
+	if w.Code != 200 || len(got.Encounters) != 2 || strings.Join(e.read.searches, ",") != "named" {
+		t.Fatalf("with patient.read: %d %s", w.Code, w.Body.String())
+	}
+	first, second := got.Encounters[0], got.Encounters[1]
+	if first.PatientName == nil || *first.PatientName != "Pasien Contoh" || first.Number != "2026/10/26/000123" ||
+		*first.RegisteredAt != "2026-10-26T08:15:00+07:00" || *first.PatientMRN != "000001" {
+		t.Errorf("first hit: %+v", first)
+	}
+	if second.PatientName == nil || *second.PatientName != "" {
+		t.Errorf(`no recorded name is "", still present: %+v`, second)
+	}
+	if ev := e.audit.events[0]; ev.Detail["names"] != "included" || strings.Contains(fmtDetail(ev), "Pasien") {
+		t.Errorf("audit: %+v", ev)
+	}
+
+	e = newEnv(t)
+	e.read.namedHits = hits
+	e.grant(PermEncounterRead, PermPatientRead)
+	e.iam.failPerm = PermPatientRead
+	if w := call(e.h.searchEncounters, "/api/v1/encounters?q=2026/10/26", nil); w.Code != 503 || len(e.read.searches) != 0 ||
+		len(e.audit.events) != 0 {
+		t.Errorf("permission check outage: %d %v %+v", w.Code, e.read.searches, e.audit.events)
+	}
+
+	e = newEnv(t)
+	e.read.namedHits = hits
+	e.grant(PermEncounterRead, PermPatientRead)
+	e.audit.fail = true
+	if w := call(e.h.searchEncounters, "/api/v1/encounters?q=2026/10/26", nil); w.Code != 503 || strings.Contains(w.Body.String(), "Pasien") {
+		t.Errorf("no audit, no data: %d %s", w.Code, w.Body.String())
+	}
+}
+
+// TestRoutesEnforcePermissions goes through Register (session and permission middleware).
+func TestRoutesEnforcePermissions(t *testing.T) {
+	e := newEnv(t)
+	e.read.namedHits = []legacyhms.EncounterHitRow{namedHit("2026/10/26/000123", s("Pasien Contoh"))}
+	e.read.encounters = []legacyhms.EncounterRow{namedHit("2026/10/26/000123", nil).EncounterRow}
+	mux := http.NewServeMux()
+	e.h.Register(mux)
+	token := base64.RawURLEncoding.EncodeToString(make([]byte, 32))
+	get := func(target string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodGet, target, nil)
+		r.AddCookie(&http.Cookie{Name: "hms_session", Value: token})
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, r)
+		return w
+	}
+	e.grant(PermEncounterRead, PermPatientRead)
+	if w := get("/api/v1/patients/000001/allergies"); w.Code != 403 {
+		t.Errorf("allergies need encounter.clinical.read: %d", w.Code)
+	}
+	if w := get("/api/v1/encounters?q=2026/10"); w.Code != 200 || !strings.Contains(w.Body.String(), `"patient_name":"Pasien Contoh"`) {
+		t.Errorf("search with patient.read: %d %s", w.Code, w.Body.String())
+	}
+	for _, p := range []string{"/api/v1/encounters/2026%2F10%2F26%2F000123", "/api/v1/patients/000001/encounters",
+		"/api/v1/patients/000001/payers"} {
+		if w := get(p); w.Code != 200 || strings.Contains(w.Body.String(), "patient_name") {
+			t.Errorf("%s must not carry patient_name: %d %s", p, w.Code, w.Body.String())
+		}
+	}
+	e.iam.perms = map[string]bool{PermClinicalRead: true}
+	if w := get("/api/v1/patients/000001/allergies"); w.Code != 200 {
+		t.Errorf("allergies with encounter.clinical.read: %d", w.Code)
+	}
+	if w := get("/api/v1/encounters?q=2026/10"); w.Code != 403 {
+		t.Errorf("search still needs encounter.read: %d", w.Code)
+	}
+	e.iam.perms = map[string]bool{PermEncounterRead: true}
+	if w := get("/api/v1/encounters?q=2026/10"); w.Code != 200 || strings.Contains(w.Body.String(), "patient_name") {
+		t.Errorf("search without patient.read: %d %s", w.Code, w.Body.String())
 	}
 }

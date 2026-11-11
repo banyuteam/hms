@@ -99,3 +99,39 @@ func TestMapEncounterLocalTime(t *testing.T) {
 		t.Errorf("unexpected encounter %+v", in)
 	}
 }
+
+func TestMapAllergiesLatestDatedEntryWins(t *testing.T) {
+	loc, _ := time.LoadLocation("Asia/Jakarta")
+	got := MapAllergies([]legacyhms.AllergyRow{
+		// Undated first: a later dated entry with the same text still becomes the latest.
+		{Number: s("2026/05/02/000009"), Source: s("resume_pasien_ranap"), Text: s("Udang")},
+		{Date: s("2026-01-01"), Time: s("07:00:00"), Number: s("2026/01/01/000001"), Source: s("pemeriksaan_ralan"), Text: s("Udang")},
+		{Date: s("2026-02-01"), Time: s("07:00:00"), Number: s("2026/02/01/000001"), Source: s("pemeriksaan_ranap"), Text: s("Udang")},
+		{Date: s("2026-03-01"), Time: s("07:00:00"), Number: s("2026/03/01/000001"), Source: s("other_table"), Text: s("Debu")},
+		{Date: s("2026-04-01"), Time: s("07:00:00"), Number: s("2026/04/01/000001"), Source: s("pemeriksaan_ralan"), Text: nil},
+		{Date: s("2025-12-01"), Time: s("07:00:00"), Number: s("2025/12/01/000001"), Source: s("pemeriksaan_ralan"), Text: s("Tidak ada")},
+	}, false, loc)
+	if len(got.Allergies) != 2 {
+		t.Fatalf("unknown source and empty text are not entries: %+v", got)
+	}
+	u := got.Allergies[0]
+	if u.Text != "Udang" || u.TimesRecorded != 3 || u.LastRecordedAt == nil || *u.LastRecordedAt != "2026-02-01T07:00:00+07:00" ||
+		u.LastEncounterNumber != "2026/02/01/000001" || u.Source != "clinical_note_inpatient" {
+		t.Errorf("latest dated entry: %+v", u)
+	}
+	if n := got.Allergies[1]; n.Text != "Tidak ada" || n.Source != "clinical_note_outpatient" {
+		t.Errorf(`"Tidak ada" is returned as written: %+v`, n)
+	}
+	if empty := MapAllergies(nil, false, loc); empty.Allergies == nil {
+		t.Error("no entries is an empty list, not null")
+	}
+}
+
+func TestMapEncounterHitName(t *testing.T) {
+	loc, _ := time.LoadLocation("Asia/Jakarta")
+	h := MapEncounterHit(legacyhms.EncounterHitRow{EncounterRow: legacyhms.EncounterRow{Number: s("2026/10/26/000123"),
+		CareSetting: s("Ranap")}, PatientName: s(" - ")}, loc)
+	if h.PatientName == nil || *h.PatientName != "" || h.Number != "2026/10/26/000123" || h.CareSetting != "inpatient" {
+		t.Errorf("unexpected hit %+v", h)
+	}
+}

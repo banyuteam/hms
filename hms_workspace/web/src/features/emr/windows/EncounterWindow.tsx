@@ -1,5 +1,5 @@
 import { useI18n } from '@/locales/I18nProvider';
-import { notes, prescriptions, surgeries } from '@/api/select';
+import { notes, prescriptions, surgeries, unlinkedSurgeryReports } from '@/api/select';
 import {
   DataTable,
   NotAvailable,
@@ -33,6 +33,7 @@ export function EncounterWindow({ winId, norawat }: { winId: string; norawat?: s
         const dx = [...journey.summary.diagnoses].sort((a, b) => a.prioritas - b.prioritas);
         const rx = prescriptions(journey);
         const ops = surgeries(journey);
+        const opsUnlinked = unlinkedSurgeryReports(journey);
         const latestPlan = cppt.find((n) => (n.rtl ?? '').trim() || n.instruksi.trim());
         const tag = {
           id: `enc:${nr}`,
@@ -179,7 +180,7 @@ export function EncounterWindow({ winId, norawat }: { winId: string; norawat?: s
             </Section>
 
             <Section id="surgery" title={t('emr.surgery.title')} icon="scissors" count={ops.length}>
-              {ops.length === 0 ? (
+              {ops.length === 0 && opsUnlinked.length === 0 ? (
                 <NotAvailable reason="recorded" />
               ) : (
                 ops.map((o) => (
@@ -195,6 +196,24 @@ export function EncounterWindow({ winId, norawat }: { winId: string; norawat?: s
                     <TextBlock label={t('emr.surgery.report')} text={o.report?.laporan_operasi} />
                   </div>
                 ))
+              )}
+              {opsUnlinked.length > 0 && (
+                <>
+                  <h3 className={w.columnTitle}>{t('emr.surgery.unlinkedTitle')}</h3>
+                  <p className={w.note}>{t('emr.surgery.unlinkedNote')}</p>
+                  {opsUnlinked.map((r) => (
+                    <div key={r.id} className={w.stack}>
+                      <p className={w.note}>
+                        {t('emr.surgery.unlinkedAt', {
+                          when: storedText(r.key) ?? t('emr.undated'),
+                        })}
+                      </p>
+                      <TextBlock label={t('emr.surgery.preop')} text={r.diagnosa_preop} />
+                      <TextBlock label={t('emr.surgery.postop')} text={r.diagnosa_postop} />
+                      <TextBlock label={t('emr.surgery.report')} text={r.laporan_operasi} />
+                    </div>
+                  ))}
+                </>
               )}
             </Section>
           </WindowPage>

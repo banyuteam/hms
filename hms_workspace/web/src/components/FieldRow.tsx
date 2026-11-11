@@ -21,7 +21,8 @@ export function FieldRow({
         {label}
       </dt>
       <dd className="type-body m-0 min-w-0 text-ink [font-variant-numeric:tabular-nums] [overflow-wrap:anywhere]">
-        {masked?.value ? (
+        {/* Live data holds no value, only the mask and a server reveal: that is masked, not "not recorded". */}
+        {masked && (masked.value || masked.reveal) ? (
           <MaskedValue field={fieldKey ?? label} label={label} text={masked} />
         ) : (
           (value ?? '—')

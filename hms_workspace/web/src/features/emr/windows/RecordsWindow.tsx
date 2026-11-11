@@ -6,7 +6,7 @@ import { Icon } from '@/components/Icon';
 import { StatusPill } from '@/components/StatusPill';
 import type { JourneyMoment } from '@/api/journey';
 import { isLiveApi } from '@/api/liveApi';
-import { isBpjs, labs, moments, radiology } from '@/api/select';
+import { isBpjs, labs, moments, radiology, unlinkedRadiologyReports } from '@/api/select';
 import { CLAIM_PERMISSION, claimErrorKind, useClaimEvaluation } from '@/api/claimApi';
 import { viewFinding } from '@/features/assistant/claimView';
 import { usePermission } from '@/state/auth';
@@ -90,6 +90,7 @@ export function RecordsWindow({ winId, norawat }: { winId: string; norawat?: str
         const all = moments(journey);
         const labRows = labs(journey);
         const radRows = radiology(journey);
+        const radUnlinked = unlinkedRadiologyReports(journey);
         const dx = [...journey.summary.diagnoses].sort((a, b) => a.prioritas - b.prioritas);
         const px = [...journey.summary.coded_procedures].sort((a, b) => a.prioritas - b.prioritas);
         const ds = journey.summary.discharge_summary_inpatient;
@@ -188,6 +189,21 @@ export function RecordsWindow({ winId, norawat }: { winId: string; norawat?: str
                   preview={`${r.exam_name ?? '—'} · ${r.report ? t('emr.rad.reported') : t('emr.rad.noReport')}`}
                   onOpen={() => open('radiology', { norawat: nr, item: r.id })}
                   openLabel={t('emr.open.radViewer')}
+                />,
+              ),
+            );
+          // A report with no exam at its date and time is listed as such, never attached to a nearby exam.
+          radUnlinked
+            .filter((rep) => rep.key === key)
+            .forEach((rep) =>
+              rows.push(
+                <SummaryRow
+                  key={rep.id}
+                  icon="image"
+                  label={t('emr.seg.radiologyReport')}
+                  preview={`${t('emr.rad.unlinkedShort')} · ${rep.hasil}`}
+                  onOpen={() => open('emr-diagnostics', { norawat: nr })}
+                  openLabel={t('emr.open.diagnostics')}
                 />,
               ),
             );

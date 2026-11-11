@@ -2,6 +2,7 @@ import { LiveUnsupportedError, NotFoundError, patientApi } from '@/api/patientAp
 import { SYNTHETIC_JOURNEYS, toListItem } from '@/data/emrFixtures';
 import type { EncounterJourney, EncounterListItem } from './journey';
 import { liveEmrApi } from './liveEmrApi';
+import { allergyRecords, groupAllergies } from './select';
 import type { EncounterBill } from './liveTimeline';
 
 /**
@@ -31,6 +32,33 @@ export interface EmrApi {
   findPatients(query: string): Promise<PatientHit[]>;
   /** Payers used on the patient's visits, each with its visits (live: GET /patients/{mrn}/payers, encounter.read). */
   getPayerHistory(mrn: string): Promise<PayerHistory>;
+  /**
+   * Every allergy written on any of the patient's visits, grouped by text (live: GET /patients/{mrn}/allergies,
+   * clinical-read-v1 1.2.0, encounter.clinical.read). An empty list means nothing is written, never "no allergy".
+   */
+  getPatientAllergies(mrn: string): Promise<PatientAllergies>;
+}
+
+/** Where an allergy entry was written. */
+export type AllergySource =
+  | 'clinical_note_outpatient'
+  | 'clinical_note_inpatient'
+  | 'discharge_summary';
+
+/** One allergy text as written (never normalised), with its latest entry. */
+export interface AllergyEntry {
+  text: string;
+  /** Latest dated entry with this text, `YYYY-MM-DD HH:MM:SS` hospital local time; null = not dated. */
+  lastRecorded: string | null;
+  lastEncounter: string;
+  source: AllergySource;
+  timesRecorded: number;
+}
+
+/** Latest first. `truncated` = the patient has more entries than the server reads: the list may be incomplete. */
+export interface PatientAllergies {
+  entries: AllergyEntry[];
+  truncated: boolean;
 }
 
 /** One payer used on a patient's visits (`reg_periksa.kd_pj` → `penjab`), with those visits latest first. */
@@ -66,9 +94,15 @@ export function groupByPayer(
   return [...groups.values()];
 }
 
+/**
+ * A patient search result. Name alone cannot tell two patients apart: the result also shows date of birth and sex
+ * (second identifier), as the server sends them. `birthDate` null = not recorded / not a valid date.
+ */
 export interface PatientHit {
   mrn: string;
   name: string;
+  sex: 'male' | 'female' | 'unknown';
+  birthDate: string | null;
 }
 
 function latencyMs(): number {
@@ -118,20 +152,30 @@ const syntheticEmrApi: EmrApi = {
       return j;
     }),
   getBill: () => Promise.reject(new LiveUnsupportedError()),
-  findEncounters: (query) =>
-    later(() => {
+  findEncounters: async (query) => {
+    const hits = await later(() => {
       const q = query.trim();
       if (!q) return [];
       return SYNTHETIC_JOURNEYS.map(toListItem)
         .filter((e) => e.no_rawat === q || e.no_rawat.includes(q))
         .sort(byAdmissionDesc);
-    }),
+    });
+    // The patient's name with each hit, as the server sends it to a session that may read patients.
+    return Promise.all(
+      hits.map(async (e) => {
+        const p = e.no_rkm_medis
+          ? await patientApi.getPatientProfile(e.no_rkm_medis).catch(() => null)
+          : null;
+        return { ...e, patientName: p?.name ?? '' };
+      }),
+    );
+  },
   // Patient data only ever comes through `patientApi` (the single door), never from the synthetic files directly.
   findPatients: async (query) => {
     const q = query.trim();
     if (q.length < 2) return [];
     const { items } = await patientApi.listPatients({ query: q });
-    return items.map((p) => ({ mrn: p.mrn, name: p.name }));
+    return items.map((p) => ({ mrn: p.mrn, name: p.name, sex: p.sex, birthDate: p.birthDate }));
   },
   getPayerHistory: (mrn) =>
     later(() => {
@@ -140,6 +184,13 @@ const syntheticEmrApi: EmrApi = {
         .sort(byAdmissionDesc);
       return { payers: groupByPayer(visits), truncated: false };
     }),
+  getPatientAllergies: (mrn) =>
+    later(() => ({
+      entries: groupAllergies(
+        SYNTHETIC_JOURNEYS.filter((j) => j.no_rkm_medis === mrn).flatMap(allergyRecords),
+      ),
+      truncated: false,
+    })),
 };
 
 /** `VITE_DATA_SOURCE=bff`: real data from hms_services (liveApi.ts); otherwise synthetic. */

@@ -15,7 +15,7 @@ successful run; there is no ingress or TLS yet.
 | `cmd/hms-services` | Binary: `serve` (native layer), `legacy-bridge` (legacy bridge worker, own database login), `setup-organization`, `check-legacy-key`, `check-clinical-read`, `check-bill-sources`, `inventory-legacy-schema` (metadata-only legacy schema inventory into `hms_database/legacy/schema-inventory/`), `bootstrap-admin` |
 | `core/config` | Typed, validated environment configuration; secrets via `NAME` or `NAME_FILE`, redacted in logs |
 | `core/httpx` | Request IDs, security headers, access log, JSON errors, trusted-proxy client address, per-key rate limiter |
-| `integrations/legacyhms` | Read-only legacy HMS (Khanza): login check (4 fixed SELECTs), patient/encounter reads (10 fixed SELECTs), visit timeline and bill charges (one fixed SELECT per section), bill reconciliation check |
+| `integrations/legacyhms` | Read-only legacy HMS (Khanza): login check (4 fixed SELECTs), patient/encounter/allergy reads (14 fixed SELECTs, listed by `Statements()`), visit timeline and bill charges (one fixed SELECT per section), bill reconciliation check |
 | `clinical` | Patient and encounter read API (clinical-read-v1), visit timeline and bill (clinical-timeline-v1): mapping to HMS terms, masking, audit on every read |
 | `canonical/recordtx`, `canonical/patient` | Shared canonical record store of both write layers (ADR-ROOT-002): transaction context, refusal classification, domain authority, canonical Patient |
 | `native/patient` | Native transaction layer: patient registration and canonical patient read (patient-records-v1, ADR-SVC-010); never touches the legacy HMS |
@@ -25,18 +25,22 @@ successful run; there is no ingress or TLS yet.
 | `platform/audit` | Writes `audit.audit_events` |
 | `platform/tenancy` | Organization/facility resolution and setup |
 | `tariffs` | Tariff book API (tariff-book-v1): legacy master price tables, read-only |
-| `assistant`, `assistant/rules` | Assistant rule evaluation (assistant-v1, ADR-SVC-006): deterministic rule sets in Go (no language model), first `claim-readiness` v1 over the visit timeline |
+| `assistant`, `assistant/rules` | Assistant rule evaluation (assistant-v1, ADR-SVC-006): deterministic rule sets in Go (no language model), first `claim-readiness` v1 over the visit timeline; the approved general-help knowledge release (`knowledge.go`) |
+| `runtimes/python-workers/assistant/datasets` | Assistant datasets (source-controlled, reviewed); `general-help.seed.json` is embedded into the service (`embed.go`) and served once approved |
 | `contracts/api/auth-v1.openapi.yaml`, `iam-admin-v1.openapi.yaml`, `clinical-read-v1.openapi.yaml`, `clinical-timeline-v1.openapi.yaml`, `tariff-book-v1.openapi.yaml`, `assistant-v1.openapi.yaml`, `patient-records-v1.openapi.yaml` | API contracts |
 | `documentation/architecture/ADR-SVC-00*.md` | Design and decisions (sign-in, IAM administration, clinical read, visit timeline and bill, tariff book, assistant evaluation, BPJS bridging read) |
 
 Endpoints: `POST /api/v1/auth/sign-in`, `GET /api/v1/auth/session`, `POST /api/v1/auth/sign-out`, the IAM
-administration API under `/api/v1/iam/`, patients and encounters under `/api/v1/patients` and `/api/v1/encounters`,
+administration API under `/api/v1/iam/`, patients and encounters under `/api/v1/patients` and `/api/v1/encounters`
+(including `GET /api/v1/patients/{mrn}/payers` and, since clinical-read-v1 1.2.0, `GET /api/v1/patients/{mrn}/allergies`),
 `GET /api/v1/encounters/{number}/timeline` and `/bill`, the tariff book under `/api/v1/tariffs`,
-`GET /api/v1/assistant/rule-sets` and `POST /api/v1/assistant/rules/evaluate` (see the contracts), `GET /healthz`, `GET /readyz`.
+`GET /api/v1/assistant/rule-sets`, `POST /api/v1/assistant/rules/evaluate` and `GET /api/v1/assistant/knowledge/general-help` (approved general-help release, session only; see the contracts), `GET /healthz`, `GET /readyz`.
 
 Clinical reads need the permissions `patient.read`, `encounter.read` and, to reveal one sensitive identifier,
 `patient.identifiers.reveal`; the visit timeline (notes, results, medication, surgery, diagnoses) needs
-`encounter.clinical.read` and the bill (charges recorded in the source tables) `billing.read` (ADR-SVC-004); the tariff book `tariff.read` (ADR-SVC-005); assistant checks `assistant.rules.evaluate` plus the read permission of the
+`encounter.clinical.read` and the bill (charges recorded in the source tables) `billing.read` (ADR-SVC-004); the
+patient's allergy list across visits also needs `encounter.clinical.read`, and the encounter search returns each hit's
+patient name only to callers who also hold `patient.read` (ADR-SVC-003 amendment 2026-11-10); the tariff book `tariff.read` (ADR-SVC-005); assistant checks `assistant.rules.evaluate` plus the read permission of the
 data they use (`encounter.clinical.read` for claim readiness, ADR-SVC-006; no role has it by default). Grant them through roles in User & Access. Every read is written to the audit trail, and
 nothing is returned when the audit event cannot be written.
 

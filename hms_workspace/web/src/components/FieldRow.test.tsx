@@ -17,6 +17,18 @@ describe('FieldRow', () => {
     expect(screen.getByRole('button', { name: /Phone/ })).toBeInTheDocument();
   });
 
+  it('live data (mask + server reveal, no value in the browser) shows the mask and a reveal control, not "—"', () => {
+    view(
+      <FieldRow
+        label="NIK"
+        masked={{ value: '', masked: '3273••••••••0002', reveal: async () => '3273010210850002' }}
+      />,
+    );
+    expect(screen.getByText('3273••••••••0002')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /NIK/ })).toBeInTheDocument();
+    expect(screen.queryByText('—')).not.toBeInTheDocument();
+  });
+
   it('an unrecorded masked value shows "—" and no reveal control (nothing to reveal)', () => {
     view(<FieldRow label="E-mail" masked={{ value: '', masked: '' }} />);
     expect(screen.getByText('—')).toBeInTheDocument();

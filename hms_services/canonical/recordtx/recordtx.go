@@ -137,11 +137,15 @@ WHERE domain = $1 AND organization_id = nullif(current_setting('hms.organization
 // a member of hms_legacy_bridge, the native runtime must not. A process started with the other layer's credentials
 // refuses to run.
 func CheckLayerRole(ctx context.Context, db *pgxpool.Pool, wantBridge bool) error {
-	var isBridge bool
-	if err := db.QueryRow(ctx, `SELECT pg_has_role(current_user, 'hms_legacy_bridge', 'MEMBER')`).Scan(&isBridge); err != nil {
+	var exists, isBridge bool
+	if err := db.QueryRow(ctx, `SELECT r IS NOT NULL, CASE WHEN r IS NULL THEN false ELSE pg_has_role(current_user, r, 'MEMBER') END
+FROM (SELECT to_regrole('hms_legacy_bridge') AS r) x`).Scan(&exists, &isBridge); err != nil {
 		return fmt.Errorf("check database role: %w", err)
 	}
 	switch {
+	case !exists:
+		return errors.New("the database predates the layer separation (role hms_legacy_bridge is missing): re-run the " +
+			"hms_database bootstrap, then apply the migrations up to 0021 (hms_database/documentation/operations/RUNBOOK.md)")
 	case wantBridge && !isBridge:
 		return errors.New("the legacy bridge must connect as the legacy bridge login (member of hms_legacy_bridge)")
 	case !wantBridge && isBridge:

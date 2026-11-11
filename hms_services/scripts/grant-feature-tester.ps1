@@ -26,7 +26,7 @@ param(
     [string]$BaseUrl = 'http://127.0.0.1:8080',
     [string]$Origin = '',
     [string]$EnvFile = (Join-Path $PSScriptRoot '..\.env'),
-    [string]$Target = '2025.311',
+    [string]$Target = '',
     [ValidatePattern('^[a-z][a-z0-9_-]{1,63}$')]
     [string]$RoleCode = 'feature-tester',
     [ValidateRange(1, 90)]

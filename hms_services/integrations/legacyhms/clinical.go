@@ -8,7 +8,8 @@ import (
 	"strings"
 )
 
-// Clinical reads patients (`pasien`), encounters (`reg_periksa`) and payer names (`penjab`) from the legacy HMS, read-only (ADR-SVC-003). Every
+// Clinical reads patients (`pasien`), encounters (`reg_periksa`), payer names (`penjab`) and recorded allergies
+// (`pemeriksaan_ralan`, `pemeriksaan_ranap`, `resume_pasien_ranap`) from the legacy HMS, read-only (ADR-SVC-003). Every
 // statement is fixed at construction and listed by Statements(); only bound parameters vary. Values are returned as
 // stored: mapping to HMS terms happens in package clinical.
 
@@ -49,6 +50,20 @@ type PayerVisitRow struct {
 	Number, RegDate, RegTime, CareSetting, Status, PayerCode, PayerName *string
 }
 
+// EncounterHitRow is an encounter search result with the patient's name (`pasien.nm_pasien`, nil when the MRN has no
+// `pasien` row).
+type EncounterHitRow struct {
+	EncounterRow
+	PatientName *string
+}
+
+// AllergyRow is one recorded allergy entry of a patient as stored. Source is the legacy table it came from
+// (`pemeriksaan_ralan`, `pemeriksaan_ranap` or `resume_pasien_ranap`); a discharge summary has no time of its own, so
+// its Date and Time are nil.
+type AllergyRow struct {
+	Date, Time, Number, Source, Text *string
+}
+
 // IdentifierRow holds the sensitive columns that are only ever returned one at a time by a reveal.
 type IdentifierRow struct {
 	NIK, Phone, Email, Address, MembershipNo, ResponsibleAddress *string
@@ -62,6 +77,9 @@ const (
 		"`status_lanjut`, `stts`, `kd_pj`"
 	// MaxSearchWords bounds the patient search (the previous implementation's measured rule).
 	MaxSearchWords = 5
+	// allergyFilter keeps only entries with something written: NULL, blank and the legacy "-" placeholder are not
+	// entries, so the row cap counts real ones.
+	allergyFilter = " WHERE r.`no_rkm_medis` = ? AND TRIM(x.`alergi`) NOT IN ('', '-')"
 )
 
 var ErrNotFound = errors.New("legacyhms: not found")
@@ -76,6 +94,9 @@ type Clinical struct {
 	qEncounterSearch   string
 	qPayerVisits       string
 	qPatientScan       string
+	// Encounter search with the patient's name, used only when the caller may also read patients (clinical-read-v1 1.2.0).
+	qEncounterSearchNamed string
+	qPatientAllergies     string
 }
 
 func NewClinical(db RowsQuerier) *Clinical {
@@ -93,6 +114,21 @@ func NewClinical(db RowsQuerier) *Clinical {
 			"r.`stts`, r.`kd_pj`, pj.`png_jawab` FROM `reg_periksa` r LEFT JOIN `penjab` pj ON pj.`kd_pj` = r.`kd_pj` " +
 			"WHERE r.`no_rkm_medis` = ? ORDER BY r.`tgl_registrasi` DESC, r.`jam_reg` DESC, r.`no_rawat` DESC LIMIT ?",
 	}
+	c.qEncounterSearchNamed = "SELECT r.`no_rawat`, r.`no_reg`, r.`no_rkm_medis`, CAST(r.`tgl_registrasi` AS CHAR), " +
+		"CAST(r.`jam_reg` AS CHAR), r.`status_lanjut`, r.`stts`, r.`kd_pj`, p.`nm_pasien` FROM `reg_periksa` r " +
+		"LEFT JOIN `pasien` p ON p.`no_rkm_medis` = r.`no_rkm_medis` WHERE r.`no_rawat` LIKE ? ESCAPE '!' " +
+		"ORDER BY r.`no_rawat` DESC LIMIT ?"
+	// Every recorded allergy entry of one patient (via the reg_periksa index on no_rkm_medis), newest first; discharge
+	// summaries have no time of their own (NULL date, sorted last). CAST gives the three text columns one character set
+	// and collation for the UNION.
+	c.qPatientAllergies = "SELECT CAST(x.`tgl_perawatan` AS CHAR) AS `d`, CAST(x.`jam_rawat` AS CHAR) AS `t`, r.`no_rawat` AS `n`, " +
+		"'pemeriksaan_ranap' AS `src`, CAST(x.`alergi` AS CHAR) AS `a` FROM `pemeriksaan_ranap` x " +
+		"JOIN `reg_periksa` r ON r.`no_rawat` = x.`no_rawat`" + allergyFilter +
+		" UNION ALL SELECT CAST(x.`tgl_perawatan` AS CHAR), CAST(x.`jam_rawat` AS CHAR), r.`no_rawat`, 'pemeriksaan_ralan', " +
+		"CAST(x.`alergi` AS CHAR) FROM `pemeriksaan_ralan` x JOIN `reg_periksa` r ON r.`no_rawat` = x.`no_rawat`" + allergyFilter +
+		" UNION ALL SELECT NULL, NULL, r.`no_rawat`, 'resume_pasien_ranap', CAST(x.`alergi` AS CHAR) FROM `resume_pasien_ranap` x " +
+		"JOIN `reg_periksa` r ON r.`no_rawat` = x.`no_rawat`" + allergyFilter +
+		" ORDER BY `d` DESC, `t` DESC, `n` DESC LIMIT ?"
 	// The legacy bridge's snapshot scan (ADR-SVC-010): primary-key range in key order, bounded by the batch size.
 	c.qPatientScan = "SELECT " + patientCols + " FROM `pasien` WHERE `no_rkm_medis` > ? ORDER BY `no_rkm_medis` LIMIT ?"
 	for n := 1; n <= MaxSearchWords; n++ {
@@ -108,7 +144,8 @@ func NewClinical(db RowsQuerier) *Clinical {
 
 // Statements returns every SQL statement this reader can send.
 func (c *Clinical) Statements() []string {
-	s := []string{c.qPatient, c.qIdentifiers, c.qEncounter, c.qPatientEncounters, c.qEncounterSearch, c.qPayerVisits, c.qPatientScan}
+	s := []string{c.qPatient, c.qIdentifiers, c.qEncounter, c.qPatientEncounters, c.qEncounterSearch, c.qPayerVisits, c.qPatientScan,
+		c.qEncounterSearchNamed, c.qPatientAllergies}
 	return append(s, c.qPatientSearch[1:]...)
 }
 
@@ -214,6 +251,43 @@ func (c *Clinical) PayerVisits(ctx context.Context, mrn string, limit int) ([]Pa
 			return nil, err
 		}
 		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// SearchEncountersNamed is SearchEncounters with each visit's patient name, for callers that may also read patients.
+func (c *Clinical) SearchEncountersNamed(ctx context.Context, prefix string, limit int) ([]EncounterHitRow, error) {
+	rows, err := c.db.Query(ctx, c.qEncounterSearchNamed, LikeEscape(prefix)+"%", limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []EncounterHitRow
+	for rows.Next() {
+		var h EncounterHitRow
+		if err := rows.Scan(append(encounterDest(&h.EncounterRow), &h.PatientName)...); err != nil {
+			return nil, err
+		}
+		out = append(out, h)
+	}
+	return out, rows.Err()
+}
+
+// PatientAllergies lists the patient's recorded allergy entries (visit notes and discharge summaries), newest first with
+// undated entries last, at most limit rows.
+func (c *Clinical) PatientAllergies(ctx context.Context, mrn string, limit int) ([]AllergyRow, error) {
+	rows, err := c.db.Query(ctx, c.qPatientAllergies, mrn, mrn, mrn, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []AllergyRow
+	for rows.Next() {
+		var a AllergyRow
+		if err := rows.Scan(&a.Date, &a.Time, &a.Number, &a.Source, &a.Text); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
 	}
 	return out, rows.Err()
 }

@@ -1,6 +1,6 @@
 # ADR-SVC-001: Staff sign-in with the legacy HMS login and server-side cookie sessions
 
-- Status: Proposed (owner decisions 2026-11-08 recorded below)
+- Status: Accepted (owner approval 2026-11-10; owner decisions 2026-11-08 recorded below)
 - Date: 2026-11-08
 - Owners: hms_services
 - Affected projects: hms_services (owner), hms_database (iam/audit schema, ADR-DB-003), hms_workspace (web client)

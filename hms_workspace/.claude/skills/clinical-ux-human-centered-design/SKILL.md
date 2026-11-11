@@ -9,45 +9,27 @@ name: clinical-ux-human-centered-design
 
 ## Purpose
 
-Design clinician-facing HMS experiences that support accurate, timely,
-safe clinical work while reducing cognitive burden and unnecessary
-interaction. Apply this skill to doctor, nurse, pharmacist, laboratory,
-radiology, and other clinical workflows, including screens, forms,
-dashboards, field components, and workflow interactions.
+Design clinician-facing HMS experiences that support accurate, timely, safe clinical work while reducing cognitive burden and unnecessary interaction. Apply this skill to doctor, nurse, pharmacist, laboratory, radiology, and other clinical workflows, including screens, forms, dashboards, field components, and workflow interactions.
 
-This skill improves the existing HMS experience; it does not authorize a
-wholesale redesign.
+This skill improves the existing HMS experience; it does not authorize a wholesale redesign.
 
 ## 1. Mandatory project constraints
 
-Before changing code, inspect the existing screen, components, project
-instructions, API contracts, and design tokens.
+Before changing code, inspect the existing screen, components, project instructions, API contracts, and design tokens.
 
--   Preserve the existing Banyumanik 2 HMS branding, design tokens,
-    typography, spacing, colors, navigation, reusable components, and
-    working behavior.
--   Prefer incremental improvements and reusable components. Do not
-    replace functioning screens merely to impose a new visual style.
--   Follow the existing React 19, strict TypeScript, and Vite
-    architecture.
--   `hms_workspace` owns presentation and interaction, not clinical
-    business rules, authorization, signatures, or persistence.
--   Never connect browser/mobile clients directly to PostgreSQL or
-    legacy MySQL.
--   Do not invent clinical rules, dosage guidance, diagnostic criteria,
-    reference ranges, terminology codes, or treatment recommendations.
--   Never use real patient information in fixtures, examples,
-    screenshots, logs, or telemetry. Use synthetic data.
--   Do not silently change field meaning, clinical workflow states,
-    resource mappings, or existing behavior.
--   If a proposed change conflicts with an established workflow,
-    describe the conflict and propose a controlled migration.
+-   Preserve the existing Banyumanik 2 HMS branding, design tokens, typography, spacing, colors, navigation, reusable components, and working behavior.
+-   Prefer incremental improvements and reusable components. Do not replace functioning screens merely to impose a new visual style.
+-   Follow the existing React 19, strict TypeScript, and Vite architecture.
+-   `hms_workspace` owns presentation and interaction, not clinical business rules, authorization, signatures, or persistence.
+-   Never connect browser/mobile clients directly to PostgreSQL or legacy MySQL.
+-   Do not invent clinical rules, dosage guidance, diagnostic criteria, reference ranges, terminology codes, or treatment recommendations.
+-   Never use real patient information in fixtures, examples, screenshots, logs, or telemetry. Use synthetic data.
+-   Do not silently change field meaning, clinical workflow states, resource mappings, or existing behavior.
+-   If a proposed change conflicts with an established workflow, describe the conflict and propose a controlled migration.
 
 ## 2. Human-centred design process
 
-Use the following process for meaningful clinical UX changes. Scale
-research effort to risk and scope; keep small visual fixes
-proportionate.
+Use the following process for meaningful clinical UX changes. Scale research effort to risk and scope; keep small visual fixes proportionate.
 
 ### A. Understand the clinical context
 
@@ -64,37 +46,25 @@ Identify:
 6.  Consequences of omission, misunderstanding, duplication, or
     wrong-context entry.
 
-Do not assume all clinicians or specialties follow the same workflow.
-Confirm differences against actual practice, facility policy, and role
-responsibilities.
+Do not assume all clinicians or specialties follow the same workflow. Confirm differences against actual practice, facility policy, and role responsibilities.
 
 ### B. Map the real workflow
 
-Document the main path, decisions, handoffs, waiting states, exceptions,
-corrections, cancellations, emergency paths, and completion state.
+Document the main path, decisions, handoffs, waiting states, exceptions, corrections, cancellations, emergency paths, and completion state.
 
-For each step, identify: - User action or decision. - Information
-required. - Data created, reviewed, or received. - Responsible role. -
-System response. - Failure and recovery path.
+For each step, identify: - User action or decision. - Information required. - Data created, reviewed, or received. - Responsible role. - System response. - Failure and recovery path.
 
-Keep three concepts distinct: - **Clinical process:** what should happen
-in care delivery. - **System process:** what the software requires. -
+Keep three concepts distinct: - **Clinical process:** what should happen in care delivery. - **System process:** what the software requires. -
 **Screen sequence:** how the interface presents the work.
 
-Never force the clinical process to follow database tables or API
-boundaries.
+Never force the clinical process to follow database tables or API boundaries.
 
 ### C. Identify needs and risks
 
-Determine what information is needed, when it is needed, what must
-remain visible, and what can be deferred. Consider interruptions, time
-pressure, shared workstations, wrong-patient/wrong-encounter hazards,
-duplicate entry, irreversible actions, accessibility, language, device,
-and connectivity constraints.
+Determine what information is needed, when it is needed, what must remain visible, and what can be deferred. Consider interruptions, time
+pressure, shared workstations, wrong-patient/wrong-encounter hazards, duplicate entry, irreversible actions, accessibility, language, device, and connectivity constraints.
 
-Prioritize risks by potential impact, likelihood, detectability, and
-recovery difficulty. Do not claim formal clinical risk assessment unless
-the appropriate process and reviewers have completed it.
+Prioritize risks by potential impact, likelihood, detectability, and recovery difficulty. Do not claim formal clinical risk assessment unless the appropriate process and reviewers have completed it.
 
 ### D. Design and prototype
 

@@ -14,6 +14,8 @@ import {
   type Topic,
 } from '@/features/assistant/rules';
 import { hashKey, resourceCache } from '@/lib/resource';
+import { knowledgeKey, type KnowledgeRelease } from '@/api/assistantKnowledgeApi';
+import { compileKnowledge } from '@/features/assistant/knowledge';
 
 export type PanelMode = 'closed' | 'docked' | 'maximized';
 
@@ -212,7 +214,13 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         const t = text.trim();
         if (!t) return;
         const { tags, subject } = stateRef.current;
-        respond(reply(t, tags, journeyOf, subject), { text: t });
+        const release = resourceCache.getData<KnowledgeRelease>(knowledgeKey);
+        respond(
+          reply(t, tags, journeyOf, subject, release ? compileKnowledge(release) : undefined),
+          {
+            text: t,
+          },
+        );
       },
       ask: (topic) => {
         const { tags, subject } = stateRef.current;

@@ -15,6 +15,7 @@ import { useI18n } from '@/locales/I18nProvider';
 import { useHomeActions, type WindowState } from '@/state/home';
 import type { Frame } from './frames';
 import { MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, type Rect } from './geometry';
+import { useCloseWindow } from './windowGuard';
 
 type Mode = 'move' | 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 const HANDLES: Array<Exclude<Mode, 'move'>> = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
@@ -54,8 +55,8 @@ export function WindowFrame({ win, frame, title, icon, active, children }: Props
   // Latest window state for the pointer handlers (a drag spans several renders).
   const winRef = useRef(win);
   winRef.current = win;
-  const { activate, minimize, toggleMaximize, toggleOnTop, close, setRect, dragOut } =
-    useHomeActions();
+  const { activate, minimize, toggleMaximize, toggleOnTop, setRect, dragOut } = useHomeActions();
+  const close = useCloseWindow();
   const { rect } = frame;
 
   // Move focus into a window when it becomes the active one (dock click, launcher, Alt+n).

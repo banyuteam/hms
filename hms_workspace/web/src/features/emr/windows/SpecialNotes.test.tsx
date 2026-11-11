@@ -2,6 +2,7 @@ import { act, configure, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { emrApi } from '@/api/emrApi';
+import { ApiError } from '@/api/liveApi';
 import type { EncounterJourney } from '@/api/journey';
 import { homeActions, renderWindows } from '../test/harness';
 
@@ -32,67 +33,101 @@ async function openProfile() {
 
 const strip = (win: HTMLElement) => within(win).getByRole('group', { name: 'Patient identity' });
 
+const noAllergies = () =>
+  vi.spyOn(emrApi, 'getPatientAllergies').mockResolvedValue({ entries: [], truncated: false });
+
+// Owner decision 2026-11-10 (replaces 2026-11-09): allergies are patient-level (every visit) and always stated in the
+// identity strip — recorded, "not recorded", or "could not be loaded"; never silence that reads as "no allergy".
 describe('Patient Profile · special notes', () => {
-  it('shows the allergy written at the last visit, names that visit, and keeps it out of the identity strip', async () => {
+  it('lists every allergy text written on any visit, with where and when it was last written', async () => {
     const { win, section } = await openProfile();
     expect(
       await within(section).findByText('Amoxicillin — rash (patient report)'),
     ).toBeInTheDocument();
+    // A different spelling in the discharge summary is its own entry (texts are never merged or interpreted).
+    expect(within(section).getByText('Amoxicillin')).toBeInTheDocument();
     expect(
-      within(section).getByText(`From the notes of the last visit, ${NR}.`),
+      within(section).getByText(/inpatient CPPT · visit 2026\/10\/26\/000123 · recorded 5×/),
     ).toBeInTheDocument();
-    expect(within(strip(win)).queryByText(/allerg/i)).toBeNull();
+    expect(
+      within(section).getByText(/^discharge summary · visit .* · undated/),
+    ).toBeInTheDocument();
+    expect(await within(strip(win)).findByText(/^Allergy: Amoxicillin — rash/)).toBeInTheDocument();
   });
 
-  it('says plainly that no allergy is in this visit’s notes, with no warning in the identity strip', async () => {
-    journeyWithoutAllergy();
+  it('nothing written on any visit says "not recorded", never "no known allergy", in the profile and the strip', async () => {
+    noAllergies();
     const { win, section } = await openProfile();
+    expect(await within(section).findByText(/^Not recorded on any visit/)).toBeInTheDocument();
+    expect(within(win).queryByText(/no known allerg/i)).toBeNull();
     expect(
-      await within(section).findByText("No allergy recorded in this visit's notes"),
+      await within(strip(win)).findByText('Allergy not recorded (not the same as no allergy)'),
     ).toBeInTheDocument();
-    expect(within(section).queryByText(/no known allerg/i)).toBeNull();
-    expect(within(strip(win)).queryByText(/allerg/i)).toBeNull();
   });
 
-  it('a last visit that cannot be loaded is an error with Try again, never "not recorded"', async () => {
-    const original = emrApi.getJourney.bind(emrApi);
-    vi.spyOn(emrApi, 'getJourney')
+  it('an allergy list that cannot be loaded is an error with Try again, never "not recorded"', async () => {
+    const original = emrApi.getPatientAllergies.bind(emrApi);
+    vi.spyOn(emrApi, 'getPatientAllergies')
       .mockRejectedValueOnce(new Error('boom'))
-      .mockImplementation((nr) => original(nr));
-    const { section } = await openProfile();
+      .mockImplementation((mrn) => original(mrn));
+    const { win, section } = await openProfile();
     expect(await within(section).findByRole('alert')).toHaveTextContent(
-      /could not be loaded, so the allergy note could not be read/,
+      /Allergy notes could not be loaded/,
     );
-    expect(within(section).queryByText(/No allergy recorded/)).toBeNull();
+    // The strip shows no warning for it, and never "not recorded" either.
+    expect(within(strip(win)).queryByText(/allerg/i)).toBeNull();
+    expect(within(win).queryByText(/not recorded \(not the same/)).toBeNull();
     await userEvent.click(within(section).getByRole('button', { name: 'Try again' }));
     expect(
       await within(section).findByText('Amoxicillin — rash (patient report)'),
     ).toBeInTheDocument();
   });
 
-  it('with no visits it says there is nothing to read from', async () => {
-    vi.spyOn(emrApi, 'listEncounterPage').mockResolvedValue({ items: [], nextCursor: null });
-    const { section } = await openProfile();
+  it('without clinical access the strip shows no allergy state and the profile says why', async () => {
+    vi.spyOn(emrApi, 'getPatientAllergies').mockRejectedValue(new ApiError(403, 'forbidden'));
+    const { win, section } = await openProfile();
     expect(
-      await within(section).findByText(/No visits recorded, so there are no notes/),
+      await within(section).findByText(/do not have permission to view clinical notes/),
     ).toBeInTheDocument();
+    expect(within(strip(win)).queryByText(/allerg/i)).toBeNull();
+  });
+
+  it('says when the list may be incomplete', async () => {
+    vi.spyOn(emrApi, 'getPatientAllergies').mockResolvedValue({
+      entries: [
+        {
+          text: 'Latex',
+          lastRecorded: '2026-01-02 08:00:00',
+          lastEncounter: '2026/01/02/000001',
+          source: 'clinical_note_outpatient',
+          timesRecorded: 1,
+        },
+      ],
+      truncated: true,
+    });
+    const { win, section } = await openProfile();
+    expect(await within(section).findByText(/the oldest are not shown/)).toBeInTheDocument();
+    expect(within(strip(win)).getByText('Allergy list may be incomplete')).toBeInTheDocument();
   });
 });
 
 describe('encounter windows · identity strip', () => {
-  it('shows a recorded allergy, and nothing (no warning) when none was written', async () => {
+  it('shows an allergy written at another visit even when this visit has none', async () => {
+    journeyWithoutAllergy(); // this visit's notes are empty; the patient-level list still has the earlier entries
     renderWindows('employee');
     act(() => homeActions().open('emr-encounter', { norawat: NR }));
     const group = await screen.findByRole('group', { name: 'Patient identity' });
     expect(await within(group).findByText(/^Allergy: Amoxicillin/)).toBeInTheDocument();
   });
 
-  it('does not show an allergy warning in the strip when no allergy was written', async () => {
+  it('states "not recorded" when no allergy is written on any visit', async () => {
     journeyWithoutAllergy();
+    noAllergies();
     renderWindows('employee');
     act(() => homeActions().open('emr-encounter', { norawat: NR }));
     const win = await screen.findByRole('region', { name: /^Medical Encounter · / });
-    await within(win).findByRole('heading', { name: /CPPT/ });
-    expect(within(strip(win)).queryByText(/allerg/i)).toBeNull();
+    expect(
+      await within(strip(win)).findByText('Allergy not recorded (not the same as no allergy)'),
+    ).toBeInTheDocument();
   });
 });

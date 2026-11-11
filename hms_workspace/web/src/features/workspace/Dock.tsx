@@ -10,6 +10,7 @@ import { useHome, useHomeActions } from '@/state/home';
 import { LayoutPicker } from './LayoutPicker';
 import { ModuleMenu } from './ModuleMenu';
 import { dockLabel, windowIcon, windowTitle } from './windowMeta';
+import { useCloseWindow } from './windowGuard';
 
 const tabBase =
   'type-body flex h-dock-tab min-w-[130px] max-w-[260px] cursor-pointer items-center gap-8 rounded-md border border-line-subtle bg-surface py-0 pl-8 text-ink-secondary phone:min-w-0 ' +
@@ -24,7 +25,8 @@ const addButton =
 export function Dock() {
   const { t, locale } = useI18n();
   const { windows, activeId } = useHome();
-  const { activate, close, showHome } = useHomeActions();
+  const { activate, showHome } = useHomeActions();
+  const close = useCloseWindow();
   const now = useNow();
   const role = useRole();
   const roleLabel = useRoleLabelKey();

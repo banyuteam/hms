@@ -1,6 +1,7 @@
 # ADR-SVC-003: First clinical vertical slice — patient and encounter read
 
-- Status: Proposed (owner decisions 2026-11-08 recorded in Decision 1–4)
+- Status: Accepted (owner approval 2026-11-10, including the amendments below; owner decisions 2026-11-08 recorded in
+  Decision 1–4)
 - Date: 2026-11-08
 - Owners: hms_services
 - Affected projects: hms_services (owner), hms_workspace/web (consumer), hms_database (audit trail, iam permissions)
@@ -45,8 +46,8 @@ without waiting for canonical persistence.
 
 ## Acceptance criteria
 - [x] Contract, statements allowlist, mapping and masking tests; HTTP tests for permissions, audit and fail-closed.
-- [ ] `check-clinical-read` against the dev Khanza (counts only) by the owner.
-- [ ] Owner review of the access rule with clinical governance before production.
+- [x] `check-clinical-read` against the dev Khanza (counts only) by the owner (confirmed by the owner 2026-11-10).
+- [x] Owner review of the access rule with clinical governance before production (confirmed by the owner 2026-11-10).
 
 **Amendment 2026-11-09:** references to the previous implementation outside this workspace removed; decisions unchanged.
 
@@ -55,3 +56,23 @@ audit action `patient.payers.read` with counts only). It reads the patient's `re
 through one fixed `LEFT JOIN penjab` (the only join in this slice; SELECT-only, listed in `Statements()`), at most 500
 visits, latest registration first, and groups them by payer code. Requested by the Patient Profile guarantor section
 (hms_workspace contract request 09, P-2). Additive; no decision above changes.
+
+**Amendment 2026-11-10 (allergies across visits, names on encounter search):** clinical-read-v1 1.2.0, two additive
+changes; no decision above changes.
+- `GET /patients/{mrn}/allergies` (`encounter.clinical.read`, audit action `patient.allergies.read`, detail counts only:
+  `results`, `entries`, `truncated`; never an allergy text). Why: the web read allergy only from the current visit's
+  notes, so an allergy recorded at an earlier visit was invisible (patient-safety finding). One fixed SELECT (`UNION ALL`
+  of `pemeriksaan_ranap`, `pemeriksaan_ralan` and `resume_pasien_ranap`, each joined to the patient's `reg_periksa`
+  rows; listed in `Statements()`) reads non-blank, non-"-" entries, at most 2000, newest first. Entries are grouped by
+  exact trimmed text (case-sensitive, never normalised or interpreted) with the time, visit and source of the latest
+  dated entry and a count. Permission: allergy text is clinical content of visit notes, so it needs the same permission
+  as the visit timeline, not `patient.read` or `encounter.read`. Discharge summaries have no time of their own; their
+  entries are undated (null) rather than given the visit's registration time, which would misstate when they were
+  written.
+- `GET /encounters` (search only) adds `patient_name` to each hit when the caller also holds `patient.read` (checked in
+  the handler with `iam.Can`; a failed check is 503, and a denial is audited by IAM as for any check). Why: a search by
+  visit number showed only the MRN, so a mistyped number could open another patient's record (wrong-patient hazard).
+  Without `patient.read` the field is omitted and the original statement runs, so `encounter.read` alone still discloses
+  no names. The name comes from a second fixed statement with `LEFT JOIN pasien` (listed in `Statements()`); single
+  encounters, a patient's encounter list and the payer history are unchanged. The search audit detail adds
+  `names: included|omitted`.

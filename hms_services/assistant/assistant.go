@@ -77,6 +77,8 @@ type Handler struct {
 	logger  *slog.Logger
 	now     func() time.Time
 	newID   func() string
+	// The approved general-help release, or nil (knowledge.go).
+	knowledge *KnowledgeRelease
 	// From the iam handler; replaced in tests.
 	can              func(r *http.Request, permission string) (bool, error)
 	allowStateChange func(w http.ResponseWriter, r *http.Request) bool
@@ -84,8 +86,9 @@ type Handler struct {
 
 func NewHandler(reader Reader, auditor AuditWriter, iamHandler *iam.Handler, loc *time.Location, logger *slog.Logger) *Handler {
 	return &Handler{reader: reader, audit: auditor, iam: iamHandler, loc: loc, logger: logger, now: time.Now, newID: newUUID,
-		limiter: httpx.NewWindowLimiter(evaluationsPerMinute, time.Minute, time.Now),
-		can:     iamHandler.Can, allowStateChange: iamHandler.AllowStateChange}
+		limiter:   httpx.NewWindowLimiter(evaluationsPerMinute, time.Minute, time.Now),
+		knowledge: mustGeneralHelp(),
+		can:       iamHandler.Can, allowStateChange: iamHandler.AllowStateChange}
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {
@@ -94,6 +97,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	}
 	route("GET /api/v1/assistant/rule-sets", h.ruleSets)
 	route("POST /api/v1/assistant/rules/evaluate", h.evaluate)
+	// General help (how to use HMS) is static and holds no patient data: any signed-in session may read it.
+	mux.Handle("GET /api/v1/assistant/knowledge/general-help", h.iam.RequireSession(http.HandlerFunc(h.generalHelp)))
 }
 
 type Reference struct {

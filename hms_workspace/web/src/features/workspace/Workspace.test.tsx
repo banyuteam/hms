@@ -148,4 +148,27 @@ describe('Workspace: windows + dock', () => {
     expect(probe.pathname).toBe('/login');
     expect(probe.state.windows).toHaveLength(0);
   });
+
+  it('reaches "Sign out" with the keyboard only: Tab moves through the user menu and wraps (WCAG 2.1.1)', async () => {
+    const { probe } = renderWorkspace('/');
+    act(() => probe.actions.open('emr-records'));
+    const user = userEvent.setup();
+    screen.getByRole('button', { name: /User menu/ }).focus();
+    await user.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog', { name: 'User menu' });
+    const first = within(dialog).getByRole('button', { name: /^Switch language to Bahasa/ });
+    expect(first).toHaveFocus();
+    await user.tab();
+    await user.tab();
+    const signOut = within(dialog).getByRole('button', { name: 'Sign out' });
+    expect(signOut).toHaveFocus();
+    // The panel stays open and Tab wraps to the first control instead of leaving the page.
+    await user.tab();
+    expect(first).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(signOut).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+    expect(probe.state.windows).toHaveLength(0);
+  });
 });

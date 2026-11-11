@@ -30,7 +30,7 @@ export function TopBar() {
       {isLiveApi() && import.meta.env.DEV && (
         <span
           role="status"
-          className="type-caption-strong whitespace-nowrap rounded-full bg-warning-bg px-12 py-4 text-warning-fg"
+          className="type-caption-strong whitespace-nowrap rounded-full bg-success-bg px-12 py-4 text-success-fg"
         >
           {t('topbar.liveApi')}
         </span>

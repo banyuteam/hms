@@ -147,17 +147,73 @@ describe('liveEmrApi (clinical-read-v1)', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('findEncounters keeps the patient name only when the server sends it (session may read patients)', async () => {
+    fetchMock.mockResolvedValueOnce(ok({ encounters: [{ ...ENC, patient_name: ' Siti ' }] }));
+    expect(await liveEmrApi.findEncounters('2026/10/26')).toEqual([
+      { ...ITEM, patientName: 'Siti' },
+    ]);
+    fetchMock.mockResolvedValueOnce(ok({ encounters: [ENC] }));
+    expect((await liveEmrApi.findEncounters('2026/10/26'))[0]).not.toHaveProperty('patientName');
+  });
+
   it('findEncounters surfaces a failed search instead of answering "no results"', async () => {
     fetchMock.mockResolvedValueOnce(fail(503));
     await expect(liveEmrApi.findEncounters('2026/10/26')).rejects.toMatchObject({ status: 503 });
+  });
+
+  it('getPatientAllergies reads the allergy entries of every visit as written (clinical-read-v1 1.2.0)', async () => {
+    fetchMock.mockResolvedValueOnce(
+      ok({
+        allergies: [
+          {
+            text: ' Amoxicillin — rash ',
+            last_recorded_at: '2026-10-30T09:00:00+07:00',
+            last_encounter_number: '2026/10/26/000123',
+            source: 'clinical_note_inpatient',
+            times_recorded: 5,
+          },
+          {
+            text: 'Amoxicillin',
+            last_recorded_at: null,
+            last_encounter_number: '2026/10/26/000123',
+            source: 'discharge_summary',
+            times_recorded: 1,
+          },
+        ],
+        truncated: false,
+      }),
+    );
+    expect(await liveEmrApi.getPatientAllergies('000001')).toEqual({
+      truncated: false,
+      entries: [
+        {
+          text: 'Amoxicillin — rash',
+          lastRecorded: '2026-10-30 09:00:00',
+          lastEncounter: '2026/10/26/000123',
+          source: 'clinical_note_inpatient',
+          timesRecorded: 5,
+        },
+        {
+          text: 'Amoxicillin',
+          lastRecorded: null,
+          lastEncounter: '2026/10/26/000123',
+          source: 'discharge_summary',
+          timesRecorded: 1,
+        },
+      ],
+    });
+    expect(lastUrl()).toBe('/api/v1/patients/000001/allergies');
+    // A shape the client does not know is an error, never an empty ("not recorded") list.
+    fetchMock.mockResolvedValueOnce(ok({ allergies: [{ text: 'x' }], truncated: false }));
+    await expect(liveEmrApi.getPatientAllergies('000001')).rejects.toMatchObject({ status: 502 });
   });
 
   it('findPatients sends normalised words to the server search and ranks the matches', async () => {
     fetchMock.mockResolvedValueOnce(
       ok({
         patients: [
-          { mrn: '000003', name: 'Ratna Dewi', sex: 'female', birth_date: null },
-          { mrn: '000007', name: ' Dewi Anggraini ', sex: 'female', birth_date: null },
+          { mrn: '000003', name: 'Ratna Dewi', sex: 'female', birth_date: '1980-02-30' },
+          { mrn: '000007', name: ' Dewi Anggraini ', sex: 'female', birth_date: '1985-10-02' },
           { mrn: '000009', name: '', sex: 'unknown', birth_date: null },
         ],
       }),
@@ -166,9 +222,10 @@ describe('liveEmrApi (clinical-read-v1)', () => {
     expect(lastUrl()).toBe('/api/v1/patients?q=dewi&limit=25');
     // A name starting with the word comes first; a missing name stays empty, never invented.
     expect(hits).toEqual([
-      { mrn: '000007', name: 'Dewi Anggraini' },
-      { mrn: '000003', name: 'Ratna Dewi' },
-      { mrn: '000009', name: '' },
+      // Date of birth and sex come along as the second identifier; a date not on the calendar is not shown as one.
+      { mrn: '000007', name: 'Dewi Anggraini', sex: 'female', birthDate: '1985-10-02' },
+      { mrn: '000003', name: 'Ratna Dewi', sex: 'female', birthDate: null },
+      { mrn: '000009', name: '', sex: 'unknown', birthDate: null },
     ]);
 
     fetchMock.mockResolvedValueOnce(ok({ patients: [] }));

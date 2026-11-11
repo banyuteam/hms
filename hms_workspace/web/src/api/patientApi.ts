@@ -8,7 +8,10 @@ import type { PatientCore } from './types';
 export { LiveUnsupportedError, NotFoundError };
 
 /** One row of the patient list (live: an item of `GET /api/v1/patients`). */
-export type PatientSummary = SyntheticPatient;
+export type PatientSummary = SyntheticPatient & {
+  /** Second identifier shown next to the name in search results; null = not recorded. */
+  birthDate: string | null;
+};
 
 /** Server-side filters (live: `?q=&status=`). An empty `query` and a missing `status` mean "no filter". */
 export interface PatientListParams {
@@ -62,7 +65,13 @@ const syntheticPatientApi: PatientApi = {
       const items = searchTerms(query ?? '').length
         ? searchPatients(byStatus, query ?? '')
         : byStatus;
-      return { items, total: all.length };
+      return {
+        items: items.map((p) => ({
+          ...p,
+          birthDate: findSyntheticRecord(p.mrn)?.birthDate ?? null,
+        })),
+        total: all.length,
+      };
     }),
 };
 

@@ -205,18 +205,30 @@ describe('User & Access window', () => {
     expect(await axeViolations(container)).toEqual([]);
   });
 
-  it('grants a role organization-wide with a reason, then refreshes and announces the change', async () => {
+  it('grants a role in two steps: nothing is sent until the summary is confirmed', async () => {
     const u = userEvent.setup();
     renderApp('/access');
     const detail = await openBob(u);
     const grant = within(detail).getByRole('form', { name: 'Grant a role' });
-    await u.click(within(grant).getByRole('button', { name: 'Grant role' }));
+    await u.click(within(grant).getByRole('button', { name: 'Review before granting' }));
     expect(await within(grant).findByText('Choose a role.')).toBeInTheDocument();
-    expect(sentTo('/role-assignments')).toHaveLength(0);
+    // How long the access lasts is a choice, never a silent "no end date".
+    expect(within(grant).getByText('Choose how long it is valid.')).toBeInTheDocument();
+    expect(within(grant).getByLabelText('Role')).toHaveAttribute('aria-invalid', 'true');
 
     await u.selectOptions(within(grant).getByLabelText('Role'), NURSE_ROLE_ID);
+    await u.click(within(grant).getByRole('radio', { name: 'Whole organization' }));
+    await u.click(within(grant).getByRole('radio', { name: 'No end date' }));
     await u.type(within(grant).getByLabelText('Reason'), 'Ward rotation');
-    await u.click(within(grant).getByRole('button', { name: 'Grant role' }));
+    await u.click(within(grant).getByRole('button', { name: 'Review before granting' }));
+    const summary = await within(detail).findByRole('region', {
+      name: 'Grant Ward nurse to Bob Synthetic?',
+    });
+    expect(within(summary).getByRole('heading')).toHaveFocus();
+    expect(within(summary).getByText(/This is broad access/)).toBeInTheDocument();
+    expect(sentTo('/role-assignments')).toHaveLength(0);
+
+    await u.click(within(summary).getByRole('button', { name: 'Grant role' }));
     await waitFor(() => expect(sentTo('/role-assignments')).toHaveLength(1));
     expect(sentTo('/role-assignments')[0]!.body).toEqual({
       role_id: NURSE_ROLE_ID,
@@ -224,21 +236,48 @@ describe('User & Access window', () => {
       valid_until: null,
       reason: 'Ward rotation',
     });
-    expect(await screen.findByText('Change saved.')).toBeInTheDocument();
+    // Visible and specific, not only announced.
+    expect(await screen.findByText('Ward nurse granted to Bob Synthetic.')).toBeVisible();
     const assignments = within(detail).getByRole('region', { name: 'Role assignments' });
     expect(await within(assignments).findByText('Ward nurse')).toBeInTheDocument();
   });
 
-  it('grants for this facility when chosen', async () => {
+  it('starts at this facility (least privilege) and grants until the chosen date', async () => {
     const u = userEvent.setup();
     renderApp('/access');
-    const grant = within(await openBob(u)).getByRole('form', { name: 'Grant a role' });
+    const detail = await openBob(u);
+    const grant = within(detail).getByRole('form', { name: 'Grant a role' });
+    expect(within(grant).getByRole('radio', { name: 'This facility' })).toBeChecked();
     await u.selectOptions(within(grant).getByLabelText('Role'), NURSE_ROLE_ID);
-    await u.click(within(grant).getByRole('radio', { name: 'This facility' }));
+    await u.click(within(grant).getByRole('radio', { name: 'Until a date' }));
+    await u.type(within(grant).getByLabelText('End date'), '2099-01-31');
     await u.type(within(grant).getByLabelText('Reason'), 'Night shift');
-    await u.click(within(grant).getByRole('button', { name: 'Grant role' }));
+    await u.click(within(grant).getByRole('button', { name: 'Review before granting' }));
+    const summary = await within(detail).findByRole('region', { name: /^Grant Ward nurse/ });
+    expect(within(summary).queryByText(/This is broad access/)).not.toBeInTheDocument();
+    await u.click(within(summary).getByRole('button', { name: 'Grant role' }));
     await waitFor(() => expect(sentTo('/role-assignments')).toHaveLength(1));
     expect(sentTo('/role-assignments')[0]!.body).toMatchObject({ facility_id: FACILITY });
+    expect((sentTo('/role-assignments')[0]!.body as { valid_until: string }).valid_until).toMatch(
+      /^2099-01-31T/,
+    );
+  });
+
+  it('warns plainly before the system administrator role is granted', async () => {
+    const u = userEvent.setup();
+    renderApp('/access');
+    const detail = await openBob(u);
+    const grant = within(detail).getByRole('form', { name: 'Grant a role' });
+    await u.selectOptions(within(grant).getByLabelText('Role'), ADMIN_ROLE_ID);
+    await u.click(within(grant).getByRole('radio', { name: 'No end date' }));
+    await u.type(within(grant).getByLabelText('Reason'), 'Backup administrator');
+    await u.click(within(grant).getByRole('button', { name: 'Review before granting' }));
+    const summary = await within(detail).findByRole('region', { name: /^Grant IAM administrator/ });
+    expect(within(summary).getByText(/system administrator role/)).toBeInTheDocument();
+    // "Change" goes back to the form with what was entered.
+    await u.click(within(summary).getByRole('button', { name: 'Change' }));
+    expect(within(grant).getByLabelText('Reason')).toHaveValue('Backup administrator');
+    expect(sentTo('/role-assignments')).toHaveLength(0);
   });
 
   it('suspends only with a reason, and explains a refused change without losing the form', async () => {
@@ -247,20 +286,24 @@ describe('User & Access window', () => {
     const detail = await openBob(u);
     await u.click(within(detail).getByRole('button', { name: 'Suspend' }));
     const confirm = within(detail).getByRole('form', { name: 'Suspend Bob Synthetic' });
+    // Says visibly what is being confirmed, what it does, and where the reason goes; focus is in the form.
+    expect(within(confirm).getByRole('heading', { name: 'Suspend Bob Synthetic' })).toBeVisible();
     expect(within(confirm).getByText(/sessions end at once/)).toBeInTheDocument();
-    await u.click(within(confirm).getByRole('button', { name: 'Confirm' }));
+    expect(within(confirm).getByLabelText('Reason')).toHaveFocus();
+    expect(within(confirm).getByLabelText('Reason')).toHaveAccessibleDescription(/audit trail/);
+    await u.click(within(confirm).getByRole('button', { name: 'Suspend' }));
     expect(await within(confirm).findByText('Enter a reason.')).toBeInTheDocument();
     expect(sentTo(BOB)).toHaveLength(0);
 
     state.failNext = error(409, 'last_admin');
     await u.type(within(confirm).getByLabelText('Reason'), 'Left the hospital');
-    await u.click(within(confirm).getByRole('button', { name: 'Confirm' }));
+    await u.click(within(confirm).getByRole('button', { name: 'Suspend' }));
     expect(await within(confirm).findByRole('alert')).toHaveTextContent(
       'without an active IAM administrator',
     );
     expect(within(confirm).getByLabelText('Reason')).toHaveValue('Left the hospital');
 
-    await u.click(within(confirm).getByRole('button', { name: 'Confirm' }));
+    await u.click(within(confirm).getByRole('button', { name: 'Suspend' }));
     await waitFor(() => expect(sentTo(BOB)).toHaveLength(2));
     expect(sentTo(BOB)[1]).toMatchObject({
       method: 'PATCH',
@@ -268,6 +311,16 @@ describe('User & Access window', () => {
     });
     expect(await within(detail).findByText('Reason: Left the hospital')).toBeInTheDocument();
     expect(within(detail).getByRole('button', { name: 'Reactivate' })).toBeInTheDocument();
+  });
+
+  it('Cancel puts the focus back on the button that opened the confirmation', async () => {
+    const u = userEvent.setup();
+    renderApp('/access');
+    const detail = await openBob(u);
+    await u.click(within(detail).getByRole('button', { name: 'Deactivate' }));
+    const confirm = within(detail).getByRole('form', { name: 'Deactivate Bob Synthetic' });
+    await u.click(within(confirm).getByRole('button', { name: 'Cancel' }));
+    expect(within(detail).getByRole('button', { name: 'Deactivate' })).toHaveFocus();
   });
 
   it('offers no changes to your own account', async () => {
@@ -318,7 +371,7 @@ describe('User & Access window', () => {
 
     await u.click(await screen.findByRole('button', { name: /IAM administrator/ }));
     expect(screen.getByText(/managed by HMS and cannot be changed/)).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'iam.users.read' })).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: 'Synthetic iam.users.read' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Save permissions' })).not.toBeInTheDocument();
 
     await u.click(screen.getByRole('button', { name: 'New role' }));
@@ -329,7 +382,7 @@ describe('User & Access window', () => {
     expect(await within(form).findByText(/lowercase letters/)).toBeInTheDocument();
     await u.clear(within(form).getByLabelText('Code'));
     await u.type(within(form).getByLabelText('Code'), 'lab-viewer');
-    await u.click(within(form).getByRole('checkbox', { name: 'iam.users.read' }));
+    await u.click(within(form).getByRole('checkbox', { name: 'Synthetic iam.users.read' }));
     await u.click(within(form).getByRole('button', { name: 'Create role' }));
     await waitFor(() =>
       expect(state.sent.filter((s) => s.url === '/api/v1/iam/roles')).toHaveLength(1),
@@ -340,6 +393,36 @@ describe('User & Access window', () => {
       description: '',
       permissions: ['iam.users.read'],
     });
+  });
+  it('Roles tab: saving permissions shows what changes for everyone with the role; leaving unsaved asks', async () => {
+    const u = userEvent.setup();
+    renderApp('/access');
+    await u.click(await screen.findByRole('tab', { name: 'Roles' }));
+    await u.click(await screen.findByRole('button', { name: /Ward nurse/ }));
+    await u.click(screen.getByRole('checkbox', { name: 'Synthetic iam.roles.manage' }));
+    await u.click(screen.getByRole('checkbox', { name: 'Synthetic iam.users.read' }));
+
+    // Unsaved ticks: opening another role asks first.
+    await u.click(screen.getByRole('button', { name: /IAM administrator/ }));
+    expect(screen.getByRole('alert')).toHaveTextContent('are not saved');
+    await u.click(screen.getByRole('button', { name: 'Back to the changes' }));
+    expect(screen.getByRole('checkbox', { name: 'Synthetic iam.roles.manage' })).toBeChecked();
+
+    await u.click(screen.getByRole('button', { name: 'Review changes' }));
+    const review = screen.getByRole('region', { name: 'Permission changes to Ward nurse' });
+    expect(within(review).getByRole('heading', { level: 4 })).toHaveFocus();
+    expect(within(review).getByText('Added')).toBeInTheDocument();
+    expect(within(review).getByText(/Synthetic iam.roles.manage/)).toBeInTheDocument();
+    expect(within(review).getByText('Removed')).toBeInTheDocument();
+    expect(within(review).getByText(/every user who holds Ward nurse/)).toBeInTheDocument();
+    expect(state.sent.filter((x) => x.method === 'PUT')).toHaveLength(0);
+
+    await u.click(screen.getByRole('button', { name: 'Save permissions' }));
+    await waitFor(() => expect(state.sent.filter((x) => x.method === 'PUT')).toHaveLength(1));
+    expect(state.sent.find((x) => x.method === 'PUT')!.body).toEqual({
+      permissions: ['iam.roles.manage'],
+    });
+    expect(await screen.findByText('Permissions of Ward nurse saved.')).toBeVisible();
   });
 });
 

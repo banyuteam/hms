@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HMS Clinical Read API — patients and encounters
-  version: 1.1.0
+  version: 1.2.0
   description: |
     Read-through from the legacy HMS (ADR-SVC-003). Requires a session (auth-v1) and the listed permission at the session
     facility. Every request is audited; when the audit event cannot be written the answer is 503 and no data is returned.
@@ -80,9 +80,33 @@ paths:
         recorded). An unknown patient gives an empty list, as for the encounter list.
       responses:
         '200': { description: Payer history, content: { application/json: { schema: { $ref: '#/components/schemas/PayerHistory' } } } }
+  /patients/{mrn}/allergies:
+    parameters: [{ $ref: '#/components/parameters/Mrn' }]
+    get:
+      summary: Every allergy text recorded for the patient, across visits (encounter.clinical.read). Added in 1.2.0.
+      description: |
+        Allergy entries from every visit of the patient (`reg_periksa`): outpatient and inpatient clinical notes
+        (`pemeriksaan_ralan.alergi`, `pemeriksaan_ranap.alergi`) and inpatient discharge summaries
+        (`resume_pasien_ranap.alergi`). Blank entries and the legacy placeholder "-" are not entries. Entries are grouped by
+        their exact trimmed text, case-sensitive: different spellings stay separate and nothing is normalised or
+        interpreted (a text such as "Tidak ada" is a recorded statement and is returned as written). Allergies are ordered
+        by `last_recorded_at`, latest first, null last. A discharge summary has no time of its own, so its entries are
+        undated (they are not given the visit's registration time); they count in `times_recorded` and set
+        `last_encounter_number`/`source` only when no dated entry with that text exists. At most 2000 entries are read,
+        dated newest first and undated last; beyond that `truncated` is true and the oldest entries (undated first) are
+        missing. An unknown patient gives an empty list, as for the encounter list. The audit event holds counts only,
+        never an allergy text.
+      responses:
+        '200': { description: Allergies, content: { application/json: { schema: { $ref: '#/components/schemas/PatientAllergies' } } } }
+        '404': { description: not_found (malformed MRN) }
   /encounters:
     get:
       summary: Find encounters by the start of the encounter number (encounter.read)
+      description: |
+        Since 1.2.0 each hit carries `patient_name` when the caller also holds `patient.read` at the session facility, so
+        a mistyped number is noticed before another patient's record is opened. Without `patient.read` the field is
+        omitted (encounter.read alone does not disclose names). Only this search carries the name; single encounters,
+        a patient's encounter list and the payer history do not.
       parameters:
         - { name: q, in: query, required: true, description: '3–17 characters, e.g. 2026/10 or 2026/10/26/0001', schema: { type: string } }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 25, default: 25 } }
@@ -94,7 +118,7 @@ paths:
               schema:
                 type: object
                 properties:
-                  encounters: { type: array, items: { $ref: '#/components/schemas/Encounter' } }
+                  encounters: { type: array, items: { $ref: '#/components/schemas/EncounterHit' } }
   /encounters/{number}:
     parameters:
       - name: number
@@ -169,6 +193,40 @@ components:
             code: { type: [string, 'null'] }
             system: { type: string, const: 'legacy-hms:reg_periksa.stts' }
         payer_code: { type: [string, 'null'] }
+    EncounterHit:
+      description: An encounter search result (GET /encounters only). Added in 1.2.0.
+      allOf:
+        - $ref: '#/components/schemas/Encounter'
+        - type: object
+          properties:
+            patient_name:
+              type: string
+              description: |
+                pasien.nm_pasien of the visit's patient, trimmed; "" when not recorded. Present only when the caller also
+                holds patient.read; omitted otherwise.
+    PatientAllergies:
+      type: object
+      required: [allergies, truncated]
+      properties:
+        allergies:
+          type: array
+          description: latest recorded first; undated last
+          items:
+            type: object
+            required: [text, last_recorded_at, last_encounter_number, source, times_recorded]
+            properties:
+              text: { type: string, description: as written, trimmed; never normalised or interpreted }
+              last_recorded_at:
+                type: [string, 'null']
+                format: date-time
+                description: latest dated entry with this exact text, hospital local time with the facility offset; null when every entry is undated (discharge summaries)
+              last_encounter_number: { type: string, description: encounter number of that latest entry }
+              source:
+                type: string
+                enum: [clinical_note_outpatient, clinical_note_inpatient, discharge_summary]
+                description: where that latest entry was recorded
+              times_recorded: { type: integer, minimum: 1, description: entries carrying this exact text }
+        truncated: { type: boolean, description: true when more than 2000 entries exist; the oldest are not included }
     PayerHistory:
       type: object
       required: [payers, truncated]

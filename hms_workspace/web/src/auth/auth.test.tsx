@@ -150,4 +150,33 @@ describe('idle logout', () => {
     unmount();
     vi.useRealTimers();
   });
+
+  it('warns before the sign-out, counts down, and "stay" restarts the period (WCAG 2.2.1)', () => {
+    vi.useFakeTimers();
+    const onIdle = vi.fn();
+    const { result, unmount } = renderHook(() => useIdleLogout(2, onIdle));
+    expect(result.current.warning).toBe(false);
+    act(() => {
+      vi.advanceTimersByTime(60_000); // 2 min period: the warning shows for the last 60 s
+    });
+    expect(result.current.warning).toBe(true);
+    expect(result.current.secondsLeft).toBe(60);
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+    expect(result.current.secondsLeft).toBe(50);
+    act(() => result.current.stay());
+    expect(result.current.warning).toBe(false);
+    act(() => {
+      vi.advanceTimersByTime(110_000);
+    });
+    expect(onIdle).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+    expect(onIdle).toHaveBeenCalledTimes(1);
+    expect(result.current.warning).toBe(false);
+    unmount();
+    vi.useRealTimers();
+  });
 });

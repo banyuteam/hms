@@ -19,6 +19,7 @@ import {
   type Subject,
   type Topic,
 } from './rules';
+import { useGeneralHelp } from '@/api/assistantKnowledgeApi';
 
 const chipX =
   'inline-grid cursor-pointer place-items-center rounded-full border-0 bg-transparent p-0 text-inherit focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-line-focus';
@@ -35,7 +36,9 @@ export function tagLabel(t: Translate, tag: AssistantTag): string {
 }
 
 function Line({ line }: { line: ReplyLine }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  // General help: the answer in the UI language, else Indonesian (the default locale).
+  if ('text' in line) return <li>{line.text[locale] ?? line.text.id ?? ''}</li>;
   if ('raw' in line) return <li className="[font-variant-numeric:tabular-nums]">{line.raw}</li>;
   if ('claim' in line) return <ClaimResult evaluation={line.claim} />;
   if (line.id === 'emr.ai.reply.source')
@@ -172,6 +175,8 @@ export function AssistantPanel() {
   const { t } = useI18n();
   const { mode, tags, subject: chosen, messages } = useAssistant();
   const { setMode, tag, untag, choose, send, ask } = useAssistantActions();
+  // Loads the approved general-help release into the data cache once per session; `send` reads it from there.
+  useGeneralHelp();
   const [draft, setDraft] = useState('');
   const logRef = useRef<HTMLDivElement>(null);
   const inputId = useId();

@@ -45,6 +45,11 @@ $env:VITE_DATA_SOURCE = 'bff'; npm run dev     # optional: $env:HMS_SERVICES_TAR
 A wrong `PUBLIC_ORIGIN` shows as "The sign-in service is not available" (the server answers `origin_not_allowed`). A page
 reload resumes the session (`GET /api/v1/auth/session`); sign-out and the idle lock end it on the server too; any 401 returns
 to sign-in. Sessions holding `iam.users.read` see **Administration → User & Access** on Home (`/access`).
+Consequential changes are confirmed with what they do: granting a role is a two-step review (scope starts at this
+facility, the end date is an explicit choice, the `iam-admin` role carries a warning); saving role permissions shows what
+is added and removed for everyone holding the role; suspend/deactivate/revoke name the person and the effect. Success
+messages are visible and specific. The idle lock warns a minute before (`VITE_IDLE_MINUTES`, default 15) and offers
+"Stay signed in". Printing the bill prints that document only (with name, MRN and date of birth), never other windows.
 
 ### Testing from other machines (LAN, HTTPS only)
 
@@ -125,9 +130,19 @@ Design tokens: `.claude/skills/design-tokens`. Tailwind theme keys map 1:1 to `-
 - **Live masked values** arrive masked from the server; Reveal fetches one value (needs `patient.identifiers.reveal`,
   audited by hms_services first) and forgets it when hidden.
 - Live sessions get the view-only UI until clinical permissions exist (no doctor/employee role in the v4 session).
-- **Allergy:** read from the allergy field of the visit's notes. Encounter windows show a recorded allergy in the identity
-  strip; the Patient Profile shows the last visit's allergy note, or that none is written there, under **Special notes**
-  (owner decision 2026-11-09). There is no patient-level allergy record in the contracts yet.
+- **Allergy:** every allergy text written on any visit (CPPT notes and discharge summary), grouped by exact text, from
+  `GET /patients/{mrn}/allergies` (clinical-read-v1 1.2.0, encounter.clinical.read). The identity strip of every patient
+  window always states it: the recorded texts, "not recorded (not the same as no allergy)", or a warning when the list
+  is incomplete (if the list cannot be loaded, only the visit's own allergies show; the Profile reports the failure);
+  a session without clinical access sees no allergy state. The Patient Profile lists
+  each entry under **Special notes** with where and when it was last written (owner decision 2026-11-10, replacing
+  2026-11-09, which showed only the last visit's note and nothing in the strip when none was written).
+- **Radiology and surgery reports** are linked to an exam/surgery only when both carry the same stored date and time (how
+  SIMRS Khanza links `hasil_radiologi` to `periksa_radiologi` and `laporan_operasi` to `operasi`). A report with no
+  match is listed on its own as such, never attached to a nearby exam. To verify on the dev Khanza: reports normally
+  share their exam's time; if many show as unlinked, the link rule needs review.
+- **Search** shows date of birth, age and sex with each patient match, and the patient's name with each visit-number
+  match (clinical-read-v1 1.2.0, only to a session that also holds patient.read).
 - **Data that is not valid** (a stored date that is not on the calendar, an amount or quantity that is not a number) is
   shown with a warning, not as "not recorded". Live dates come back `null` when invalid, so they still read as "not
   recorded" until hms_services sends data-quality flags (`docs/contract-requests/10-contract-request-data-quality-flags.md`).
@@ -141,7 +156,13 @@ Design tokens: `.claude/skills/design-tokens`. Tailwind theme keys map 1:1 to `-
   `src/data/claimFixtures.ts`). Questions are asked with topic buttons or typed text about one subject visit: the only
   tagged visit, or the chip the user picks when several are tagged (never guessed). The claim answer groups the server's
   findings (needs attention, not checked, complete, not applicable), says where to look in the Records window, and offers
-  "Open visit in Records" and "Check again" (a new audited evaluation). Baseline and findings:
+  "Open visit in Records" and "Check again" (a new audited evaluation). Topics, patterns, advice refusal, section topics,
+  every reply and how each answer is built live in `src/features/assistant/catalogue.json` (validated at startup by
+  `catalogue.ts`; edit there, not in `rules.ts`). General help (how to use HMS) comes from the approved general-help
+  release of hms_services (`GET /api/v1/assistant/knowledge/general-help`, assistant-v1 1.1.0; live only), matched
+  deterministically in `knowledge.ts` and answered first, before advice refusal and the record topics (precedence in
+  the catalogue's `knowledge` section); its held-out test set
+  measures the matcher (`knowledge.test.ts`, 12/32 correct, 0 wrong on 2026-11-10). Baseline and findings:
   `docs/assistant-inventory.md`; feedback on findings is proposed in ADR-SVC-008.
 
 - No separate Patient Management or tabbed Patient Detail window (owner decision 2026-11-05: remodel windows only).

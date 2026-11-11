@@ -64,10 +64,21 @@ function items(root: HTMLElement | null): HTMLElement[] {
     : [];
 }
 
+const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+/** Controls Tab can reach inside a dialog panel, in order. */
+function focusables(root: HTMLElement | null): HTMLElement[] {
+  return root
+    ? Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+        (el) => !el.hasAttribute('disabled') && el.tabIndex >= 0,
+      )
+    : [];
+}
+
 /**
- * Trigger + floating panel. `role="menu"`: arrow keys / Home / End move between `MenuItem`s, typing nothing else.
- * `role="dialog"`: free content (language switch, layout choices). Both close on Escape (focus returns to the trigger), Tab,
- * and a pointer press outside. Rendered in a portal with fixed coordinates so a window's `overflow: hidden` never clips it.
+ * Trigger + floating panel. `role="menu"`: arrow keys / Home / End move between `MenuItem`s, Tab closes it.
+ * `role="dialog"`: free content (language switch, layout choices, "Sign out"); Tab moves between its controls and wraps.
+ * Both close on Escape (focus returns to the trigger) and a pointer press outside. Rendered in a portal with fixed coordinates so a window's `overflow: hidden` never clips it.
  */
 export function Popover({
   label,
@@ -124,9 +135,7 @@ export function Popover({
         ? focusOnOpen.current === 'last'
           ? list[list.length - 1]
           : list[0]
-        : panel.querySelector<HTMLElement>(
-            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-          );
+        : panel.querySelector<HTMLElement>(FOCUSABLE);
     (target ?? panel).focus();
   }, [open, role]);
 
@@ -158,7 +167,28 @@ export function Popover({
       return;
     }
     if (e.key === 'Tab') {
-      close(false);
+      // A menu closes on Tab (menu convention). A dialog holds free content (language, "Sign out", layout choices), so
+      // Tab moves between its controls and wraps around: the panel sits at the end of <body>, so letting Tab leave it
+      // would drop focus out of the page and "Sign out" could never be reached from the keyboard (WCAG 2.1.1).
+      if (role === 'menu') {
+        close(false);
+        return;
+      }
+      const list = focusables(panelRef.current);
+      const first = list[0];
+      const last = list[list.length - 1];
+      if (!first || !last) {
+        e.preventDefault();
+        return;
+      }
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || active === panelRef.current)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
       return;
     }
     if (role !== 'menu') return;

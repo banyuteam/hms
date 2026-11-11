@@ -1,11 +1,19 @@
 import { useI18n } from '@/locales/I18nProvider';
 import { Button } from '@/components/Button';
-import { labs, medicationGiven, prescriptions, radiology, vitals, VITAL_KEYS } from '@/api/select';
+import {
+  labs,
+  medicationGiven,
+  prescriptions,
+  radiology,
+  unlinkedRadiologyReports,
+  vitals,
+  VITAL_KEYS,
+} from '@/api/select';
 import { DataTable, NotAvailable, Section, TextBlock } from '../components/Blocks';
 import { IdentityStrip } from '../components/IdentityStrip';
 import { AskAssistant, OpenWindow } from '../components/RecordActions';
 import { WindowPage } from '../components/WindowPage';
-import { StoredTime } from '@/components/StoredTime';
+import { StoredTime, useStoredText } from '@/components/StoredTime';
 import { EncounterGate, useOpen } from './EncounterGate';
 import { w } from './windowsStyles';
 
@@ -16,6 +24,7 @@ import { w } from './windowsStyles';
  */
 export function DiagnosticsWindow({ winId, norawat }: { winId: string; norawat?: string }) {
   const { t } = useI18n();
+  const storedText = useStoredText();
   const open = useOpen();
 
   return (
@@ -24,6 +33,7 @@ export function DiagnosticsWindow({ winId, norawat }: { winId: string; norawat?:
         const nr = journey.no_rawat;
         const labRows = labs(journey);
         const radRows = radiology(journey);
+        const radUnlinked = unlinkedRadiologyReports(journey);
         const vitalRows = vitals(journey);
         const rx = prescriptions(journey);
         const given = medicationGiven(journey);
@@ -120,7 +130,7 @@ export function DiagnosticsWindow({ winId, norawat }: { winId: string; norawat?:
             </Section>
 
             <Section id="rad" title={t('emr.rad.title')} icon="image" count={radRows.length}>
-              {radRows.length === 0 ? (
+              {radRows.length === 0 && radUnlinked.length === 0 ? (
                 <NotAvailable reason="recorded" />
               ) : (
                 radRows.map((r) => (
@@ -140,6 +150,21 @@ export function DiagnosticsWindow({ winId, norawat }: { winId: string; norawat?:
                     <TextBlock label={t('emr.rad.report')} text={r.report} />
                   </div>
                 ))
+              )}
+              {radUnlinked.length > 0 && (
+                <>
+                  <h3 className={w.columnTitle}>{t('emr.rad.unlinkedTitle')}</h3>
+                  <p className={w.note}>{t('emr.rad.unlinkedNote')}</p>
+                  {radUnlinked.map((rep) => (
+                    <TextBlock
+                      key={rep.id}
+                      label={t('emr.rad.unlinkedAt', {
+                        when: storedText(rep.key) ?? t('emr.undated'),
+                      })}
+                      text={rep.hasil}
+                    />
+                  ))}
+                </>
               )}
             </Section>
 

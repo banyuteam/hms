@@ -1,4 +1,7 @@
+import { useEffect, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useI18n } from '@/locales/I18nProvider';
+import { formatStoredDate } from '@/locales/storedTime';
 import { Button } from '@/components/Button';
 import { Icon, type IconName } from '@/components/Icon';
 import type { EncounterJourney } from '@/api/journey';
@@ -12,7 +15,7 @@ import {
   TextBlock,
 } from '../components/Blocks';
 import { BillCharges } from '../components/BillCharges';
-import { IdentityStrip } from '../components/IdentityStrip';
+import { IdentityStrip, type IdentityPerson } from '../components/IdentityStrip';
 import { AskAssistant } from '../components/RecordActions';
 import { WindowPage } from '../components/WindowPage';
 import { StoredTime, useStoredText } from '@/components/StoredTime';
@@ -87,6 +90,7 @@ function ViewerBody({
   const { t } = useI18n();
   const storedText = useStoredText();
   const open = useOpen();
+  const [printing, setPrinting] = useState(false);
   const { journey, facts, person } = view;
   const nr = journey.no_rawat;
   // Titles and list labels are text: an invalid time shows the warning text there.
@@ -223,53 +227,24 @@ function ViewerBody({
       );
     }
     // Billing summary (document): visit facts from the timeline, charges from the saved bill (billing.read).
-    const f = toFacts(journey);
     return (
       <Section
         id="detail"
         title={t('emr.viewer.billing.title')}
         icon="receipt"
         actions={
-          <Button variant="secondary" onClick={() => window.print()}>
+          <Button variant="secondary" onClick={() => setPrinting(true)}>
             <Icon name="printer" size={16} />
             {t('emr.viewer.print')}
           </Button>
         }
       >
-        <article className={w.doc} aria-label={t('emr.viewer.billing.title')}>
-          <h3 className={w.docTitle}>{t('emr.viewer.billing.docTitle')}</h3>
-          <TextBlock label={t('emr.identity.norawatLabel')} text={nr} />
-          <TextBlock label={t('emr.stay.admitted')} text={<StoredTime value={f.admittedKey} />} />
-          <TextBlock label={t('emr.stay.discharged')} text={<StoredTime value={f.discharged} />} />
-          <TextBlock
-            label={t('emr.stay.los')}
-            text={f.lengthOfStay !== null ? t('emr.stay.days', { n: f.lengthOfStay }) : null}
-          />
-          <TextBlock label={t('emr.identity.payerLabel')} text={f.payer} />
-          {f.payerType === 'bpjs' && (
-            <TextBlock
-              label={t('emr.sep.no')}
-              text={
-                f.sep.state === 'present'
-                  ? f.sep.records.map((r) => r.no_sep).join('\n')
-                  : t(f.sep.state === 'none' ? 'emr.sep.none' : 'emr.na.source')
-              }
-            />
-          )}
-          <TextBlock
-            label={t('emr.dx.title')}
-            text={journey.summary.diagnoses
-              .map((d) => `${d.kd_penyakit} ${d.diagnosis_name ?? ''}`)
-              .join('\n')}
-          />
-          <TextBlock
-            label={t('emr.px.title')}
-            text={journey.summary.coded_procedures
-              .map((p) => `${p.kode} ${p.procedure_name ?? ''}`)
-              .join('\n')}
-          />
-          <BillCharges norawat={nr} />
-        </article>
+        <BillingDocument journey={journey} person={person} />
+        {printing && (
+          <PrintOnly onDone={() => setPrinting(false)}>
+            <BillingDocument journey={journey} person={person} />
+          </PrintOnly>
+        )}
       </Section>
     );
   })();
@@ -294,4 +269,74 @@ function ViewerBody({
       {body}
     </WindowPage>
   );
+}
+
+/**
+ * The bill as a document: who it belongs to (name, MRN, date of birth: two identifiers), the visit, diagnoses and
+ * procedures, then the charges. The same component is printed on its own (`PrintOnly`).
+ */
+function BillingDocument({
+  journey,
+  person,
+}: {
+  journey: EncounterJourney;
+  person: IdentityPerson;
+}) {
+  const { t, locale } = useI18n();
+  const f = toFacts(journey);
+  const nr = journey.no_rawat;
+  const dob = formatStoredDate(person.birthDate, locale);
+  return (
+    <article className={w.doc} aria-label={t('emr.viewer.billing.title')}>
+      <h3 className={w.docTitle}>{t('emr.viewer.billing.docTitle')}</h3>
+      <TextBlock label={t('field.fullName')} text={person.name} />
+      <TextBlock label={t('field.mrn')} text={person.mrn ?? f.mrn} />
+      <TextBlock label={t('field.birthDate')} text={dob} />
+      <TextBlock label={t('emr.identity.norawatLabel')} text={nr} />
+      <TextBlock label={t('emr.stay.admitted')} text={<StoredTime value={f.admittedKey} />} />
+      <TextBlock label={t('emr.stay.discharged')} text={<StoredTime value={f.discharged} />} />
+      <TextBlock
+        label={t('emr.stay.los')}
+        text={f.lengthOfStay !== null ? t('emr.stay.days', { n: f.lengthOfStay }) : null}
+      />
+      <TextBlock label={t('emr.identity.payerLabel')} text={f.payer} />
+      {f.payerType === 'bpjs' && (
+        <TextBlock
+          label={t('emr.sep.no')}
+          text={
+            f.sep.state === 'present'
+              ? f.sep.records.map((r) => r.no_sep).join('\n')
+              : t(f.sep.state === 'none' ? 'emr.sep.none' : 'emr.na.source')
+          }
+        />
+      )}
+      <TextBlock
+        label={t('emr.dx.title')}
+        text={journey.summary.diagnoses
+          .map((d) => `${d.kd_penyakit} ${d.diagnosis_name ?? ''}`)
+          .join('\n')}
+      />
+      <TextBlock
+        label={t('emr.px.title')}
+        text={journey.summary.coded_procedures
+          .map((p) => `${p.kode} ${p.procedure_name ?? ''}`)
+          .join('\n')}
+      />
+      <BillCharges norawat={nr} />
+    </article>
+  );
+}
+
+/**
+ * Prints only `children`: they are rendered in a layer of their own next to the app, and the print stylesheet
+ * (`styles/index.css`, `.hms-print-root`) hides everything else, so other open windows (other patients) never reach the
+ * paper. The layer is removed once the print dialog closes.
+ */
+function PrintOnly({ children, onDone }: { children: ReactNode; onDone: () => void }) {
+  useEffect(() => {
+    window.addEventListener('afterprint', onDone);
+    window.print();
+    return () => window.removeEventListener('afterprint', onDone);
+  }, [onDone]);
+  return createPortal(<div className="hms-print-root">{children}</div>, document.body);
 }

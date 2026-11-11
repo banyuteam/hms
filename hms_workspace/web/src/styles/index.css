@@ -141,3 +141,19 @@
     container-type: inline-size;
   }
 }
+
+/*
+ * Printing a document (the bill): `PrintOnly` renders it in `.hms-print-root` next to #root, and only that layer is
+ * printed. Other open windows (possibly other patients) never reach the paper.
+ */
+.hms-print-root {
+  display: none;
+}
+@media print {
+  body:has(> .hms-print-root) > :not(.hms-print-root) {
+    display: none !important;
+  }
+  .hms-print-root {
+    display: block;
+  }
+}

@@ -1,14 +1,28 @@
 import type { EncounterJourney } from '@/api/journey';
-import { facts, labs, prescriptions } from '@/api/select';
+import { facts, labs, prescriptions, type EncounterFacts } from '@/api/select';
 import type { ClaimErrorKind, ClaimEvaluation } from '@/api/claimApi';
+import {
+  CATALOGUE,
+  type AnswerSpec,
+  type Fact,
+  type RowSource,
+  type Topic,
+  ROW_FIELDS,
+} from './catalogue';
+import type { Knowledge, KnowledgeMatch } from './knowledge';
 
 /**
  * Rule-based assistant (deterministic, no language model; ADR-SVC-006). Topic detection and read-back run here: it reads
  * back what the tagged records contain and refuses clinical advice. Claim readiness is the exception: it is a domain rule,
  * evaluated by hms_services (`evaluate` in the reply), and only presented here. Replies are i18n message ids (+ values)
  * so they follow the UI locale; record text is passed through as stored (`raw`).
+ *
+ * What it recognises and how each answer is put together come from `catalogue.json` (validated in `catalogue.ts`):
+ * topics and their patterns, advice refusal, section topics, the reply of every step and the rows/format of each answer.
+ * This file holds what is code: choosing the visit, and reading the record sources the catalogue may name.
  */
 export type TagKind = AssistantTag['kind'];
+export type { Topic };
 
 /**
  * A record the user tagged explicitly. A patient tag names the patient only: it never carries a visit, so the assistant
@@ -30,25 +44,21 @@ export type ReplyLine =
   | { id: string; values?: Record<string, string | number> }
   | { raw: string }
   /** The server's claim-readiness evaluation, shown as one structured result (`ClaimResult`). */
-  | { claim: ClaimEvaluation };
+  | { claim: ClaimEvaluation }
+  /** A general-help answer from the approved release, per language (shown in the UI locale). */
+  | { text: Readonly<Record<string, string>> };
 
 export interface Reply {
   intent: Intent;
   lines: ReplyLine[];
   /** Claim readiness: the visit to have hms_services evaluate; the answer lines come from `claimLines`. */
   evaluate?: string;
+  /** General help: the release intent that answered. */
+  knowledgeTag?: string;
 }
 
-/** What the assistant can be asked about a visit, in the order the quick-action buttons show them. */
-export const TOPICS = [
-  'claim',
-  'summary',
-  'diagnoses',
-  'procedures',
-  'labs',
-  'medications',
-] as const;
-export type Topic = (typeof TOPICS)[number];
+/** What the assistant can be asked about a visit, in the order the quick-action buttons show them (catalogue). */
+export const TOPICS: readonly Topic[] = CATALOGUE.quickActions.order;
 
 export type Intent =
   | Topic
@@ -57,19 +67,15 @@ export type Intent =
   | 'needVisit'
   | 'chooseVisit'
   | 'notLoaded'
-  | 'help';
+  | 'help'
+  /** General help from the approved release (how to use HMS). */
+  | 'general';
 
-/** The topic a tagged section stands for (F-8); sections without one (CPPT, radiology, billing) leave it to the text. */
-const SECTION_TOPICS: Readonly<Record<string, Topic>> = {
-  diagnoses: 'diagnoses',
-  labs: 'labs',
-  lab: 'labs',
-  claim: 'claim',
-  prescription: 'medications',
-};
-
+/** The topic a tagged section stands for (F-8; catalogue `sectionTopics`); other sections leave it to the text. */
 export function sectionTopic(tag: AssistantTag | undefined): Topic | undefined {
-  return tag?.kind === 'section' && tag.section ? SECTION_TOPICS[tag.section] : undefined;
+  return tag?.kind === 'section' && tag.section
+    ? CATALOGUE.sectionTopics.map[tag.section]
+    : undefined;
 }
 
 export type Subject =
@@ -96,42 +102,43 @@ export function subjectOf(tags: readonly AssistantTag[], chosen?: string): Subje
   return patient ? { kind: 'patientOnly', mrn: patient.mrn } : { kind: 'none' };
 }
 
-/** Requests for advice, diagnosis or treatment decisions (EN + ID). Checked before anything else. */
-const ADVICE =
-  /\b(should (i|we|he|she|the patient)|recommend|what (dose|drug|treatment)|which (drug|treatment|antibiotic)|diagnose|prognosis|is it safe|safe to|increase|decrease|stop the|start the|sarankan|rekomendasi|sebaiknya|harus (diberi|minum|dirawat)|dosis (yang|berapa)|obat apa|terapi apa|diagnosisnya apa|aman(kah)? untuk)\b/i;
-
-const INTENTS: [Topic, RegExp][] = [
-  ['claim', /\b(claim|klaim|bpjs|casemix|resume|ina-?cbg|readiness|kelengkapan)\b/i],
-  ['diagnoses', /\b(diagnos\w*|icd-?10|dx)\b/i],
-  ['procedures', /\b(procedure\w*|tindakan|icd-?9\w*|operasi|surgery)\b/i],
-  ['labs', /\b(lab\w*|result\w*|hasil)\b/i],
-  ['medications', /\b(med\w*|drug\w*|obat|resep|prescri\w*)\b/i],
-  ['summary', /\b(summar\w*|ringkas\w*|overview|riwayat|timeline)\b/i],
-];
-
+/** Advice is refused first (catalogue `advice`); then the first topic pattern that matches (catalogue `intents`). */
 export function detectIntent(text: string): Topic | 'refuse' | 'help' {
-  if (ADVICE.test(text)) return 'refuse';
-  return INTENTS.find(([, re]) => re.test(text))?.[0] ?? 'help';
+  if (CATALOGUE.adviceRe.test(text)) return 'refuse';
+  return CATALOGUE.intentRes.find(([, re]) => re.test(text))?.[0] ?? 'help';
 }
 
 type JourneyOf = (norawat: string) => EncounterJourney | undefined;
 
+const refusal = (): Reply => ({ intent: 'refuse', lines: [{ id: CATALOGUE.advice.reply }] });
+
+/** A general-help answer; a release intent listed in `knowledge.refuseTags` gets the one advice refusal. */
+function fromKnowledge(m: KnowledgeMatch): Reply {
+  if (CATALOGUE.knowledge.refuseTags.includes(m.tag)) return refusal();
+  return { intent: 'general', knowledgeTag: m.tag, lines: [{ text: m.responses }] };
+}
+
 /**
- * Answers typed text. Advice is refused first. Text without a topic takes the topic of the tagged section it is asked
- * about, if that section has one (F-8); otherwise it gets the help text.
+ * Answers typed text, in the order of catalogue `knowledge.description` (owner, 2026-11-10): general help first (a
+ * strong, then a weak match: its answers are approved static text, never advice); then advice refusal; the record
+ * topics; the topic of the tagged section asked about (F-8); the help text. Without `knowledge` (none approved, not
+ * loaded yet, or the synthetic build) the general-help step is skipped and advice refusal comes first.
  */
 export function reply(
   text: string,
   tags: readonly AssistantTag[],
   journeyOf: JourneyOf,
   chosen?: string,
+  knowledge?: Knowledge,
 ): Reply {
-  const intent = detectIntent(text);
-  if (intent === 'refuse') return { intent, lines: [{ id: 'emr.ai.reply.refuse' }] };
+  const general = knowledge?.strong(text) ?? knowledge?.weak(text);
+  if (general) return fromKnowledge(general);
+  if (CATALOGUE.adviceRe.test(text)) return refusal();
   const subject = subjectOf(tags, chosen);
-  const topic =
-    intent === 'help' ? sectionTopic(subject.kind === 'visit' ? subject.tag : undefined) : intent;
-  if (!topic) return { intent: 'help', lines: [{ id: 'emr.ai.reply.help' }] };
+  const byText = CATALOGUE.intentRes.find(([, re]) => re.test(text))?.[0];
+  if (byText) return answer(byText, subject, journeyOf);
+  const topic = sectionTopic(subject.kind === 'visit' ? subject.tag : undefined);
+  if (!topic) return { intent: 'help', lines: [{ id: CATALOGUE.help.reply }] };
   return answer(topic, subject, journeyOf);
 }
 
@@ -145,76 +152,98 @@ export function ask(
   return answer(topic, subjectOf(tags, chosen), journeyOf);
 }
 
+type Row = Record<string, string>;
+
+/** The record sources an answer may list (catalogue `rows.source`), each row with the fields of `ROW_FIELDS`. */
+const ROWS: {
+  [S in RowSource]: (j: EncounterJourney) => Record<(typeof ROW_FIELDS)[S][number], string>[];
+} = {
+  diagnoses: (j) =>
+    [...j.summary.diagnoses]
+      .sort((a, b) => a.prioritas - b.prioritas)
+      .map((d) => ({
+        priority: `${d.prioritas}`,
+        code: d.kd_penyakit,
+        name: d.diagnosis_name ?? '',
+      })),
+  codedProcedures: (j) =>
+    j.summary.coded_procedures.map((p) => ({ code: p.kode, name: p.procedure_name ?? '' })),
+  flaggedLabResults: (j) =>
+    labs(j).flatMap((l) =>
+      l.results
+        .filter((r) => r.keterangan.trim() !== '')
+        .map((r) => ({
+          item: r.item_name ?? '',
+          value: r.nilai,
+          unit: r.unit ?? '',
+          range: r.nilai_rujukan,
+          flag: r.keterangan,
+        })),
+    ),
+  prescriptionItems: (j) =>
+    prescriptions(j).flatMap((p) =>
+      p.items.map((it) => ({ drug: it.drug_name ?? '', instructions: it.aturan_pakai })),
+    ),
+};
+
+/** Visit facts a header may show (catalogue `header.values`); a fact not recorded shows as "—". */
+const FACT: Record<Fact, (f: EncounterFacts, rowCount: number) => string | number> = {
+  careSetting: (f) => f.careSetting ?? '—',
+  dpjp: (f) => f.dpjp ?? '—',
+  lengthOfStay: (f) => f.lengthOfStay ?? '—',
+  dischargeOrVisitStatus: (f) => f.dischargeStatus ?? f.status ?? '—',
+  rowCount: (_, n) => n,
+};
+
+const fill = (format: string, row: Row) =>
+  format.replace(/\{(\w+)\}/g, (_, k: string) => row[k] ?? '');
+
+/** One read-back answer as the catalogue describes it: source · header · rows (or "none") · disclaimer. */
+function readBack(spec: AnswerSpec, j: EncounterJourney, norawat: string): ReplyLine[] {
+  const lines: ReplyLine[] = [{ id: CATALOGUE.answers.source, values: { norawat } }];
+  const all: Row[] = ROWS[spec.rows.source](j);
+  if (spec.header) {
+    const f = facts(j);
+    lines.push({
+      id: spec.header.reply,
+      values: Object.fromEntries(
+        Object.entries(spec.header.values).map(([k, fact]) => [k, FACT[fact](f, all.length)]),
+      ),
+    });
+  }
+  const rows = spec.rows.limit ? all.slice(0, spec.rows.limit) : all;
+  if (rows.length === 0 && spec.whenEmpty) lines.push({ id: spec.whenEmpty });
+  for (const row of rows) lines.push({ raw: fill(spec.rows.format, row) });
+  lines.push({ id: CATALOGUE.answers.disclaimer });
+  return lines;
+}
+
 function answer(intent: Topic, subject: Subject, journeyOf: JourneyOf): Reply {
   // Only a tagged visit (encounter or section) names a visit; a patient tag never stands in for one.
+  const steps = CATALOGUE.subject.replies;
   switch (subject.kind) {
     case 'patientOnly':
       return {
-        intent: 'needVisit',
-        lines: [{ id: 'emr.ai.reply.needVisit', values: { mrn: subject.mrn } }],
+        intent: steps.patientOnly.intent,
+        lines: [{ id: steps.patientOnly.reply, values: { mrn: subject.mrn } }],
       };
     case 'ambiguous':
       return {
-        intent: 'chooseVisit',
-        lines: [{ id: 'emr.ai.reply.chooseVisit', values: { n: subject.visits } }],
+        intent: steps.ambiguous.intent,
+        lines: [{ id: steps.ambiguous.reply, values: { n: subject.visits } }],
       };
     case 'none':
-      return { intent: 'needTag', lines: [{ id: 'emr.ai.reply.needTag' }] };
+      return { intent: steps.none.intent, lines: [{ id: steps.none.reply }] };
   }
   const norawat = subject.tag.norawat;
   // The server reads the visit itself; nothing needs to be loaded in the browser.
   if (intent === 'claim') return { intent, lines: [], evaluate: norawat };
   const j = journeyOf(norawat);
-  if (!j)
-    return { intent: 'notLoaded', lines: [{ id: 'emr.ai.reply.notLoaded', values: { norawat } }] };
-
-  const lines: ReplyLine[] = [{ id: 'emr.ai.reply.source', values: { norawat } }];
-  const f = facts(j);
-  switch (intent) {
-    case 'summary':
-      lines.push({
-        id: 'emr.ai.reply.summary',
-        values: {
-          setting: f.careSetting ?? '—',
-          dpjp: f.dpjp ?? '—',
-          los: f.lengthOfStay ?? '—',
-          status: f.dischargeStatus ?? f.status ?? '—',
-        },
-      });
-      for (const d of [...j.summary.diagnoses]
-        .sort((a, b) => a.prioritas - b.prioritas)
-        .slice(0, 3))
-        lines.push({ raw: `${d.kd_penyakit} — ${d.diagnosis_name ?? ''}` });
-      break;
-    case 'diagnoses':
-      if (j.summary.diagnoses.length === 0) lines.push({ id: 'emr.ai.reply.none' });
-      for (const d of [...j.summary.diagnoses].sort((a, b) => a.prioritas - b.prioritas))
-        lines.push({ raw: `${d.prioritas}. ${d.kd_penyakit} — ${d.diagnosis_name ?? ''}` });
-      break;
-    case 'procedures':
-      if (j.summary.coded_procedures.length === 0) lines.push({ id: 'emr.ai.reply.none' });
-      for (const p of j.summary.coded_procedures)
-        lines.push({ raw: `ICD-9-CM ${p.kode} — ${p.procedure_name ?? ''}` });
-      break;
-    case 'labs': {
-      const flagged = labs(j).flatMap((l) =>
-        l.results.filter((r) => r.keterangan.trim() !== '').map((r) => ({ l, r })),
-      );
-      lines.push({ id: 'emr.ai.reply.labsFlagged', values: { n: flagged.length } });
-      for (const { r } of flagged)
-        lines.push({
-          raw: `${r.item_name ?? ''}: ${r.nilai} ${r.unit ?? ''} (${r.nilai_rujukan}) [${r.keterangan}]`,
-        });
-      break;
-    }
-    case 'medications':
-      for (const p of prescriptions(j))
-        for (const it of p.items) lines.push({ raw: `${it.drug_name ?? ''} — ${it.aturan_pakai}` });
-      if (lines.length === 1) lines.push({ id: 'emr.ai.reply.none' });
-      break;
+  if (!j) {
+    const notLoaded = CATALOGUE.answers.notLoaded;
+    return { intent: notLoaded.intent, lines: [{ id: notLoaded.reply, values: { norawat } }] };
   }
-  lines.push({ id: 'emr.ai.reply.disclaimer' });
-  return { intent, lines };
+  return { intent, lines: readBack(CATALOGUE.answers.topics[intent], j, norawat) };
 }
 
 /**
@@ -222,20 +251,24 @@ function answer(intent: Topic, subject: Subject, journeyOf: JourneyOf): Reply {
  * (every finding, grouped; `ClaimResult`).
  */
 export function claimLines(norawat: string, e: ClaimEvaluation): ReplyLine[] {
+  const c = CATALOGUE.claim;
   const lines: ReplyLine[] = [
-    { id: 'emr.ai.reply.source', values: { norawat } },
-    { id: 'emr.ai.reply.claimRuleSet', values: { version: e.rule_set.version } },
+    { id: CATALOGUE.answers.source, values: { norawat } },
+    { id: c.ruleSet, values: { version: e.rule_set.version } },
   ];
-  if (e.status === 'not_applicable') lines.push({ id: 'emr.claim.notApplicable' });
+  if (e.status === 'not_applicable') lines.push({ id: c.notApplicable });
   else {
     lines.push({ claim: e });
-    lines.push({ id: 'emr.claim.scope' });
+    lines.push({ id: c.scope });
   }
-  lines.push({ id: 'emr.ai.reply.disclaimer' });
+  lines.push({ id: CATALOGUE.answers.disclaimer });
   return lines;
 }
 
 /** The answer when the evaluation failed: nothing was checked, and the reply says so. */
 export function claimErrorLines(norawat: string, kind: ClaimErrorKind): ReplyLine[] {
-  return [{ id: 'emr.ai.reply.source', values: { norawat } }, { id: `emr.claim.error.${kind}` }];
+  return [
+    { id: CATALOGUE.answers.source, values: { norawat } },
+    { id: `${CATALOGUE.claim.errorPrefix}${kind}` },
+  ];
 }

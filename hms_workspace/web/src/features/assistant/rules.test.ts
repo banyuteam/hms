@@ -21,9 +21,29 @@ describe('rule-based assistant', () => {
     'Should we stop the bisoprolol?',
     'obat apa yang sebaiknya diberikan?',
     'Diagnose this patient please',
+    'boleh minum obat ini?',
+    'perlukah dirawat?',
   ])('refuses clinical advice: %s', (q) => {
     expect(detectIntent(q)).toBe('refuse');
     expect(reply(q, [tag], lookup).lines).toEqual([{ id: 'emr.ai.reply.refuse' }]);
+  });
+
+  // Catalogue 1.0.1 routing fixes.
+  it.each([
+    // "medis" (rekam medis, riwayat medis) is not medication.
+    ['ringkasan rekam medis pasien ini', 'summary'],
+    ['riwayat medis pasien', 'summary'],
+    ['obat yang diberikan apa saja', 'medications'],
+    ['meds list', 'medications'],
+    // Radiology results are not lab results; there is no radiology topic, so the text gets help.
+    ['hasil rontgen thorax', 'help'],
+    ['x-ray results', 'help'],
+    ['hasil lab', 'labs'],
+    // The recorded diagnosis is a read-back whatever the word order.
+    ['apa diagnosisnya?', 'diagnoses'],
+    ['diagnosisnya apa?', 'diagnoses'],
+  ])('routes %s to %s', (q, want) => {
+    expect(detectIntent(q)).toBe(want);
   });
 
   it('asks for a tagged record before reading anything', () => {

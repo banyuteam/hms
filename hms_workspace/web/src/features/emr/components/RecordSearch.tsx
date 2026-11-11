@@ -7,6 +7,8 @@ import type { PatientHit } from '@/api/emrApi';
 import { useEncounterList, useEncounterSearch, usePatientSearch } from '@/api/hooks';
 import type { EncounterListItem } from '@/api/journey';
 import { useStoredText } from '@/components/StoredTime';
+import { ageInYears } from '@/api/livePatientApi';
+import { formatStoredDate } from '@/locales/storedTime';
 import { cn } from '@/lib/cn';
 
 const hit =
@@ -21,6 +23,26 @@ export type SearchPick =
 
 /** Patients listed in "patient → visits" mode; more matches ask the user to refine. */
 export const MAX_PATIENT_SNIPPETS = 5;
+
+/**
+ * MRN, date of birth (age) and sex of a patient match: with the name, two identifiers, so two patients with the same
+ * name can be told apart before one is opened. A missing value says so; it is never left blank.
+ */
+function usePatientMeta() {
+  const { t, locale } = useI18n();
+  return (p: PatientHit, withMrn = true) => {
+    const dob = formatStoredDate(p.birthDate, locale);
+    return [
+      withMrn ? t('emr.identity.mrn', { mrn: p.mrn }) : null,
+      dob
+        ? t('emr.identity.dob', { date: dob, age: ageInYears(p.birthDate) ?? '—' })
+        : t('emr.identity.dobMissing'),
+      p.sex === 'unknown' ? t('emr.search.sexMissing') : t(`emr.sex.${p.sex}`),
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  };
+}
 
 /** One encounter result row (shared by the no_rawat hits and the per-patient visit snippets). */
 function EncounterHit({
@@ -38,6 +60,12 @@ function EncounterHit({
     <button type="button" className={hit} onClick={() => onPick({ type: 'encounter', item: e })}>
       <Icon name={e.status_lanjut === 'Ranap' ? 'bed' : 'stethoscope'} size={16} />
       <span className={hitMain}>{e.no_rawat}</span>
+      {/* Who the visit belongs to, before it is opened (sent only to a session that may read patients). */}
+      {showMrn && e.patientName !== undefined && (
+        <span className="font-semibold text-ink">
+          {e.patientName || t('emr.search.nameMissing')}
+        </span>
+      )}
       <span className={hitMeta}>
         {[
           storedText(`${e.tgl_registrasi ?? ''} ${e.jam_reg ?? ''}`.trim()),
@@ -55,6 +83,7 @@ function EncounterHit({
 /** Snippet under a patient match: that patient's visits, newest admission first (GET /patients/{id}/encounters). */
 function PatientVisits({ hit, onPick }: { hit: PatientHit; onPick: (pick: SearchPick) => void }) {
   const { t } = useI18n();
+  const meta = usePatientMeta();
   const visits = useEncounterList(hit.mrn);
   const headId = useId();
   const list = visits.data ?? [];
@@ -66,7 +95,7 @@ function PatientVisits({ hit, onPick }: { hit: PatientHit; onPick: (pick: Search
       >
         <Icon name="user" size={16} />
         <span className={hitMain}>{hit.name}</span>
-        <span className={hitMeta}>{t('emr.identity.mrn', { mrn: hit.mrn })}</span>
+        <span className={hitMeta}>{meta(hit)}</span>
       </p>
       {visits.isPending ? (
         <p className="type-caption m-0 pr-8 pl-[calc(var(--hms-size-icon-sm)+var(--hms-space-16))] text-ink-muted">
@@ -128,6 +157,7 @@ export function RecordSearch({
   label?: string;
 }) {
   const { t } = useI18n();
+  const meta = usePatientMeta();
   const listId = useId();
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -253,7 +283,7 @@ export function RecordSearch({
                   >
                     <Icon name="user" size={16} />
                     <span className={hitMain}>{p.name}</span>
-                    <span className={hitMeta}>{t('emr.identity.mrn', { mrn: p.mrn })}</span>
+                    <span className={hitMeta}>{meta(p)}</span>
                   </button>
                 </li>
               ),

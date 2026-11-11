@@ -10,11 +10,10 @@ import { useHomeActions } from '@/state/home';
 import {
   flattenEncounterPages,
   useEncounterPages,
-  useJourney,
+  usePatientAllergies,
   usePatientProfile,
   usePayerHistory,
 } from '@/api/hooks';
-import { facts as toFacts } from '@/api/select';
 import { RowList, Section, StateView, SummaryRow } from '../components/Blocks';
 import { IdentityStrip } from '../components/IdentityStrip';
 import { PayerHistory } from '../components/PayerHistory';
@@ -22,12 +21,12 @@ import { AskAssistant, EditAction } from '../components/RecordActions';
 import { RecordSearch } from '../components/RecordSearch';
 import { WindowPage } from '../components/WindowPage';
 import { StoredTime, useStoredText } from '@/components/StoredTime';
-import { useOpen } from './EncounterGate';
+import { useOpen, usePatientAllergyStatus } from './EncounterGate';
 import { w } from './windowsStyles';
 
 /**
  * W1 Patient Profile (key: MRN). One page, no tabs: identity · background · contact · emergency contact · special notes
- * (allergy from the last visit's notes) · guarantor (payers used on the visits, from `reg_periksa` + `penjab`) · visits
+ * (allergy entries of every visit) · guarantor (payers used on the visits, from `reg_periksa` + `penjab`) · visits
  * (newest admission first → each opens W2 for that no_rawat). PHI fields stay masked with audited reveal.
  */
 export function ProfileWindow({ winId, mrn }: { winId: string; mrn?: string }) {
@@ -58,13 +57,11 @@ function Profile({ mrn }: { mrn: string }) {
   const patient = usePatientProfile(mrn);
   const visits = useEncounterPages(mrn);
   const list = useMemo(() => flattenEncounterPages(visits.data?.pages), [visits.data]);
-  const latest = list[0];
-  const latestJourney = useJourney(latest?.no_rawat);
   const payers = usePayerHistory(mrn); // same cache entry as the guarantor section; here only for the counts
-  const facts = useMemo(
-    () => (latestJourney.data ? toFacts(latestJourney.data) : null),
-    [latestJourney.data],
-  );
+  // Patient-level: every visit's allergy entries (the strip shares this cache entry).
+  const allergies = usePatientAllergies(mrn);
+  const allergyStatus = usePatientAllergyStatus(mrn);
+  const allergyForbidden = allergies.error instanceof ApiError && allergies.error.status === 403;
 
   if (patient.isPending) return <StateView kind="loading" message={t('detail.loading')} />;
   if (patient.error || !patient.data) {
@@ -102,8 +99,8 @@ function Profile({ mrn }: { mrn: string }) {
               birthDate: p.birthDate,
               ageYears: p.ageYears,
               sex: p.sex === 'unknown' ? null : p.sex,
+              allergies: allergyStatus,
             }}
-            facts={facts}
             scope="patient"
           />
         }
@@ -205,34 +202,55 @@ function Profile({ mrn }: { mrn: string }) {
             <FieldRow
               label={t('emr.special.allergy')}
               value={
-                visits.isPending || (latest && latestJourney.isPending) ? (
+                allergies.data ? (
+                  allergies.data.entries.length === 0 ? (
+                    t('emr.special.allergyNone')
+                  ) : (
+                    <ul className="m-0 flex list-none flex-col gap-8 p-0">
+                      {allergies.data.entries.map((a) => (
+                        <li key={a.text} className="flex flex-col gap-2">
+                          <strong className="inline-flex items-start gap-6 text-danger-fg">
+                            <Icon name="alert" size={16} className="mt-2 flex-none" />
+                            <span className="whitespace-pre-line">{a.text}</span>
+                          </strong>
+                          <span className="type-caption text-ink-muted">
+                            {t(
+                              a.lastRecorded
+                                ? 'emr.special.allergyEntry'
+                                : 'emr.special.allergyEntryUndated',
+                              {
+                                when: storedText(a.lastRecorded) ?? '',
+                                norawat: a.lastEncounter,
+                                source: t(`emr.special.allergySource.${a.source}`),
+                                n: a.timesRecorded,
+                              },
+                            )}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )
+                ) : allergies.isPending ? (
                   <span className="text-ink-muted">{t('emr.special.loading')}</span>
-                ) : (visits.isError && !visits.data) || latestJourney.error ? (
+                ) : allergyForbidden ? (
+                  <span className="text-ink-muted">{t('emr.special.forbidden')}</span>
+                ) : (
                   <span role="alert" className="text-warning-fg">
                     {t('emr.special.error')}{' '}
-                    {/* A failed visit list already has its Try again under Visits. */}
-                    {Boolean(latestJourney.error) && (
-                      <Button variant="ghost" onClick={() => void latestJourney.refetch()}>
-                        {t('emr.search.retry')}
-                      </Button>
-                    )}
+                    <Button variant="ghost" onClick={() => void allergies.refetch()}>
+                      {t('emr.search.retry')}
+                    </Button>
                   </span>
-                ) : !latest || !facts ? (
-                  <span className="text-ink-muted">{t('emr.special.noVisits')}</span>
-                ) : facts.allergy.state === 'recorded' ? (
-                  <strong className="inline-flex items-start gap-6 text-danger-fg">
-                    <Icon name="alert" size={16} className="mt-2 flex-none" />
-                    <span className="whitespace-pre-line">{facts.allergy.text}</span>
-                  </strong>
-                ) : (
-                  t('emr.special.allergyNotRecorded')
                 )
               }
             />
           </FieldList>
-          {latest && facts && (
-            <p className={w.note}>{t('emr.special.source', { norawat: latest.no_rawat })}</p>
+          {allergies.data?.truncated && (
+            <p className={w.note} role="status">
+              {t('emr.special.truncated')}
+            </p>
           )}
+          {allergies.data && <p className={w.note}>{t('emr.special.sourceAll')}</p>}
         </Section>
 
         <Section

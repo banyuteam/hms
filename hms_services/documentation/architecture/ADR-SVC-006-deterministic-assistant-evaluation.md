@@ -164,3 +164,24 @@ detection, read-back and the refusal guard. `hms_database` is unchanged: the exi
 - [x] Response and audit events contain no record value (tested).
 - [x] `check-clinical-read` unchanged (no new statement).
 - [ ] Owner grants `assistant.rules.evaluate` on dev and compares results with the browser checks on real visits.
+
+## Amendment 2026-11-10 — general-help knowledge release (assistant-v1 1.1.0)
+- **Decision (owner, 2026-11-10):** the general-help seed dataset
+  (`runtimes/python-workers/assistant/datasets/general-help.seed.json`, `hms-assistant.general-help` 0.1.0: how to use
+  HMS, no patient data) is approved and used by the web assistant. `help.contact_support` stays out until the hospital
+  supplies its facts (its answer is a TODO).
+- **Delivery:** the file is embedded into the service at build time (`datasets.GeneralHelp`), validated at startup
+  (`assistant/knowledge.go`; a malformed file stops the service, a draft publishes nothing) and served by
+  `GET /api/v1/assistant/knowledge/general-help`. Only `review: from_app` intents with no attached record and a complete
+  answer in every language are served; the held-out `test` set and the approver are never served.
+- **Access:** session only, no permission, not audited: the content is static help text without patient data.
+- **Matching stays deterministic** (no language model): the web matches the example messages by normalised whole-word
+  phrases. Precedence (owner, 2026-11-10, revised the same day: general help on top): 1) general help, a close phrase
+  match (the whole message, or a multi-word example inside it) and then a one-word example; 2) advice refusal; 3) the
+  record-topic keywords; 4) the tagged section's topic; 5) the help text. Consequence accepted by the owner: a message
+  that contains a help example and also asks for clinical advice gets the help answer (approved static text, never
+  advice) instead of the refusal; the dataset's `safety.advice_refusal` examples still answer with the refusal.
+- **Measuring:** the dataset's held-out `test` sentences are used only to measure the web matcher (a test reads the file;
+  it is never served or matched against).
+- [x] `assistant/knowledge_test.go`: shipped dataset published without placeholders or test set; draft not published;
+  incomplete intents left out; malformed datasets rejected; 200 / 404 from the handler.

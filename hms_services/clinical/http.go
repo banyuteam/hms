@@ -43,7 +43,9 @@ type Reader interface {
 	Encounter(ctx context.Context, number string) (legacyhms.EncounterRow, error)
 	PatientEncounters(ctx context.Context, mrn, before string, limit int) ([]legacyhms.EncounterRow, error)
 	SearchEncounters(ctx context.Context, prefix string, limit int) ([]legacyhms.EncounterRow, error)
+	SearchEncountersNamed(ctx context.Context, prefix string, limit int) ([]legacyhms.EncounterHitRow, error)
 	PayerVisits(ctx context.Context, mrn string, limit int) ([]legacyhms.PayerVisitRow, error)
+	PatientAllergies(ctx context.Context, mrn string, limit int) ([]legacyhms.AllergyRow, error)
 	Timeline(ctx context.Context, number string) (legacyhms.SectionRows, error)
 	Bill(ctx context.Context, number string) (legacyhms.SectionRows, error)
 }
@@ -75,6 +77,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	route("GET /api/v1/patients/{mrn}/identifiers/{kind}", PermIdentifierReveal, h.identifier)
 	route("GET /api/v1/patients/{mrn}/encounters", PermEncounterRead, h.patientEncounters)
 	route("GET /api/v1/patients/{mrn}/payers", PermEncounterRead, h.patientPayers)
+	route("GET /api/v1/patients/{mrn}/allergies", PermClinicalRead, h.patientAllergies)
 	route("GET /api/v1/encounters", PermEncounterRead, h.searchEncounters)
 	route("GET /api/v1/encounters/{number}", PermEncounterRead, h.encounter)
 	route("GET /api/v1/encounters/{number}/timeline", PermClinicalRead, h.timeline)
@@ -289,6 +292,41 @@ func (h *Handler) patientPayers(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// MaxAllergyRows caps the allergy entries read for a patient; beyond it the answer says `truncated`.
+const MaxAllergyRows = 2000
+
+// patientAllergies lists every allergy text recorded for the patient across visits (outpatient and inpatient notes,
+// discharge summaries), so an allergy written at an earlier visit is not missed. Texts are returned as written.
+func (h *Handler) patientAllergies(w http.ResponseWriter, r *http.Request) {
+	mrn := r.PathValue("mrn")
+	if !mrnPattern.MatchString(mrn) {
+		notFound(w)
+		return
+	}
+	rows, err := h.reader.PatientAllergies(r.Context(), mrn, MaxAllergyRows+1)
+	if err != nil {
+		h.logger.Error("legacy allergy list failed", "err", err)
+		unavailable(w)
+		return
+	}
+	truncated := len(rows) > MaxAllergyRows
+	if truncated {
+		rows = rows[:MaxAllergyRows]
+	}
+	list := MapAllergies(rows, truncated, h.loc)
+	// Counts only: the allergy text is clinical content and never enters the audit trail.
+	detail := map[string]string{"results": strconv.Itoa(len(list.Allergies)), "entries": strconv.Itoa(len(rows))}
+	if truncated {
+		detail["truncated"] = "entries"
+	}
+	if h.record(w, r, "patient.allergies.read", audit.OutcomeSuccess, "Patient", mrn, detail) {
+		httpx.WriteJSON(w, http.StatusOK, list)
+	}
+}
+
+// searchEncounters finds visits by number. Callers who may also read patients get each visit's patient name, so a
+// mistyped number is noticed before the wrong patient's record is opened; for others the name is omitted (encounter.read
+// alone does not disclose names).
 func (h *Handler) searchEncounters(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	limit, ok := limitParam(r, 25, 25)
@@ -296,14 +334,41 @@ func (h *Handler) searchEncounters(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", "q must be the start of an encounter number (3-17 characters); limit 1-25.")
 		return
 	}
-	rows, err := h.reader.SearchEncounters(r.Context(), q, limit)
+	named, err := h.iam.Can(r, PermPatientRead)
 	if err != nil {
-		h.logger.Error("legacy encounter search failed", "err", err)
 		unavailable(w)
 		return
 	}
-	if h.record(w, r, "encounter.search", audit.OutcomeSuccess, "Encounter", "", map[string]string{"results": strconv.Itoa(len(rows))}) {
-		httpx.WriteJSON(w, http.StatusOK, map[string]any{"encounters": h.mapEncounters(rows)})
+	var resp any
+	var results int
+	if named {
+		rows, err := h.reader.SearchEncountersNamed(r.Context(), q, limit)
+		if err != nil {
+			h.logger.Error("legacy encounter search failed", "err", err)
+			unavailable(w)
+			return
+		}
+		hits := make([]EncounterHit, 0, len(rows))
+		for _, row := range rows {
+			hits = append(hits, MapEncounterHit(row, h.loc))
+		}
+		resp, results = map[string]any{"encounters": hits}, len(rows)
+	} else {
+		rows, err := h.reader.SearchEncounters(r.Context(), q, limit)
+		if err != nil {
+			h.logger.Error("legacy encounter search failed", "err", err)
+			unavailable(w)
+			return
+		}
+		resp, results = map[string]any{"encounters": h.mapEncounters(rows)}, len(rows)
+	}
+	names := "omitted"
+	if named {
+		names = "included"
+	}
+	if h.record(w, r, "encounter.search", audit.OutcomeSuccess, "Encounter", "",
+		map[string]string{"results": strconv.Itoa(results), "names": names}) {
+		httpx.WriteJSON(w, http.StatusOK, resp)
 	}
 }
 

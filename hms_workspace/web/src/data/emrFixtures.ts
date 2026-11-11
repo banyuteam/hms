@@ -145,14 +145,15 @@ const inpatient: EncounterJourney = {
           status: 'Ranap',
         },
       ],
-    },
-    '2026-10-26T17:20:00': {
+      // The report carries its exam's date and time (`hasil_radiologi` shares `tgl_periksa` + `jam` with the exam).
       radiology_report: [
         {
           hasil:
             'Cardiomegaly (CTR 0.62). Bilateral perihilar haziness consistent with pulmonary congestion. No pneumothorax.',
         },
       ],
+    },
+    '2026-10-26T17:20:00': {
       clinical_notes: [
         {
           care_setting: 'inpatient',

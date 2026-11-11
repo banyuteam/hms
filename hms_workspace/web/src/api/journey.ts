@@ -292,4 +292,9 @@ export interface EncounterListItem {
   stts: Nullable<EncounterStts>;
   /** Payer code as stored (`penjab.kd_pj`); the name needs a lookup the list does not carry (contract request 09, P-1). */
   kd_pj?: string;
+  /**
+   * Visit-number search hits only (clinical-read-v1 1.2.0), and only for a session that may also read patients: the
+   * patient's name, so a mistyped number is not opened as someone else's visit. '' = not recorded; absent = not sent.
+   */
+  patientName?: string;
 }

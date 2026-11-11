@@ -1,6 +1,6 @@
 # ADR-SVC-002: IAM administration, permission registry and first administrator
 
-- Status: Proposed
+- Status: Accepted (owner approval 2026-11-10)
 - Date: 2026-11-08
 - Owners: hms_services
 - Affected projects: hms_services, hms_database (iam schema, ADR-DB-003), hms_workspace (future admin screens)
@@ -39,5 +39,7 @@ SQL and without an unaudited back door, while the clinical role catalog remains 
 ## Acceptance criteria
 - [x] Integration test over HTTP and PostgreSQL covering grants, revocation, suspension, scoping and all guards.
 - [x] Eight deliberate defects in the guards each caught by the tests.
-- [ ] Owner chooses the first administrator and runs bootstrap-admin on the dev server.
-- [ ] Owner defines the clinical role catalog (permissions arrive as clinical APIs are built).
+- [x] Owner chooses the first administrator and runs bootstrap-admin on the dev server (confirmed by the owner
+      2026-11-10).
+- [x] Owner defines the clinical role catalog (permissions arrive as clinical APIs are built) (confirmed by the owner
+      2026-11-10).

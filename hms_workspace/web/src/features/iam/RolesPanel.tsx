@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Button } from '@/components/Button';
@@ -17,6 +17,7 @@ import {
   type IamPermission,
   type IamRole,
 } from './iamApi';
+import { useReportUnsaved } from '@/features/workspace/windowGuard';
 import { iamErrorKey, isForbidden } from './iamErrors';
 
 const heading = 'type-heading-sm mt-0 mb-8 text-ink';
@@ -33,6 +34,14 @@ export function RolesPanel({
   const roles = useResource(['iam', 'roles'], listRoles);
   const perms = useResource(['iam', 'permissions'], listPermissions);
   const [selected, setSelected] = useState<string | 'new' | null>(null);
+  // Unsaved ticks in the open role: switching away asks first (they would be lost).
+  const [dirty, setDirty] = useState(false);
+  const [switchTo, setSwitchTo] = useState<string | 'new' | null>(null);
+  const select = (next: string | 'new') => {
+    if (next === selected) return;
+    if (dirty) setSwitchTo(next);
+    else setSelected(next);
+  };
 
   const error = roles.error ?? perms.error;
   if ((roles.isError || perms.isError) && isForbidden(error))
@@ -52,6 +61,8 @@ export function RolesPanel({
   if (!roles.data || !perms.data) return <LoadingState message={t('iam.roles.loading')} />;
 
   const current = roles.data.find((r) => r.id === selected) ?? null;
+  const switchName = (to: string | 'new') =>
+    to === 'new' ? t('iam.roles.new') : (roles.data?.find((r) => r.id === to)?.name ?? '');
   const changed = async (message: string, id?: string) => {
     await roles.refetch();
     if (id) setSelected(id);
@@ -73,7 +84,7 @@ export function RolesPanel({
                 <button
                   type="button"
                   aria-pressed={r.id === selected}
-                  onClick={() => setSelected(r.id)}
+                  onClick={() => select(r.id)}
                   className={cn(
                     'flex w-full cursor-pointer flex-col items-start gap-2 rounded-md border border-line-subtle bg-surface p-8 text-left hover:bg-hover focus-visible:focus-ring',
                     r.id === selected && 'border-line-selected bg-selected',
@@ -94,16 +105,40 @@ export function RolesPanel({
         )}
         {canManage && (
           <div>
-            <Button onClick={() => setSelected('new')}>{t('iam.roles.new')}</Button>
+            <Button onClick={() => select('new')}>{t('iam.roles.new')}</Button>
           </div>
         )}
       </section>
 
-      <section aria-label={t('iam.roles.detail')} className="min-w-0">
+      <section aria-label={t('iam.roles.detail')} className="flex min-w-0 flex-col gap-12">
+        {switchTo !== null && current && (
+          <div
+            role="alert"
+            className="flex flex-col gap-8 rounded-md border border-line bg-warning-bg p-12 text-warning-fg"
+          >
+            <p className="type-body m-0">
+              {t('iam.roles.unsaved', { role: current.name, next: switchName(switchTo) })}
+            </p>
+            <div className="flex flex-wrap gap-8">
+              <Button variant="primary" onClick={() => setSwitchTo(null)}>
+                {t('iam.roles.unsavedKeep')}
+              </Button>
+              <Button
+                onClick={() => {
+                  setSelected(switchTo);
+                  setSwitchTo(null);
+                  setDirty(false);
+                }}
+              >
+                {t('iam.roles.unsavedDiscard')}
+              </Button>
+            </div>
+          </div>
+        )}
         {selected === 'new' ? (
           <NewRoleForm
             permissions={perms.data}
-            onCreated={(role) => changed(t('iam.done'), role.id)}
+            onCreated={(role) => changed(t('iam.done.roleCreated', { role: role.name }), role.id)}
             onCancel={() => setSelected(null)}
           />
         ) : current ? (
@@ -112,7 +147,8 @@ export function RolesPanel({
             role={current}
             permissions={perms.data}
             canManage={canManage && !current.system}
-            onSaved={() => changed(t('iam.done'))}
+            onDirtyChange={setDirty}
+            onSaved={() => changed(t('iam.done.rolePermissions', { role: current.name }))}
           />
         ) : (
           <p className="type-body m-0 text-ink-muted">{t('iam.roles.select')}</p>
@@ -151,9 +187,12 @@ function PermissionChecks({
             onChange={() => onToggle(p.code)}
           />
           <span className="flex flex-col">
-            <label htmlFor={`${id}-${p.code}`}>{p.code}</label>
-            <span id={`${id}-${p.code}-desc`} className="type-caption text-ink-secondary">
-              {p.description}
+            <label htmlFor={`${id}-${p.code}`}>{p.description || p.code}</label>
+            <span
+              id={`${id}-${p.code}-desc`}
+              className="type-caption text-ink-muted [font-variant-numeric:tabular-nums]"
+            >
+              {p.code}
             </span>
           </span>
         </div>
@@ -173,25 +212,46 @@ function RolePermissions({
   role,
   permissions,
   canManage,
+  onDirtyChange,
   onSaved,
 }: {
   role: IamRole;
   permissions: IamPermission[];
   canManage: boolean;
+  onDirtyChange: (dirty: boolean) => void;
   onSaved: () => Promise<void>;
 }) {
   const { t } = useI18n();
+  const id = useId();
   const [checked, setChecked] = useState<ReadonlySet<string>>(() => new Set(role.permissions));
   const [saving, setSaving] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const reviewRef = useRef<HTMLHeadingElement>(null);
+  const added = permissions.filter(
+    (p) => checked.has(p.code) && !role.permissions.includes(p.code),
+  );
+  const removed = permissions.filter(
+    (p) => !checked.has(p.code) && role.permissions.includes(p.code),
+  );
   const dirty =
     checked.size !== role.permissions.length || role.permissions.some((p) => !checked.has(p));
+  // Closing the window, or switching to another role, with unsaved ticks asks first.
+  useReportUnsaved(dirty);
+  useEffect(() => {
+    onDirtyChange(dirty);
+    return () => onDirtyChange(false);
+  }, [dirty, onDirtyChange]);
+  useEffect(() => {
+    if (reviewing) reviewRef.current?.focus();
+  }, [reviewing]);
 
   const save = async () => {
     setSaving(true);
     setError(null);
     try {
       await setRolePermissions(role.id, [...checked].sort());
+      setReviewing(false);
       await onSaved();
     } catch (e) {
       setError(iamErrorKey(e));
@@ -199,6 +259,20 @@ function RolePermissions({
       setSaving(false);
     }
   };
+  const changeList = (list: IamPermission[], key: string) =>
+    list.length > 0 && (
+      <>
+        <h5 className="type-caption-strong m-0 text-ink-secondary">{t(key)}</h5>
+        <ul className="m-0 flex flex-col gap-2 pl-16">
+          {list.map((p) => (
+            <li key={p.code} className="type-body">
+              {p.description || p.code}{' '}
+              <span className="type-caption text-ink-muted">({p.code})</span>
+            </li>
+          ))}
+        </ul>
+      </>
+    );
 
   return (
     <div className="flex flex-col gap-12">
@@ -215,19 +289,50 @@ function RolePermissions({
       <PermissionChecks
         permissions={permissions}
         checked={checked}
-        disabled={!canManage || saving}
+        disabled={!canManage || saving || reviewing}
         onToggle={(code) => setChecked((s) => toggle(s, code))}
       />
+      {reviewing && (
+        <section
+          aria-labelledby={`${id}-review`}
+          className="flex flex-col gap-8 rounded-md border border-line bg-surface-subtle p-12"
+        >
+          <h4
+            id={`${id}-review`}
+            ref={reviewRef}
+            tabIndex={-1}
+            className="type-body-strong m-0 outline-none"
+          >
+            {t('iam.roles.reviewTitle', { role: role.name })}
+          </h4>
+          {changeList(added, 'iam.roles.added')}
+          {changeList(removed, 'iam.roles.removed')}
+          <p className="type-caption m-0 rounded-md bg-warning-bg p-8 text-warning-fg">
+            {t('iam.roles.reviewEffect', { role: role.name })}
+          </p>
+        </section>
+      )}
       {error && (
         <p role="alert" className={formStyles.errorText}>
           {t(error)}
         </p>
       )}
       {canManage && (
-        <div>
-          <Button variant="primary" disabled={!dirty || saving} onClick={() => void save()}>
-            {t('iam.roles.save')}
-          </Button>
+        <div className="flex flex-wrap gap-8">
+          {reviewing ? (
+            <>
+              <Button variant="primary" disabled={saving} onClick={() => void save()}>
+                {t('iam.roles.save')}
+              </Button>
+              <Button disabled={saving} onClick={() => setReviewing(false)}>
+                {t('iam.roles.editAgain')}
+              </Button>
+            </>
+          ) : (
+            <Button variant="primary" disabled={!dirty} onClick={() => setReviewing(true)}>
+              {t('iam.roles.review')}
+            </Button>
+          )}
         </div>
       )}
     </div>

@@ -502,6 +502,7 @@ func checkClinicalRead(ctx context.Context, lookup config.Lookup) error {
 	}
 	fmt.Printf("patient search (one common letter, limit 25): %d rows\n", len(hits))
 	var profiles, validBirth, nik, phone, encounters, withTime, payerVisits, payers, payersNamed int
+	var allergyEntries, allergyTexts, allergyPatients int
 	careSettings, statuses := map[string]int{}, map[string]int{}
 	for _, h := range hits {
 		mrn := clinical.Clean(h.MRN)
@@ -551,12 +552,23 @@ func checkClinicalRead(ctx context.Context, lookup config.Lookup) error {
 				payersNamed++
 			}
 		}
+		allergyRows, err := r.PatientAllergies(ctx, mrn, clinical.MaxAllergyRows+1)
+		if err != nil {
+			return fmt.Errorf("patient allergies: %w", err)
+		}
+		allergyEntries += len(allergyRows)
+		if n := len(clinical.MapAllergies(allergyRows, false, loc).Allergies); n > 0 {
+			allergyTexts += n
+			allergyPatients++
+		}
 	}
 	fmt.Printf("patient profiles read:             %d (valid birth date %d, NIK recorded %d, phone recorded %d)\n",
 		profiles, validBirth, nik, phone)
 	fmt.Printf("encounters of those patients:      %d (registration time mapped %d)\n", encounters, withTime)
 	fmt.Printf("payer history of those patients:   %d visits, %d payer groups (%d with a penjab name)\n",
 		payerVisits, payers, payersNamed)
+	fmt.Printf("allergies of those patients:       %d entries, %d distinct texts, %d patients with any\n",
+		allergyEntries, allergyTexts, allergyPatients)
 	fmt.Printf("care settings:                     %v\n", careSettings)
 	fmt.Printf("legacy status codes:               %v\n", statuses)
 	found, err := r.SearchEncounters(ctx, time.Now().Format("2006/"), 25)
@@ -564,6 +576,17 @@ func checkClinicalRead(ctx context.Context, lookup config.Lookup) error {
 		return fmt.Errorf("encounter search: %w", err)
 	}
 	fmt.Printf("encounter search (this year, limit 25): %d rows\n", len(found))
+	namedHits, err := r.SearchEncountersNamed(ctx, time.Now().Format("2006/"), 25)
+	if err != nil {
+		return fmt.Errorf("encounter search with names: %w", err)
+	}
+	withName := 0
+	for _, h := range namedHits {
+		if clinical.Clean(h.PatientName) != "" {
+			withName++
+		}
+	}
+	fmt.Printf("encounter search with names:       %d rows (%d with a patient name)\n", len(namedHits), withName)
 	if len(found) > 0 {
 		if _, err := r.Encounter(ctx, clinical.Clean(found[0].Number)); err != nil {
 			return fmt.Errorf("encounter by number: %w", err)

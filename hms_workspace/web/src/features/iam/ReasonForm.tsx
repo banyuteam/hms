@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Button } from '@/components/Button';
@@ -11,20 +11,25 @@ const schema = z.object({ reason: z.string().trim().max(500, 'iam.reason.tooLong
 type Values = z.infer<typeof schema>;
 
 /**
- * Inline confirmation for a consequential IAM change (suspend, deactivate, revoke). The reason is required by the server
- * and recorded in the audit trail; `optional` is only for reactivation. Errors stay in the form so nothing is lost.
+ * Inline confirmation for a consequential IAM change (suspend, deactivate, reactivate, revoke). It says, visibly, what is
+ * about to happen and to whom (`title`), what that does (`effect`), and the button names the action. The reason is
+ * required by the server and recorded in the audit trail (`optional` only for reactivation). Focus moves to the reason
+ * when the form opens; errors stay in the form so nothing is lost.
  */
 export function ReasonForm({
-  label,
+  title,
   effect,
+  confirmLabel,
   optional = false,
   onConfirm,
   onCancel,
 }: {
-  /** Accessible name of the form, e.g. "Suspend dr. A". */
-  label: string;
+  /** What is about to happen, e.g. "Suspend dr. A". Heading and accessible name of the form. */
+  title: string;
   /** What the change does, shown before confirming. */
   effect?: string;
+  /** The action on the button, e.g. "Suspend" (never a bare "Confirm"). */
+  confirmLabel: string;
   optional?: boolean;
   onConfirm: (reason: string) => Promise<void>;
   onCancel: () => void;
@@ -36,12 +41,15 @@ export function ReasonForm({
     register,
     handleSubmit,
     setError,
+    setFocus,
     formState: { errors, isSubmitting },
   } = useForm<Values>({ resolver: zodResolver(schema), defaultValues: { reason: '' } });
 
+  useEffect(() => setFocus('reason'), [setFocus]);
+
   const onValid = async ({ reason }: Values) => {
     if (!optional && !reason) {
-      setError('reason', { message: 'iam.reason.required' });
+      setError('reason', { message: 'iam.reason.required' }, { shouldFocus: true });
       return;
     }
     setServerError(null);
@@ -53,14 +61,18 @@ export function ReasonForm({
   };
 
   const errorKey = errors.reason?.message ?? serverError;
+  const describedBy = [`${id}-hint`, errorKey ? `${id}-error` : null].filter(Boolean).join(' ');
   return (
     <form
-      aria-label={label}
+      aria-labelledby={`${id}-title`}
       className="flex flex-col gap-8 rounded-md border border-line bg-surface-subtle p-12"
       onSubmit={(e) => void handleSubmit(onValid)(e)}
       noValidate
     >
-      {effect && <p className="type-caption m-0 text-ink-secondary">{effect}</p>}
+      <h4 id={`${id}-title`} className="type-body-strong m-0 text-ink">
+        {title}
+      </h4>
+      {effect && <p className="type-body m-0 text-ink-secondary">{effect}</p>}
       <div className={formStyles.field}>
         <label htmlFor={`${id}-reason`}>{t(optional ? 'iam.reason.optional' : 'iam.reason')}</label>
         <input
@@ -68,10 +80,13 @@ export function ReasonForm({
           className={`${formStyles.input} px-12`}
           maxLength={500}
           disabled={isSubmitting}
-          aria-invalid={Boolean(errorKey) || undefined}
-          aria-describedby={errorKey ? `${id}-error` : undefined}
+          aria-invalid={Boolean(errors.reason) || undefined}
+          aria-describedby={describedBy}
           {...register('reason')}
         />
+        <span id={`${id}-hint`} className="type-caption text-ink-muted">
+          {t('iam.reason.hint')}
+        </span>
       </div>
       {errorKey && (
         <p id={`${id}-error`} role="alert" className={formStyles.errorText}>
@@ -80,7 +95,7 @@ export function ReasonForm({
       )}
       <div className="flex gap-8">
         <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {t('iam.action.confirm')}
+          {confirmLabel}
         </Button>
         <Button onClick={onCancel} disabled={isSubmitting}>
           {t('iam.action.cancel')}

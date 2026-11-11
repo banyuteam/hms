@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useRef, useState, type KeyboardEvent } from 'react';
 import { isLiveApi } from '@/api/liveApi';
 import { ErrorState } from '@/components/QueryState';
 import { cn } from '@/lib/cn';
@@ -20,6 +20,11 @@ export function AccessWindow({ winId }: { winId: string }) {
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>('users');
   const [announcement, setAnnouncement] = useState('');
+  // Cleared first, so the same message twice in a row is still announced (a live region only reads changes).
+  const announce = useCallback((message: string) => {
+    setAnnouncement('');
+    setTimeout(() => setAnnouncement(message), 50);
+  }, []);
   const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ users: null, roles: null });
   const can = {
     usersManage: usePermission(PERMISSIONS.usersManage),
@@ -72,7 +77,12 @@ export function AccessWindow({ winId }: { winId: string }) {
           </button>
         ))}
       </div>
-      <p role="status" aria-live="polite" className="sr-only">
+      {/* Visible as well as announced, and specific ("Role X granted to Y"). */}
+      <p
+        role="status"
+        aria-live="polite"
+        className="type-body m-0 rounded-md bg-success-bg px-12 py-8 text-success-fg empty:p-0"
+      >
         {announcement}
       </p>
       <div
@@ -82,14 +92,9 @@ export function AccessWindow({ winId }: { winId: string }) {
         className="min-h-0"
       >
         {tab === 'users' ? (
-          <UsersPanel
-            me={user.id}
-            facilityId={user.facilityId}
-            can={can}
-            announce={setAnnouncement}
-          />
+          <UsersPanel me={user.id} facilityId={user.facilityId} can={can} announce={announce} />
         ) : (
-          <RolesPanel canManage={canManageRoles} announce={setAnnouncement} />
+          <RolesPanel canManage={canManageRoles} announce={announce} />
         )}
       </div>
     </div>

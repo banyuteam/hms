@@ -5,6 +5,7 @@ package clinical
 
 import (
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -71,6 +72,28 @@ type Encounter struct {
 	CareSetting  string  `json:"care_setting"`
 	Status       Status  `json:"status"`
 	PayerCode    *string `json:"payer_code"`
+}
+
+// EncounterHit is an encounter search result. PatientName is set (possibly "", not recorded) only when the caller may
+// also read patients; otherwise it is omitted (clinical-read-v1 1.2.0).
+type EncounterHit struct {
+	Encounter
+	PatientName *string `json:"patient_name,omitempty"`
+}
+
+// Allergy is one distinct allergy text recorded for a patient, as written (trimmed), with its latest entry.
+type Allergy struct {
+	Text                string  `json:"text"`
+	LastRecordedAt      *string `json:"last_recorded_at"`
+	LastEncounterNumber string  `json:"last_encounter_number"`
+	Source              string  `json:"source"`
+	TimesRecorded       int     `json:"times_recorded"`
+}
+
+// PatientAllergies is every allergy text recorded for a patient, latest recorded first.
+type PatientAllergies struct {
+	Allergies []Allergy `json:"allergies"`
+	Truncated bool      `json:"truncated"`
 }
 
 // UsedPayer is one payer used on a patient's visits, with those visits latest first.
@@ -295,6 +318,67 @@ func MapPayerHistory(mrn string, rows []legacyhms.PayerVisitRow, truncated bool,
 			p.LastVisitAt = e.RegisteredAt // the latest visit had no valid date; keep the latest dated one
 		}
 	}
+	return out
+}
+
+// MapEncounterHit maps an encounter search row with the patient's name ("" = not recorded or no `pasien` row).
+func MapEncounterHit(r legacyhms.EncounterHitRow, loc *time.Location) EncounterHit {
+	name := Clean(r.PatientName)
+	return EncounterHit{Encounter: MapEncounter(r.EncounterRow, loc), PatientName: &name}
+}
+
+// allergySources maps the legacy table of an allergy entry to its contract source.
+var allergySources = map[string]string{
+	"pemeriksaan_ralan":   "clinical_note_outpatient",
+	"pemeriksaan_ranap":   "clinical_note_inpatient",
+	"resume_pasien_ranap": "discharge_summary",
+}
+
+// MapAllergies groups allergy entries by their exact trimmed text (case-sensitive: different spellings stay separate,
+// merging them would be interpretation; nothing is normalised, so "Tidak ada" is returned as written). Each allergy
+// carries its latest dated entry (time, visit and source); an allergy recorded only in discharge summaries, which have
+// no time of their own, has a null time and the first entry in reader order (the newest visit number). Allergies are
+// ordered by that time, latest first, undated last; ties keep reader order.
+func MapAllergies(rows []legacyhms.AllergyRow, truncated bool, loc *time.Location) PatientAllergies {
+	out := PatientAllergies{Allergies: []Allergy{}, Truncated: truncated}
+	latest := []*time.Time{}
+	index := map[string]int{}
+	for _, row := range rows {
+		text, source := Clean(row.Text), allergySources[Clean(row.Source)]
+		if text == "" || source == "" {
+			continue
+		}
+		at := LocalTime(row.Date, row.Time, loc)
+		i, seen := index[text]
+		if !seen {
+			i = len(out.Allergies)
+			index[text] = i
+			out.Allergies = append(out.Allergies, Allergy{Text: text})
+			latest = append(latest, nil)
+		}
+		a := &out.Allergies[i]
+		a.TimesRecorded++
+		if a.TimesRecorded == 1 || (at != nil && (latest[i] == nil || at.After(*latest[i]))) {
+			latest[i] = at
+			a.LastRecordedAt, a.LastEncounterNumber, a.Source = stamp(at), Clean(row.Number), source
+		}
+	}
+	order := make([]int, len(out.Allergies))
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(x, y int) bool {
+		a, b := latest[order[x]], latest[order[y]]
+		if a == nil || b == nil {
+			return a != nil && b == nil
+		}
+		return a.After(*b)
+	})
+	sorted := make([]Allergy, len(order))
+	for k, i := range order {
+		sorted[k] = out.Allergies[i]
+	}
+	out.Allergies = sorted
 	return out
 }
 

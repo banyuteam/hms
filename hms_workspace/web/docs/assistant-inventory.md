@@ -9,6 +9,16 @@ latest visit. F-8 to F-10 are fixed (2026-11-09): a tagged section gives the top
 quick-action buttons put it first (F-8); with several visits tagged the assistant asks which one and the user picks a chip
 (F-9); the UI no longer calls it AI (labels, sparkles icon, "AI draft"), and the attachment control that never read files
 is gone (F-10). Feedback on findings is proposed in ADR-SVC-008 (not built).
+**Since 2026-11-10** the catalogue is data: `src/features/assistant/catalogue.json` holds the topics and their patterns,
+advice refusal, quick-action order, section topics, the reply of every step and how each read-back answer is built (record
+source, row format, header facts, "none" reply), plus the claim presentation keys. `catalogue.ts` validates it at startup
+against fixed lists (topics, record sources and their fields, visit facts) and throws when it is invalid; `rules.ts` keeps
+what is code (choosing the visit, reading the record). Behaviour was unchanged by the move (answers compared before and
+after). Line numbers in the tables below refer to the 2026-11-09 baseline.
+General help (2026-11-10): the approved `hms-assistant.general-help` release is served by hms_services (ADR-SVC-006
+amendment 2026-11-10) and matched in `src/features/assistant/knowledge.ts`; the catalogue's `knowledge` section holds the
+precedence (general help, strong then one-word match → advice refusal → record topics → section topic → help;
+owner decision 2026-11-10: general help on top).
 **Governs:** `hms-assistant-workspace-governance` skill, Phase 1 · **Next:** ADR-SVC-006 and `assistant-v1` contract (Phase 2)
 **Reviewed:** `src/features/assistant/{AssistantPanel,rules}.tsx|ts`, `src/state/assistant.tsx`, `src/api/select.ts`,
 `src/api/liveTimeline.ts`, `src/features/emr/windows/*` (Ask AI buttons), `hms_services/contracts/api/clinical-timeline-v1.openapi.yaml` 1.2.0

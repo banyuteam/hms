@@ -1,3 +1,4 @@
+import type { AllergyEntry, AllergySource } from './emrApi';
 import type {
   ClinicalNote,
   EncounterJourney,
@@ -7,6 +8,7 @@ import type {
   Prescription,
   ProcedureAction,
   Radiology,
+  RadiologyReport,
   RoomStay,
   SepRecord,
   Surgery,
@@ -66,28 +68,63 @@ export const notes = (j: EncounterJourney, order: 'asc' | 'desc' = 'asc'): NoteR
 export const labs = (j: EncounterJourney): LabRow[] =>
   collect(j, 'laboratory').map((r) => ({ ...r, id: `lab:${r.key}:${r.index}` }));
 
-/** Pairs each exam with the next unassigned report (reports arrive at a later timestamp than the exam). */
+/**
+ * A report belongs to an exam only when both carry the same stored date and time: that is how the legacy HMS links
+ * them (`hasil_radiologi` and `periksa_radiologi` share `no_rawat` + `tgl_periksa` + `jam`; `laporan_operasi.tanggal`
+ * is the surgery's `tgl_operasi`). A key without a time (or `undated`) links nothing. Nothing is paired by order or
+ * proximity: a report with no exam at its time is listed on its own, never attached to a neighbour.
+ */
+const linkable = (key: string) => key.includes('T');
+
+export type RadiologyReportRow = RadiologyReport & Stamp & { index: number; id: string };
+export type SurgeryReportRow = SurgeryReport & Stamp & { index: number; id: string };
+
+/** Exams with the report written at their date and time (one report covers every exam of that time). */
 export function radiology(j: EncounterJourney): RadiologyRow[] {
-  const exams = collect(j, 'radiology').map((r) => ({
-    ...r,
-    id: `rad:${r.key}:${r.index}`,
-    report: null as string | null,
-  }));
   const reports = collect(j, 'radiology_report');
-  for (const rep of reports) {
-    const target = exams.find((e) => e.report === null && e.key <= rep.key);
-    if (target) target.report = rep.hasil;
-  }
-  return exams;
+  return collect(j, 'radiology').map((r) => {
+    const own = linkable(r.key) ? reports.filter((rep) => rep.key === r.key) : [];
+    return {
+      ...r,
+      id: `rad:${r.key}:${r.index}`,
+      report: own.length ? own.map((rep) => rep.hasil).join('\n\n') : null,
+    };
+  });
+}
+
+/** Radiology reports with no exam at the same date and time: shown as such, never guessed onto an exam. */
+export function unlinkedRadiologyReports(j: EncounterJourney): RadiologyReportRow[] {
+  const examKeys = new Set(collect(j, 'radiology').map((r) => r.key));
+  return collect(j, 'radiology_report')
+    .filter((rep) => !linkable(rep.key) || !examKeys.has(rep.key))
+    .map((rep) => ({ ...rep, id: `radrep:${rep.key}:${rep.index}` }));
 }
 
 export const prescriptions = (j: EncounterJourney): PrescriptionRow[] => collect(j, 'prescription');
 export const medicationGiven = (j: EncounterJourney): GivenRow[] => collect(j, 'medication_given');
 export const actions = (j: EncounterJourney): ActionRow[] => collect(j, 'procedures');
 
+/** Surgeries with the report dated at the surgery's own date and time (see `linkable`). */
 export function surgeries(j: EncounterJourney): SurgeryRow[] {
   const reports = collect(j, 'surgery_report');
-  return collect(j, 'surgery').map((s, i) => ({ ...s, report: reports[i] ?? null }));
+  return collect(j, 'surgery').map((s) => ({
+    ...s,
+    report: (linkable(s.key) && reports.find((r) => r.key === s.key)) || null,
+  }));
+}
+
+/** Surgery reports with no surgery at the same date and time. */
+export function unlinkedSurgeryReports(j: EncounterJourney): SurgeryReportRow[] {
+  const surgeryKeys = new Set(collect(j, 'surgery').map((s) => s.key));
+  const seen = new Set<string>();
+  return collect(j, 'surgery_report')
+    .filter((r) => {
+      // The first report at a surgery's time is that surgery's; any further one at the same time is listed on its own.
+      const linked = linkable(r.key) && surgeryKeys.has(r.key) && !seen.has(r.key);
+      if (linked) seen.add(r.key);
+      return !linked;
+    })
+    .map((r) => ({ ...r, id: `oprep:${r.key}:${r.index}` }));
 }
 
 export type VitalKey = 'tensi' | 'nadi' | 'respirasi' | 'suhu_tubuh' | 'spo2' | 'gcs';
@@ -128,7 +165,8 @@ export interface EncounterFacts {
   payerCode: string | null;
   status: string | null;
   deceased: boolean;
-  allergy: { state: 'recorded'; text: string } | { state: 'notRecorded' };
+  /** Allergy texts written on this visit, distinct, newest first. Patient-level: `PatientAllergies`. */
+  allergy: { state: 'recorded'; texts: string[] } | { state: 'notRecorded' };
   truncated: string[];
   sep: SepFacts;
 }
@@ -149,6 +187,71 @@ export function sepFacts(j: EncounterJourney): SepFacts {
   return { state: 'present', records: list };
 }
 
+/** One allergy entry of a visit as written (empty and "-" are "nothing written", dropped). */
+export interface AllergyRecord {
+  text: string;
+  /** Stored key (`YYYY-MM-DDTHH:MM:SS`) of the note; null for the discharge summary (it has no time of its own). */
+  at: string | null;
+  encounter: string;
+  source: AllergySource;
+}
+
+const written = (t: string | null | undefined) => {
+  const v = (t ?? '').trim();
+  return v && v !== '-' ? v : null;
+};
+
+/** The allergy entries of one visit: every CPPT note's allergy field, newest first, then the discharge summary's. */
+export function allergyRecords(j: EncounterJourney): AllergyRecord[] {
+  const out: AllergyRecord[] = [];
+  for (const n of notes(j, 'desc')) {
+    const text = written(n.alergi);
+    if (text)
+      out.push({
+        text,
+        at: n.key === 'undated' ? null : n.key,
+        encounter: j.no_rawat,
+        source:
+          n.care_setting === 'inpatient' ? 'clinical_note_inpatient' : 'clinical_note_outpatient',
+      });
+  }
+  const ds = written(j.summary.discharge_summary_inpatient?.alergi);
+  if (ds) out.push({ text: ds, at: null, encounter: j.no_rawat, source: 'discharge_summary' });
+  return out;
+}
+
+/**
+ * Groups entries by their exact text (different spellings stay apart: merging them would be interpretation), latest
+ * dated entry first; undated last. The synthetic twin of the server's grouping (clinical-read-v1 1.2.0).
+ */
+export function groupAllergies(records: readonly AllergyRecord[]): AllergyEntry[] {
+  const byText = new Map<string, AllergyEntry>();
+  const stamp = (at: string | null) => (at ? at.replace('T', ' ') : null);
+  for (const r of records) {
+    const e = byText.get(r.text);
+    if (!e) {
+      byText.set(r.text, {
+        text: r.text,
+        lastRecorded: stamp(r.at),
+        lastEncounter: r.encounter,
+        source: r.source,
+        timesRecorded: 1,
+      });
+      continue;
+    }
+    e.timesRecorded += 1;
+    const at = stamp(r.at);
+    if (at && (!e.lastRecorded || at > e.lastRecorded)) {
+      e.lastRecorded = at;
+      e.lastEncounter = r.encounter;
+      e.source = r.source;
+    }
+  }
+  return [...byText.values()].sort((a, b) =>
+    (b.lastRecorded ?? '').localeCompare(a.lastRecorded ?? ''),
+  );
+}
+
 export function facts(j: EncounterJourney): EncounterFacts {
   const all = moments(j);
   const reg = all.find((m) => m.moment.registration)?.moment.registration?.[0] ?? null;
@@ -158,12 +261,8 @@ export function facts(j: EncounterJourney): EncounterFacts {
     [...j.summary.attending_doctors].sort((a, b) => a.prioritas - b.prioritas)[0]?.doctor_name ??
     reg?.doctor_name ??
     null;
-  const allergyTexts = [
-    ...notes(j, 'desc').map((n) => n.alergi ?? ''),
-    j.summary.discharge_summary_inpatient?.alergi ?? '',
-  ]
-    .map((t) => t.trim())
-    .filter(Boolean);
+  // Every distinct allergy text written on this visit (newest note first), not only the latest one.
+  const allergyTexts = [...new Set(allergyRecords(j).map((r) => r.text))];
   const deceased =
     enc?.stts === 'Meninggal' ||
     stay?.stts_pulang === 'Meninggal' ||
@@ -186,8 +285,8 @@ export function facts(j: EncounterJourney): EncounterFacts {
     status: enc?.stts ?? reg?.stts ?? null,
     deceased,
     // Never "no known allergies": an empty text only means nothing was written.
-    allergy: allergyTexts[0]
-      ? { state: 'recorded', text: allergyTexts[0] }
+    allergy: allergyTexts.length
+      ? { state: 'recorded', texts: allergyTexts }
       : { state: 'notRecorded' },
     truncated: j.meta.truncated,
     sep: sepFacts(j),

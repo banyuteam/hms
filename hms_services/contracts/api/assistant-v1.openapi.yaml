@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HMS Assistant API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     Implemented in hms_services (package assistant, ADR-SVC-006); used by hms_workspace/web (src/api/claimApi.ts). Deterministic rule evaluation for the assistant: no language model, no
     generated text. Session (auth-v1) and permission `assistant.rules.evaluate` at the session facility required. The
@@ -12,6 +12,8 @@ info:
     versions 1 and 2 are retired and answered with unsupported_rule_set.
     A result is a snapshot of the legacy record at `evaluated_at`. Findings are codes for the client to localize; they
     carry no record values. A complete checklist is an internal readiness check, not insurer acceptance.
+    1.1.0 (2026-11-10): GET /assistant/knowledge/general-help, the approved general-help release (how to use HMS, no
+    patient data); session only, no permission, not audited.
 servers:
   - url: /api/v1
 paths:
@@ -30,6 +32,24 @@ paths:
                   rule_sets: { type: array, items: { $ref: '#/components/schemas/RuleSetInfo' } }
         '401': { description: unauthenticated }
         '403': { description: forbidden }
+  /assistant/knowledge/general-help:
+    get:
+      summary: The approved general-help release (static, no PHI, not audited). Added in 1.1.0.
+      description: |
+        Built into the service from the reviewed dataset `runtimes/python-workers/assistant/datasets/general-help.seed.json`.
+        Served only when the dataset is approved (status, approver and date). Only intents written from the app
+        (`review: from_app`, no attached record) with a complete answer in every language are included; intents waiting
+        for facts from the hospital are left out. The dataset's held-out test set and the approver are never served.
+        Patterns are example messages; the client matches them deterministically (no language model). Needs a session
+        (auth-v1) but no permission: the content is how to use HMS.
+      responses:
+        '200':
+          description: Release
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KnowledgeRelease' }
+        '401': { description: unauthenticated }
+        '404': { description: not_found (no approved release) }
   /assistant/rules/evaluate:
     post:
       summary: Evaluate one rule set against explicit, user-selected context references (side-effect free)
@@ -56,6 +76,26 @@ paths:
         '503': { description: 'service_unavailable (legacy read failed or timed out, audit write failed)' }
 components:
   schemas:
+    KnowledgeRelease:
+      type: object
+      required: [dataset, version, approved_at, languages, intents]
+      properties:
+        dataset: { type: string, examples: [hms-assistant.general-help] }
+        version: { type: string, description: version of the dataset }
+        approved_at: { type: string, description: date of the approval as recorded in the dataset }
+        languages: { type: array, items: { type: string }, examples: [[id, en]] }
+        intents:
+          type: array
+          items:
+            type: object
+            required: [tag, patterns, responses]
+            properties:
+              tag: { type: string, examples: [help.sign_in] }
+              patterns: { type: array, minItems: 1, items: { type: string }, description: example user messages }
+              responses:
+                type: object
+                description: answer text per language (every language of `languages`)
+                additionalProperties: { type: string }
     RuleSetInfo:
       type: object
       required: [id, version, resource_types, max_references, rules]

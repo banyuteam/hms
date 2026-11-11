@@ -92,7 +92,7 @@ describe('RecordSearch: loading and error states', () => {
     expect(await emrApi.findPatients(' s ')).toEqual([]);
     expect(spy).not.toHaveBeenCalled();
     expect(await emrApi.findPatients('00012346')).toEqual([
-      { mrn: '00012346', name: 'Siti Nurhaliza' },
+      { mrn: '00012346', name: 'Siti Nurhaliza', sex: 'female', birthDate: '1985-10-02' },
     ]);
   });
 });
@@ -102,6 +102,14 @@ describe('RecordSearch: matching and hints', () => {
     const input = await openSearch();
     await userEvent.type(input, 'nurhaliza   siti');
     expect(await screen.findByRole('list', { name: /siti nurhaliza/i })).toBeInTheDocument();
+  });
+
+  it('shows date of birth and sex next to the name, so two patients with the same name can be told apart', async () => {
+    const input = await openSearch();
+    await userEvent.type(input, 'siti nurhaliza');
+    expect(
+      (await screen.findAllByText(/MRN 00012346 · Born 02 Oct 1985 \(\d+ y\) · Female/))[0],
+    ).toBeInTheDocument();
   });
 
   it('asks for 2 characters for a patient (not a visit-number hint) and says "No matches" from 2', async () => {

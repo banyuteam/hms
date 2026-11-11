@@ -6,9 +6,18 @@ import { ViewerWindow } from '@/features/emr/windows/ViewerWindow';
 import { AccessWindow } from '@/features/iam/AccessWindow';
 import { TariffWindow } from '@/features/tariffs/TariffWindow';
 import type { WindowState } from '@/state/home';
+import { WindowIdProvider } from './windowGuard';
 
 /** Content of one window. `key={win.id}` resets local state when a window is pointed at another record. */
 export function WindowBody({ win }: { win: WindowState }) {
+  return (
+    <WindowIdProvider id={win.id}>
+      <Content win={win} />
+    </WindowIdProvider>
+  );
+}
+
+function Content({ win }: { win: WindowState }) {
   const { mrn, norawat, item } = win.params;
   switch (win.kind) {
     case 'emr-profile':
