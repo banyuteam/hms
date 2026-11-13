@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HMS Layered Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: stacked horizontal bands (top = people, bottom = data), each with a layer label rail on the left.
+   Palette follows the Banyumanik 2 tokens in hms_workspace/web/src/styles/tokens.css (brand navy #264f78). */
+:root {
+  --bg: #eef4fb;
+  --surface: #ffffff;
+  --surface-2: #f5f9fe;
+  --ink: #132847;
+  --ink-2: #405a7e;
+  --ink-3: #6a7f9f;
+  --line: #cbdff5;
+  --navy: #264f78;
+  --navy-soft: #dfe9f4;
+  --live: #067a52;    --live-bg: #e0f8ed;
+  --wip: #a85a0c;     --wip-bg: #fff1dc;
+  --idle: #6a7f9f;    --idle-bg: #edf2f8;
+  --ext: #8a2f3c;     --ext-bg: #fbe9eb;
+  --font-display: "IBM Plex Sans Condensed", "Segoe UI", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1826; --surface: #15233a; --surface-2: #1a2b45; --ink: #e4edf8; --ink-2: #a9bdd8; --ink-3: #7f95b5;
+    --line: #2a3f60; --navy: #8fb6e0; --navy-soft: #1f3654;
+    --live: #5fd3a2; --live-bg: #123828; --wip: #f0a95a; --wip-bg: #3a2a14; --idle: #8fa3c0; --idle-bg: #1d2a3e;
+    --ext: #f19aa6; --ext-bg: #3a1c22; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1826; --surface: #15233a; --surface-2: #1a2b45; --ink: #e4edf8; --ink-2: #a9bdd8; --ink-3: #7f95b5;
+  --line: #2a3f60; --navy: #8fb6e0; --navy-soft: #1f3654;
+  --live: #5fd3a2; --live-bg: #123828; --wip: #f0a95a; --wip-bg: #3a2a14; --idle: #8fa3c0; --idle-bg: #1d2a3e;
+  --ext: #f19aa6; --ext-bg: #3a1c22; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { color-scheme: light; }
+body { margin: 0; }
+img { max-width: 100%; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.5;
+}
+.page {
+  max-width: 1180px; margin: 0 auto;
+  padding-block: 32px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 40px;
+}
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+h1 { font-size: 2.1rem; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+h2 { font-size: 1.35rem; font-weight: 600; }
+h3 { font-size: 1rem; font-weight: 600; }
+p { margin: 0; }
+.eyebrow { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+.lede { color: var(--ink-2); max-width: 68ch; }
+
+header.top { display: grid; gap: 12px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-top: 4px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 0.85rem; }
+
+/* status marks: color and border style both carry the state */
+.st { display: inline-block; width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.st.live { background: var(--live); }
+.st.wip { background: var(--wip-bg); border: 2px dashed var(--wip); }
+.st.idle { background: transparent; border: 2px dotted var(--idle); }
+.st.ext { background: var(--ext); border-radius: 50%; }
+
+/* ---------- the layered diagram ---------- */
+.diagram { display: grid; gap: 0; }
+.band {
+  display: grid; grid-template-columns: 12.5rem minmax(0, 1fr); gap: 0;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+}
+.rail {
+  background: var(--navy-soft); padding: 16px; display: grid; align-content: start; gap: 4px;
+  border-right: 1px solid var(--line);
+}
+.rail .lvl { font-family: var(--font-mono); font-size: 0.72rem; color: var(--ink-3); letter-spacing: 0.06em; }
+.rail h3 { font-size: 1.05rem; color: var(--navy); }
+.rail .owner { font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-2); }
+.cells { padding: 14px; display: grid; gap: 12px; min-width: 0; }
+.row { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.row.wide2 { grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr); }
+
+.box {
+  border-radius: 8px; padding: 12px 13px; display: grid; gap: 6px; align-content: start; min-width: 0;
+  background: var(--surface-2); border: 1px solid var(--line);
+}
+.box.live { border-left: 4px solid var(--live); }
+.box.wip { background: var(--wip-bg); border: 1.5px dashed var(--wip); }
+.box.idle { background: transparent; border: 1.5px dotted var(--idle); color: var(--ink-2); }
+.box.ext { background: var(--ext-bg); border: 1.5px solid var(--ext); }
+.box.group { background: transparent; border: 1px solid var(--line); gap: 10px; }
+.box .hd { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.box .hd b { font-family: var(--font-display); font-size: 0.98rem; font-weight: 600; }
+.box .tag { font-family: var(--font-mono); font-size: 0.7rem; color: var(--ink-3); }
+.box ul { margin: 0; padding-left: 1.05em; color: var(--ink-2); display: grid; gap: 2px; }
+.box li::marker { color: var(--ink-3); }
+.box p { color: var(--ink-2); }
+.path { font-family: var(--font-mono); font-size: 0.76rem; color: var(--navy); word-break: break-word; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font-family: var(--font-mono); font-size: 0.76rem; padding: 4px 8px; border-radius: 5px;
+  background: var(--surface-2); border: 1px solid var(--line); color: var(--ink); white-space: nowrap;
+}
+.chip .v { color: var(--ink-3); }
+.chip.live { border-color: var(--live); }
+.chip.wip { border: 1.5px dashed var(--wip); background: var(--wip-bg); }
+.chip.idle { border: 1.5px dotted var(--idle); background: transparent; color: var(--ink-3); }
+
+.link {
+  display: flex; align-items: center; gap: 10px; padding: 6px 0 6px calc(12.5rem + 14px);
+  color: var(--ink-3); font-family: var(--font-mono); font-size: 0.75rem;
+}
+.link::before { content: ""; width: 2px; height: 22px; background: var(--navy); opacity: 0.5; flex: none; }
+
+.process-head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
+.process-head b { font-family: var(--font-display); font-size: 1rem; }
+
+/* ---------- flows ---------- */
+.flows { display: grid; gap: 16px; }
+.flow { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 12px; }
+.flow .meta { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }
+.flow .meta p { color: var(--ink-2); }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); counter-reset: s; }
+.steps li {
+  counter-increment: s; background: var(--surface-2); border: 1px solid var(--line); border-radius: 7px;
+  padding: 10px 11px; display: grid; gap: 3px; align-content: start; color: var(--ink-2); font-size: 0.86rem;
+}
+.steps li::before { content: counter(s); font-family: var(--font-mono); font-size: 0.72rem; color: var(--navy); font-weight: 500; }
+.steps li b { color: var(--ink); font-weight: 600; }
+.authority { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 0.78rem; color: var(--ink-2); }
+.authority .s { padding: 3px 8px; border-radius: 5px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); }
+
+/* ---------- tables ---------- */
+.tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 0.86rem; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-size: 0.72rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); background: var(--surface-2); }
+tr:last-child td { border-bottom: 0; }
+td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink-2); }
+
+section { display: grid; gap: 14px; }
+.cols { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.note { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 8px; }
+.note ul { margin: 0; padding-left: 1.1em; color: var(--ink-2); display: grid; gap: 4px; }
+footer { color: var(--ink-3); font-size: 0.82rem; max-width: 80ch; }
+
+@media (max-width: 760px) {
+  .band { grid-template-columns: minmax(0, 1fr); }
+  .rail { border-right: 0; border-bottom: 1px solid var(--line); grid-template-columns: auto 1fr; align-items: baseline; gap: 2px 10px; padding: 12px 14px; }
+  .rail .owner { grid-column: 1 / -1; }
+  .link { padding-left: 14px; }
+  .row.wide2 { grid-template-columns: minmax(0, 1fr); }
+  h1 { font-size: 1.7rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="page">
+
+<header class="top">
+  <span class="eyebrow">RSU Banyumanik 2 · hms workspace · working tree as of 13 Nov 2026</span>
+  <h1>HMS layered architecture</h1>
+  <p class="lede">How <code>hms_workspace</code>, <code>hms_services</code> and <code>hms_database</code> fit together today, from the screen down to the data. Layers talk only to the layer below them through a versioned contract. The legacy Khanza database sits outside every layer and is only ever read.</p>
+  <div class="legend" aria-label="Legend">
+    <span><i class="st live"></i>Implemented and wired in</span>
+    <span><i class="st wip"></i>Code in the working tree, not yet wired or committed</span>
+    <span><i class="st idle"></i>Folder or ADR only</span>
+    <span><i class="st ext"></i>External system, read-only</span>
+  </div>
+</header>
+
+<!-- ======================= DIAGRAM ======================= -->
+<div class="diagram" role="figure" aria-label="Layered architecture diagram">
+
+  <!-- L1 Experience -->
+  <div class="band">
+    <div class="rail"><span class="lvl">LAYER 1</span><h3>Experience</h3><span class="owner">hms_workspace · hms_desktop</span></div>
+    <div class="cells">
+      <div class="row wide2">
+        <div class="box live">
+          <div class="hd"><b>Web app</b><span class="tag">React · Vite · Tailwind</span></div>
+          <span class="path">hms_workspace/web/src</span>
+          <ul>
+            <li>Workspace shell: home, dock, movable windows, idle sign-out, leave warning</li>
+            <li>EMR windows: profile, encounter, records, diagnostics, viewer, SEP details, emergency assessment</li>
+            <li>User &amp; Access (IAM admin), Tariff book, Assistant panel (claim readiness, general help)</li>
+            <li><code>src/api</code> is the only door to data: synthetic fixtures, or live <code>hms_services</code> when built with <code>VITE_DATA_SOURCE=bff</code></li>
+            <li>Locales <code>id</code> and <code>en</code>; Banyumanik 2 design tokens</li>
+          </ul>
+        </div>
+        <div class="row" style="grid-template-columns: minmax(0,1fr);">
+          <div class="box idle">
+            <div class="hd"><b>Web scaffolds</b></div>
+            <p><code>engine/ui-ir</code>, <code>workflow-engine</code>, <code>realtime</code>, 14 <code>modules/*</code> placeholders</p>
+          </div>
+          <div class="box idle">
+            <div class="hd"><b>Android · iOS</b></div>
+            <p>Native project skeletons, no screens yet</p>
+          </div>
+          <div class="box idle">
+            <div class="hd"><b>Desktop shell</b><span class="tag">Rust · WebView</span></div>
+            <p>Hosts the web app plus a typed native bridge. ADR-DSK-001…003. Last in priority.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="link">HTTPS · same origin · session cookie · /api/v1/*</div>
+
+  <!-- L2 Edge -->
+  <div class="band">
+    <div class="rail"><span class="lvl">LAYER 2</span><h3>Edge</h3><span class="owner">hms_workspace/web/nginx</span></div>
+    <div class="cells">
+      <div class="box live">
+        <div class="hd"><b>nginx in the hms-web container</b><span class="tag">nginx/default.conf</span></div>
+        <ul>
+          <li>Serves the built SPA and <code>/assets/</code>; sets security headers (CSP, Permissions-Policy)</li>
+          <li>Proxies <code>/api/</code> to <code>hms-services:8080</code>; separate upload rule for <code>/api/v1/documents</code> and <code>/api/v1/catalogue</code></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="link">contract boundary</div>
+
+  <!-- L3 Contracts -->
+  <div class="band">
+    <div class="rail"><span class="lvl">LAYER 3</span><h3>API contracts</h3><span class="owner">hms_services/contracts/api</span></div>
+    <div class="cells">
+      <div class="chips" aria-label="OpenAPI contracts">
+        <span class="chip live">auth-v1 <span class="v">1.0.0</span></span>
+        <span class="chip live">iam-admin-v1 <span class="v">1.0.0</span></span>
+        <span class="chip live">clinical-read-v1 <span class="v">1.2.0</span></span>
+        <span class="chip live">clinical-timeline-v1 <span class="v">1.4.0</span></span>
+        <span class="chip live">tariff-book-v1 <span class="v">1.0.0</span></span>
+        <span class="chip live">assistant-v1 <span class="v">1.1.0</span></span>
+        <span class="chip live">patient-records-v1 <span class="v">1.0.0</span></span>
+        <span class="chip wip">catalogue-v1 <span class="v">1.0.0</span></span>
+        <span class="chip idle">contracts/events (empty)</span>
+        <span class="chip idle">contracts/protobuf (empty)</span>
+      </div>
+      <p style="color:var(--ink-3);font-size:0.82rem">patient-records-v1 is served but no web screen calls it yet. Every route checks session and permission on the server; the web hiding a button is never the access rule.</p>
+    </div>
+  </div>
+
+  <div class="link">Go handlers on one shared mux</div>
+
+  <!-- L4 Application -->
+  <div class="band">
+    <div class="rail"><span class="lvl">LAYER 4</span><h3>Application runtime</h3><span class="owner">hms_services (Go modular monolith)</span></div>
+    <div class="cells">
+      <div class="row wide2">
+        <!-- serve process -->
+        <div class="box group">
+          <div class="process-head"><b>Process <code>hms-services serve</code></b><span class="tag">login hms_meta_runtime</span></div>
+
+          <div class="box live">
+            <div class="hd"><b>Cross-cutting platform</b></div>
+            <ul>
+              <li><code>core/httpx</code> middleware and error envelope · <code>core/config</code></li>
+              <li><code>platform/iam</code> sign-in, sessions, lockout, <code>RequireSession</code> / <code>RequirePermission</code>, admin</li>
+              <li><code>platform/audit</code> audit writer; if the event cannot be written, no data is returned (503)</li>
+              <li><code>platform/tenancy</code> organization, facility and its time zone</li>
+            </ul>
+          </div>
+
+          <div class="row">
+            <div class="box live">
+              <div class="hd"><b>Legacy read-through</b><span class="tag">LRA</span></div>
+              <ul>
+                <li><code>clinical/</code> patients, encounters, timeline, bill <span class="tag">SVC-003/004/007</span></li>
+                <li><code>tariffs/</code> tariff book <span class="tag">SVC-005</span></li>
+                <li><code>assistant/</code> claim-readiness rules v3, general help <span class="tag">SVC-006</span></li>
+              </ul>
+              <p style="font-size:0.82rem">Reads Khanza on each request. No copy kept in PostgreSQL.</p>
+            </div>
+            <div class="box live">
+              <div class="hd"><b>Native transaction layer</b><span class="tag">NTL</span></div>
+              <ul>
+                <li><code>native/patient</code> registration rules, <code>patient.register</code>, audit in the same transaction <span class="tag">SVC-010</span></li>
+              </ul>
+              <p style="font-size:0.82rem">Never imports the legacy adapter or the bridge (checked by <code>core/archtest</code>).</p>
+            </div>
+          </div>
+
+          <div class="box wip">
+            <div class="hd"><b>Built, not yet registered in <code>serve</code></b></div>
+            <ul>
+              <li><code>catalogue/</code> external reference sources <span class="tag">SVC-012</span></li>
+              <li><code>documents/</code> + <code>platform/filestore</code> uploads, type sniffing, ClamAV scan</li>
+              <li><code>runtimes/go-runtime/pyworker</code> supervised Python worker, only <code>runtime.ping</code> <span class="tag">SVC-011</span></li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- legacy-bridge process -->
+        <div class="box group">
+          <div class="process-head"><b>Process <code>hms-services legacy-bridge</code></b><span class="tag">login hms_meta_legacy_bridge</span></div>
+          <div class="box live">
+            <div class="hd"><b>Legacy bridge</b><span class="tag">LCL write side</span></div>
+            <span class="path">legacybridge/patientsync</span>
+            <ul>
+              <li>Mapping <code>legacy-hms.pasien/1</code>, row hash</li>
+              <li>Lease, checkpoint, run, crosswalk</li>
+              <li>Unmappable values become bridge issues (key + reason, never the value)</li>
+              <li>Patient domain only so far</li>
+            </ul>
+            <p style="font-size:0.82rem">Opt-in compose profile. Refuses to start with the runtime login, and vice versa.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="box live">
+        <div class="hd"><b>Shared canonical store</b><span class="tag">used by both NTL and the bridge</span></div>
+        <ul>
+          <li><code>canonical/recordtx</code> sets the transaction context (organization, one actor, request id, reason), looks up domain authority, checks the login's layer at start-up</li>
+          <li><code>canonical/patient</code> create, replace with history, get. No business rules.</li>
+        </ul>
+      </div>
+
+      <div class="box idle">
+        <div class="hd"><b>Folders only</b></div>
+        <p><code>core/{engine,event,workflow,scheduler,transaction,plugin}</code>, <code>ui-engine</code>, <code>dsl</code>, <code>finance_engine</code>, <code>platform/{notification,threat-detection,ai-governance,workflow,configuration,security}</code>. No outbox publisher yet.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="link">fixed SQL only · no SQL from callers</div>
+
+  <!-- L5 Integration -->
+  <div class="band">
+    <div class="rail"><span class="lvl">LAYER 5</span><h3>Integration adapters</h3><span class="owner">hms_services/integrations</span></div>
+    <div class="cells">
+      <div class="row">
+        <div class="box live">
+          <div class="hd"><b><code>integrations/legacyhms</code></b><span class="tag">SELECT-only</span></div>
+          <ul>
+            <li>Fixed, parameterised statements: sign-in check, patients, encounters, timeline, bill, BPJS SEP, tariffs, <code>PatientScan</code>, schema inventory</li>
+            <li>Read-only session, statement timeout</li>
+          </ul>
+        </div>
+        <div class="box ext">
+          <div class="hd"><b>Khanza (SIMRS) MySQL</b><span class="tag">external</span></div>
+          <p>The hospital's running system. HMS reads it with a SELECT-only account and never writes, adds triggers or changes its schema. Staff sign-in is also verified against it.</p>
+        </div>
+        <div class="box idle">
+          <div class="hd"><b>Other integrations</b></div>
+          <p><code>fhir</code>, <code>satusehat</code>, <code>event-streaming</code>, <code>legacy-polling</code></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="link">pgx pool · least-privilege login per process</div>
+
+  <!-- L6 Persistence -->
+  <div class="band">
+    <div class="rail"><span class="lvl">LAYER 6</span><h3>Persistence</h3><span class="owner">hms_database (PostgreSQL 18)</span></div>
+    <div class="cells">
+      <div class="row">
+        <div class="box live">
+          <div class="hd"><b>Platform &amp; control</b><span class="tag">0001–0005, 0008, 0019</span></div>
+          <p><code>platform</code> · <code>iam</code> · <code>audit</code> · <code>eventing</code> (outbox) · <code>privacy</code></p>
+        </div>
+        <div class="box live">
+          <div class="hd"><b>Canonical record</b><span class="tag">FHIR R4 shaped</span></div>
+          <p><code>terminology</code> · <code>workforce</code> · <code>patient</code> · <code>clinical</code> · <code>knowledge</code> · <code>imaging</code></p>
+        </div>
+        <div class="box live">
+          <div class="hd"><b>Integration &amp; bridge state</b><span class="tag">0004, 0016, 0021</span></div>
+          <p><code>domain_authority</code>, <code>record_domains</code>, <code>legacy_record_links</code>, <code>bridge_issues</code>, <code>poll_*</code>, <code>sync_runs</code></p>
+        </div>
+        <div class="box live">
+          <div class="hd"><b>Projections</b><span class="tag">0018, 0020</span></div>
+          <p><code>readmodel</code> · <code>analytics</code> (not yet fed)</p>
+        </div>
+        <div class="box wip">
+          <div class="hd"><b>New</b><span class="tag">0022, 0023</span></div>
+          <p><code>catalogue</code> · document attachments metadata</p>
+        </div>
+        <div class="box wip">
+          <div class="hd"><b>File volume + ClamAV</b><span class="tag">beside the DB</span></div>
+          <p>Bytes on <code>hms_files</code> (<code>/data/files</code>); the DB keeps key, type, size, SHA-256</p>
+        </div>
+      </div>
+      <div class="box live">
+        <div class="hd"><b>Rules the database enforces itself</b><span class="tag">ADR-DB-002/005/006</span></div>
+        <ul>
+          <li>Versioned records with sealed history; no DELETE or TRUNCATE, even for the owner</li>
+          <li>Row-level security per organization; the actor must be an active user of that organization</li>
+          <li>Layer guard: a write without the domain's authority fails with <code>HM001</code></li>
+          <li>Separate logins: migrator, runtime, legacy bridge; per-schema group roles</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= FLOWS ======================= -->
+<section>
+  <h2>Three paths through the layers</h2>
+  <div class="flows">
+
+    <div class="flow">
+      <div class="meta"><span class="eyebrow">Path A · in use today</span><h3>Read a visit timeline</h3><p>The main path for every EMR window.</p></div>
+      <ol class="steps">
+        <li><b>Web</b>EMR window calls <code>GET /api/v1/encounters/{no}/timeline</code> with the session cookie</li>
+        <li><b>nginx</b>proxies to <code>hms-services</code></li>
+        <li><b>IAM</b>session valid, <code>encounter.clinical.read</code> at the session facility</li>
+        <li><b>clinical/</b>runs the fixed timeline statements through <code>legacyhms</code> against Khanza</li>
+        <li><b>audit</b>event written in PostgreSQL; on failure the answer is 503 with no data</li>
+        <li><b>Web</b>maps clinical-timeline-v1 into the EMR windows</li>
+      </ol>
+    </div>
+
+    <div class="flow">
+      <div class="meta"><span class="eyebrow">Path B · built, no screen yet</span><h3>Register a patient natively</h3><p>Allowed only once the patient domain is cut over.</p></div>
+      <ol class="steps">
+        <li><b>Client</b><code>POST /api/v1/patient-records</code> with a client-made id (safe retries)</li>
+        <li><b>IAM</b><code>patient.register</code></li>
+        <li><b>native/patient</b>applies registration rules</li>
+        <li><b>recordtx</b>sets organization, user actor and request id for the transaction</li>
+        <li><b>Database</b>guard checks authority is <code>native</code>; otherwise <code>HM001</code>, returned as 409 <code>domain_not_native</code></li>
+        <li><b>Database</b>writes version 1, history row and audit event in one commit</li>
+      </ol>
+    </div>
+
+    <div class="flow">
+      <div class="meta"><span class="eyebrow">Path C · built, opt-in worker</span><h3>Bridge a Khanza patient</h3><p>Fills the canonical record while Khanza still owns the domain.</p></div>
+      <ol class="steps">
+        <li><b>Bridge</b>takes the lease and reads its checkpoint</li>
+        <li><b>legacyhms</b><code>PatientScan</code>: bounded primary-key range on <code>pasien</code></li>
+        <li><b>Mapping</b><code>pasien/1</code>, row hash; unchanged rows are skipped</li>
+        <li><b>canonical/patient</b>write as service <code>legacy-bridge</code></li>
+        <li><b>Database</b>guard checks authority is <code>legacy</code>; crosswalk and issues recorded</li>
+        <li><b>Bridge</b>advances the checkpoint only while it still holds the lease</li>
+      </ol>
+      <div class="authority" aria-label="Domain authority lifecycle">
+        <span>Domain authority, per organization and domain:</span>
+        <span class="s">legacy</span><span>→</span><span class="s">cutover</span><span>→</span><span class="s">native</span>
+        <span>(abort: cutover → legacy; native is final)</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= DETAILS ======================= -->
+<section>
+  <h2>Database migrations by layer</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Migration</th><th>Adds</th><th>Used by today</th></tr></thead>
+      <tbody>
+        <tr><td class="num">0001–0003</td><td>Platform foundation, audit events, eventing outbox</td><td>IAM, audit writer; outbox has no publisher yet</td></tr>
+        <tr><td class="num">0004</td><td>Integration polling state</td><td>Legacy bridge (leases, checkpoints, runs)</td></tr>
+        <tr><td class="num">0005</td><td>IAM foundation</td><td>Sign-in, sessions, User &amp; Access</td></tr>
+        <tr><td class="num">0006–0017</td><td>Clinical record infrastructure, terminology, locations, workforce, patient, encounter/condition/allergy, observation/procedure/report, medication, knowledge, documents &amp; provenance, interoperability, imaging</td><td>Patient tables by NTL and bridge; the rest has no writer yet</td></tr>
+        <tr><td class="num">0018–0020</td><td>Read model, privacy &amp; audit anchoring, analytics</td><td>Defined, not yet fed</td></tr>
+        <tr><td class="num">0021</td><td>Layer separation: domains, authority, guard, bridge login</td><td>Both write layers</td></tr>
+        <tr><td class="num">0022–0023</td><td>Catalogue, document attachments (working tree)</td><td>Catalogue and documents packages, once wired</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="cols">
+  <div class="note">
+    <h3>Deployment topology (deployment/compose.yaml)</h3>
+    <ul>
+      <li>One-shot steps in order: <code>postgres</code> → <code>db-bootstrap</code> → <code>db-migrate</code> → <code>org-setup</code></li>
+      <li>Long-running: <code>hms-services</code>, <code>hms-web</code>, <code>clamav</code>; <code>legacy-bridge</code> behind a profile</li>
+      <li>Networks <code>hms-private</code> and <code>hms-scan</code>; volumes for PostgreSQL, files and virus signatures</li>
+      <li>Passwords and keys as mounted secret files, never environment values</li>
+      <li>Separate <code>compose.production.yaml</code> and a monitoring stack (Prometheus, Grafana, Loki, Alertmanager)</li>
+    </ul>
+  </div>
+  <div class="note">
+    <h3>Still open</h3>
+    <ul>
+      <li>Wire catalogue, documents and the Python worker into <code>serve</code>, then commit them</li>
+      <li>Next bridge slices: encounters (<code>reg_periksa</code>), then vitals and diagnoses</li>
+      <li>Outbox publisher and the first event contract</li>
+      <li>Web screen for patient-records-v1; native MRN format (owner decision)</li>
+      <li>Owner review of the <code>pasien</code> mapping; bridge run on a Khanza dev copy</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  Drawn from the repository working tree on 13 November 2026: <code>cmd/hms-services/main.go</code>, the OpenAPI contracts, migrations 0001–0023, ADR-ROOT-002 and the SVC/DB ADRs. "Implemented" means the code is present and registered; it does not mean tests were run for this page. No layer here has been assessed for production readiness.
+</footer>
+
+</div>
+</body>
+</html>
