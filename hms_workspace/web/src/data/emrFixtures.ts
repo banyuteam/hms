@@ -14,6 +14,65 @@ const inpatient: EncounterJourney = {
   no_rkm_medis: '00012346',
   meta: { time_basis: 'hospital local time as stored', truncated: [] },
   data: {
+    // Admission order: the legacy row stores a date only, so it sits at 00:00 of that date (owner decision 2026-11-11).
+    '2026-10-26T00:00:00': {
+      admission_order: [
+        {
+          time_recorded: false,
+          kd_kamar: 'MEL.02',
+          nm_bangsal: 'Melati',
+          kelas: 'Kelas 2',
+          diagnosa: 'Acute decompensated heart failure',
+          catatan: 'Observasi balans cairan',
+          nm_dpjp: DPJP,
+        },
+      ],
+    },
+    '2026-10-26T14:50:00': {
+      emergency_assessment: [
+        {
+          doctor_name: 'dr. Sari Wulandari',
+          anamnesis: 'Autoanamnesis',
+          hubungan: '',
+          keluhan_utama: 'Shortness of breath for 2 days, worse lying flat.',
+          rps: 'Progressive dyspnoea, leg swelling for 1 week.',
+          rpd: 'Hypertension since 2019.',
+          rpk: '',
+          rpo: 'Amlodipine 10 mg daily.',
+          alergi: 'Amoxicillin — rash (patient report)',
+          keadaan: 'Sakit Sedang',
+          kesadaran: 'Compos Mentis',
+          gcs: '15',
+          td: '150/95',
+          nadi: '104',
+          rr: '26',
+          suhu: '36.8',
+          spo: '91',
+          bb: '62',
+          tb: '155',
+          fisik: {
+            kepala: 'Normal',
+            mata: 'Normal',
+            gigi: 'Tidak Diperiksa',
+            leher: 'Abnormal',
+            thoraks: 'Abnormal',
+            abdomen: 'Normal',
+            genital: 'Tidak Diperiksa',
+            ekstremitas: 'Abnormal',
+          },
+          ket_fisik: 'Raised JVP; bibasal crackles; pitting oedema both legs.',
+          ket_lokalis: '',
+          ekg: 'Sinus tachycardia, no acute ST change.',
+          rad: 'Chest X-ray requested.',
+          lab: 'CBC and renal function requested.',
+          diagnosis: 'Acute decompensated heart failure',
+          tata: 'O2 3 L/min nasal cannula; furosemide 40 mg IV; admit.',
+          cara_keluar: 'Rawat Inap di',
+          deskripsi: 'Melati',
+          indikasi: '',
+        },
+      ],
+    },
     '2026-10-26T14:30:00': {
       registration: [
         {
@@ -538,6 +597,8 @@ export function toListItem(j: EncounterJourney): EncounterListItem {
     jam_reg: firstKey && firstKey.length > 10 ? firstKey.slice(11) : null,
     status_lanjut: j.summary.encounter?.status_lanjut ?? reg?.status_lanjut ?? 'Ralan',
     stts: j.summary.encounter?.stts ?? null,
-    kd_pj: j.summary.encounter?.kd_pj,
+    // The fixtures record the payer on the registration (as Khanza's reg_periksa does); without it the Profile listed
+    // every visit as "no payer recorded" while the same visit's identity strip showed BPJS.
+    kd_pj: j.summary.encounter?.kd_pj ?? reg?.kd_pj,
   };
 }

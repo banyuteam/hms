@@ -6,7 +6,7 @@ DECLARE
     p        text := current_setting('hms.role_prefix');
     schemas  text[] := ARRAY['hms_meta', 'platform', 'audit', 'eventing', 'integration', 'iam', 'terminology',
                              'workforce', 'patient', 'clinical', 'knowledge', 'imaging', 'readmodel', 'privacy',
-                             'analytics'];
+                             'analytics', 'catalogue', 'document'];
     offender text;
 BEGIN
     SELECT string_agg(n.nspname || '.' || c.relname, ', ') INTO offender

@@ -1,5 +1,12 @@
 import { useI18n } from '@/locales/I18nProvider';
-import { notes, prescriptions, surgeries, unlinkedSurgeryReports } from '@/api/select';
+import {
+  admissionOrders,
+  emergencyAssessments,
+  notes,
+  prescriptions,
+  surgeries,
+  unlinkedSurgeryReports,
+} from '@/api/select';
 import {
   DataTable,
   NotAvailable,
@@ -9,6 +16,7 @@ import {
   TextBlock,
 } from '../components/Blocks';
 import { CpptNote } from '../components/CpptNote';
+import { AdmissionOrder, EmergencyAssessment } from '../components/EmergencyAssessment';
 import { IdentityStrip } from '../components/IdentityStrip';
 import { AskAssistant, EditAction, OpenWindow } from '../components/RecordActions';
 import { WindowPage } from '../components/WindowPage';
@@ -18,7 +26,8 @@ import { w } from './windowsStyles';
 
 /**
  * W3 Patient Medical Encounter (key: no_rawat): what the clinicians wrote — CPPT (newest first, for rounds and
- * handover), diagnoses, prescriptions, treatment plan, surgery. Doctor sees draft-only edit actions.
+ * handover), the emergency medical assessment and the inpatient admission order (only when the visit has them),
+ * diagnoses, prescriptions, treatment plan, surgery. Doctor sees draft-only edit actions.
  */
 export function EncounterWindow({ winId, norawat }: { winId: string; norawat?: string }) {
   const { t } = useI18n();
@@ -34,6 +43,8 @@ export function EncounterWindow({ winId, norawat }: { winId: string; norawat?: s
         const rx = prescriptions(journey);
         const ops = surgeries(journey);
         const opsUnlinked = unlinkedSurgeryReports(journey);
+        const igd = emergencyAssessments(journey);
+        const orders = admissionOrders(journey);
         const latestPlan = cppt.find((n) => (n.rtl ?? '').trim() || n.instruksi.trim());
         const tag = {
           id: `enc:${nr}`,
@@ -45,9 +56,15 @@ export function EncounterWindow({ winId, norawat }: { winId: string; norawat?: s
         return (
           <WindowPage
             label={`${t('emr.w3.title')} · ${nr}`}
-            identity={<IdentityStrip person={person} facts={facts} />}
+            identity={(actions) => (
+              <IdentityStrip person={person} facts={facts} actions={actions} />
+            )}
             sections={[
               { id: 'cppt', label: t('emr.cppt.title'), count: cppt.length },
+              ...(igd.length > 0 ? [{ id: 'igd', label: t('emr.igd.title') }] : []),
+              ...(orders.length > 0
+                ? [{ id: 'admission', label: t('emr.admissionOrder.title') }]
+                : []),
               { id: 'diagnoses', label: t('emr.dx.title'), count: dx.length },
               { id: 'rx', label: t('emr.rx.title'), count: rx.length },
               { id: 'plan', label: t('emr.plan.title') },
@@ -90,6 +107,22 @@ export function EncounterWindow({ winId, norawat }: { winId: string; norawat?: s
                 cppt.map((n) => <CpptNote key={`${n.key}-${n.index}`} note={n} />)
               )}
             </Section>
+
+            {igd.length > 0 && (
+              <Section id="igd" title={t('emr.igd.title')} icon="clipboardCheck">
+                {igd.map((a) => (
+                  <EmergencyAssessment key={`${a.key}-${a.index}`} a={a} />
+                ))}
+              </Section>
+            )}
+
+            {orders.length > 0 && (
+              <Section id="admission" title={t('emr.admissionOrder.title')} icon="forward">
+                {orders.map((o) => (
+                  <AdmissionOrder key={`${o.key}-${o.index}`} o={o} />
+                ))}
+              </Section>
+            )}
 
             <Section
               id="diagnoses"

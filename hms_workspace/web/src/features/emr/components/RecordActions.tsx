@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId } from 'react';
 import { useI18n } from '@/locales/I18nProvider';
 import { Button } from '@/components/Button';
 import { Icon, type IconName } from '@/components/Icon';
@@ -26,25 +26,36 @@ export function AskAssistant({ tag, label }: { tag: AssistantTag; label?: string
 }
 
 /**
- * Doctor-only edit/create affordance. Iteration 2 = UI only: pressing it shows that nothing is saved, so production
- * builds do not show it (`useCanEdit`). Hidden for the employee role (role-based UI); the backend stays the authority once
- * writes exist.
+ * Doctor-only edit/create affordance. Iteration 2 = UI only, so production builds do not show it (`useCanEdit`). It says
+ * so before anyone presses it: visibly unavailable (aria-disabled keeps it focusable, so the reason can be read), with a
+ * "Preview" tag and the reason as its description — never a button that looks ready and does nothing. Hidden for the
+ * employee role (role-based UI); the backend stays the authority once writes exist.
  */
 export function EditAction({ label, icon = 'pencil' }: { label: string; icon?: IconName }) {
   const { t } = useI18n();
   const canEdit = useCanEdit();
-  const [shown, setShown] = useState(false);
+  const reasonId = useId();
   if (!canEdit) return null;
+  const reason = t('emr.edit.uiOnly');
   return (
-    <span className="inline-flex items-center gap-8">
-      <Button variant="secondary" onClick={() => setShown(true)}>
+    <>
+      <Button
+        variant="secondary"
+        aria-disabled="true"
+        aria-describedby={reasonId}
+        title={reason}
+        className="cursor-not-allowed border-dashed text-ink-muted enabled:hover:bg-surface"
+      >
         <Icon name={icon} size={16} />
         {label}
+        <span className="type-caption rounded-sm bg-warning-bg px-4 text-warning-fg">
+          {t('emr.edit.previewTag')}
+        </span>
       </Button>
-      <span role="status" className="type-caption text-warning-fg empty:hidden">
-        {shown ? t('emr.edit.uiOnly') : ''}
+      <span id={reasonId} className="sr-only">
+        {reason}
       </span>
-    </span>
+    </>
   );
 }
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { NotFoundError, patientApi } from './patientApi';
 
 describe('patientApi.listPatients (server-side filtering contract)', () => {
@@ -30,6 +30,17 @@ describe('patientApi.listPatients (server-side filtering contract)', () => {
     const a = await patientApi.listPatients();
     a.items[0]!.name = 'changed';
     expect((await patientApi.listPatients()).items[0]!.name).not.toBe('changed');
+  });
+
+  it('getPatientProfile gives the age on today’s date from the birth date, like the search results', async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date(2026, 10, 11, 12) });
+    try {
+      const p = await patientApi.getPatientProfile('00012346');
+      expect(p.birthDate).toBe('1985-10-02');
+      expect(p.ageYears).toBe(41);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('getPatientProfile rejects with NotFoundError for an unknown MRN', async () => {

@@ -176,6 +176,72 @@ export interface SurgeryReport {
   tanggal: string;
 }
 
+/**
+ * Inpatient admission order (Surat Perintah Rawat Inap, legacy `perintah_ranap`), at most one per visit
+ * (clinical-timeline-v1 1.4.0). The legacy row stores a date only: its moment is 00:00 of that date and
+ * `time_recorded` is false, so 00:00 is never shown as a recorded time.
+ */
+export interface AdmissionOrder {
+  time_recorded: boolean;
+  kd_kamar: string;
+  nm_bangsal: Nullable<string>;
+  kelas: Nullable<string>;
+  diagnosa: Nullable<string>;
+  catatan: Nullable<string>;
+  nm_dpjp: Nullable<string>;
+}
+
+/** Body regions of the emergency assessment's physical exam, each 'Normal' / 'Abnormal' / 'Tidak Diperiksa' as recorded. */
+export const EXAM_REGIONS = [
+  'kepala',
+  'mata',
+  'gigi',
+  'leher',
+  'thoraks',
+  'abdomen',
+  'genital',
+  'ekstremitas',
+] as const;
+export type ExamRegion = (typeof EXAM_REGIONS)[number];
+
+/**
+ * Emergency department medical assessment (legacy `penilaian_medis_igd`), at most one per visit (clinical-timeline-v1
+ * 1.4.0). Free text and legacy codes as recorded; '' / null = not recorded. Its allergy text is not part of the
+ * patient allergy list (owner decision 2026-11-11).
+ */
+export interface EmergencyAssessment {
+  doctor_name: Nullable<string>;
+  anamnesis: string;
+  hubungan: string;
+  keluhan_utama: string;
+  rps: string;
+  rpd: string;
+  rpk: string;
+  rpo: string;
+  alergi: string;
+  keadaan: string;
+  kesadaran: Nullable<string>;
+  gcs: Nullable<string>;
+  td: Nullable<string>;
+  nadi: Nullable<string>;
+  rr: Nullable<string>;
+  suhu: Nullable<string>;
+  spo: Nullable<string>;
+  bb: Nullable<string>;
+  tb: Nullable<string>;
+  fisik: Record<ExamRegion, Nullable<string>>;
+  ket_fisik: string;
+  ket_lokalis: string;
+  ekg: string;
+  rad: string;
+  lab: string;
+  diagnosis: string;
+  tata: string;
+  cara_keluar: string;
+  deskripsi: string;
+  indikasi: string;
+}
+
 /** What happened at one timestamp, grouped by segment. Every segment is optional (minProperties: 1). */
 export interface JourneyMoment {
   registration?: Registration[];
@@ -189,6 +255,8 @@ export interface JourneyMoment {
   medication_given?: MedicationGiven[];
   surgery?: Surgery[];
   surgery_report?: SurgeryReport[];
+  admission_order?: AdmissionOrder[];
+  emergency_assessment?: EmergencyAssessment[];
 }
 
 export interface DiagnosisCode {

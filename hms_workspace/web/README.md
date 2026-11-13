@@ -43,7 +43,8 @@ $env:VITE_DATA_SOURCE = 'bff'; npm run dev     # optional: $env:HMS_SERVICES_TAR
 ```
 
 A wrong `PUBLIC_ORIGIN` shows as "The sign-in service is not available" (the server answers `origin_not_allowed`). A page
-reload resumes the session (`GET /api/v1/auth/session`); sign-out and the idle lock end it on the server too; any 401 returns
+reload resumes the session (`GET /api/v1/auth/session`) but not the open windows (they are in memory only), so while any
+window is open the browser asks before a reload or tab close; sign-out and the idle lock end it on the server too; any 401 returns
 to sign-in. Sessions holding `iam.users.read` see **Administration → User & Access** on Home (`/access`).
 Consequential changes are confirmed with what they do: granting a role is a two-step review (scope starts at this
 facility, the end date is an explicit choice, the `iam-admin` role carries a warning); saving role permissions shows what
@@ -126,14 +127,21 @@ Design tokens: `.claude/skills/design-tokens`. Tailwind theme keys map 1:1 to `-
   clinic or ward. The billing document shows today's tariff next to each charged price and says when they differ.
 - **SEP (BPJS)**: from clinical-timeline-v1 1.3.0 `summary.sep` (legacy `bridging_sep`, ADR-SVC-007), shown in the
   identity strip, the Records SEP section and the billing document. The SEP number is shown in full (owner decision
-  B-1: it arrives in the audited timeline read). A server older than 1.3.0 shows "not available from source".
+  B-1: it arrives in the audited timeline read). A server older than 1.3.0 shows "not available from source". The SEP
+  section lists one row per SEP that expands to its details.
+- **Admission order and IGD assessment** (clinical-timeline-v1 1.4.0): the Surat Perintah Rawat Inap
+  (`perintah_ranap`) and the emergency medical assessment (`penilaian_medis_igd`) appear in the Records History and as
+  their own sections in Medical Encounter, only on visits that have them. The admission order has a date but no time:
+  it sits at 00:00 of its date (owner decision 2026-11-11) and says "jam tidak tercatat". The assessment's allergy
+  text stays in the assessment; it does not feed the allergy banner. A server older than 1.4.0 simply shows neither.
 - **Live masked values** arrive masked from the server; Reveal fetches one value (needs `patient.identifiers.reveal`,
   audited by hms_services first) and forgets it when hidden.
 - Live sessions get the view-only UI until clinical permissions exist (no doctor/employee role in the v4 session).
 - **Allergy:** every allergy text written on any visit (CPPT notes and discharge summary), grouped by exact text, from
   `GET /patients/{mrn}/allergies` (clinical-read-v1 1.2.0, encounter.clinical.read). The identity strip of every patient
-  window always states it: the recorded texts, "not recorded (not the same as no allergy)", or a warning when the list
-  is incomplete (if the list cannot be loaded, only the visit's own allergies show; the Profile reports the failure);
+  window shows the recorded texts, or a warning when the list is incomplete (if the list cannot be loaded, only the
+  visit's own allergies show; the Profile reports the failure); when nothing is written on any visit the strip shows
+  nothing (owner decision 2026-11-11) and only the Profile's Special notes says "not recorded" (never "no allergy");
   a session without clinical access sees no allergy state. The Patient Profile lists
   each entry under **Special notes** with where and when it was last written (owner decision 2026-11-10, replacing
   2026-11-09, which showed only the last visit's note and nothing in the strip when none was written).

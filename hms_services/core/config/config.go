@@ -6,9 +6,11 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/netip"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -74,6 +76,15 @@ type SignIn struct {
 	PerIPPerMinute  int
 }
 
+// Files configures the shared file volume of uploads (platform/filestore; ADR-SVC-012 catalogue, ADR-SVC-013
+// document attachments). Off unless FILES_DIR is set; then the malware scanner is required too: uploads fail closed.
+type Files struct {
+	Enabled    bool
+	Dir        string // absolute; each feature writes under its own namespace directory
+	ClamAVAddr string // host:port of clamd
+	MaxBytes   int    // cap for any one file; a feature may set a lower limit
+}
+
 type Config struct {
 	Env              Env
 	HTTPAddr         string
@@ -87,6 +98,7 @@ type Config struct {
 	LegacyLogin      LegacyLogin
 	Session          Session
 	SignIn           SignIn
+	Files            Files
 }
 
 // Lookup reads one variable; os.LookupEnv in production, a map in tests.
@@ -132,6 +144,7 @@ func Load(get Lookup) (*Config, error) {
 			LockoutDuration: time.Duration(p.integer("SIGNIN_LOCKOUT_MINUTES", 15, 1, 240)) * time.Minute,
 			PerIPPerMinute:  p.integer("SIGNIN_RATE_PER_MINUTE", 20, 1, 600),
 		},
+		Files: p.files(),
 	}
 
 	switch c.Env {
@@ -288,6 +301,25 @@ func (d Database) PostgresDSN() string {
 		RawQuery: url.Values{"sslmode": {d.SSLMode}, "application_name": {"hms-services"}}.Encode(),
 	}
 	return u.String()
+}
+
+func (p *parser) files() Files {
+	f := Files{Dir: p.str("FILES_DIR", ""), MaxBytes: p.integer("FILES_MAX_MB", 20, 1, 20) << 20}
+	addr := p.str("CLAMAV_ADDR", "")
+	if f.Dir == "" {
+		if addr != "" {
+			p.fail("CLAMAV_ADDR needs FILES_DIR")
+		}
+		return f
+	}
+	f.Enabled, f.ClamAVAddr = true, addr
+	if !filepath.IsAbs(f.Dir) && !strings.HasPrefix(f.Dir, "/") {
+		p.fail("FILES_DIR must be an absolute path")
+	}
+	if _, port, err := net.SplitHostPort(addr); err != nil || port == "" {
+		p.fail("CLAMAV_ADDR (host:port of clamd) is required with FILES_DIR: uploads are always scanned")
+	}
+	return f
 }
 
 type parser struct {

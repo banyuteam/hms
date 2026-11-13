@@ -1,6 +1,8 @@
 import type { AllergyEntry, AllergySource } from './emrApi';
 import type {
+  AdmissionOrder,
   ClinicalNote,
+  EmergencyAssessment,
   EncounterJourney,
   JourneyMoment,
   Laboratory,
@@ -59,6 +61,8 @@ export type PrescriptionRow = Prescription & Stamp & { index: number };
 export type GivenRow = MedicationGiven & Stamp & { index: number };
 export type ActionRow = ProcedureAction & Stamp & { index: number };
 export type SurgeryRow = Surgery & Stamp & { index: number; report: SurgeryReport | null };
+export type AdmissionOrderRow = AdmissionOrder & Stamp & { index: number };
+export type EmergencyAssessmentRow = EmergencyAssessment & Stamp & { index: number };
 
 export const notes = (j: EncounterJourney, order: 'asc' | 'desc' = 'asc'): NoteRow[] => {
   const rows = collect(j, 'clinical_notes');
@@ -103,6 +107,11 @@ export function unlinkedRadiologyReports(j: EncounterJourney): RadiologyReportRo
 export const prescriptions = (j: EncounterJourney): PrescriptionRow[] => collect(j, 'prescription');
 export const medicationGiven = (j: EncounterJourney): GivenRow[] => collect(j, 'medication_given');
 export const actions = (j: EncounterJourney): ActionRow[] => collect(j, 'procedures');
+/** Inpatient admission orders (Surat Perintah Rawat Inap); at most one per visit, keyed at 00:00 of its date. */
+export const admissionOrders = (j: EncounterJourney): AdmissionOrderRow[] =>
+  collect(j, 'admission_order');
+export const emergencyAssessments = (j: EncounterJourney): EmergencyAssessmentRow[] =>
+  collect(j, 'emergency_assessment');
 
 /** Surgeries with the report dated at the surgery's own date and time (see `linkable`). */
 export function surgeries(j: EncounterJourney): SurgeryRow[] {

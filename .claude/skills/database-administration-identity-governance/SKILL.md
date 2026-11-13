@@ -14,7 +14,7 @@ Read `hms_database/governance/DATABASE-ADMINISTRATION-AND-IDENTITY-POLICY.md`.
 - Identify the assigned operator for the target environment; never infer it.
 - Keep superuser use to bootstrap, cluster administration and approved recovery.
 - Never use a superuser for application runtime.
-- `hms_app` is the canonical non-superuser runtime identity; it does not own schemas or tables.
+- `<p>_runtime` (default `hms_meta_runtime`, ADR-DB-002) is the canonical non-superuser runtime identity; it does not own schemas or tables. The legacy bridge worker alone uses `<p>_legacy_bridge`. Never use or adopt pre-existing fixed-name roles such as `hms_app`.
 - Use a NOLOGIN object-owner role and controlled migration identity.
 - Keep a secured break-glass recovery path. Never lock out all administrative recovery.
 - Exclude other superusers from routine access through credential, host and network controls; do not claim a policy file alone enforces this.

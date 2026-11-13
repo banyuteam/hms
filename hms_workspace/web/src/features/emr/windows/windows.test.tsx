@@ -55,6 +55,92 @@ describe('EMR windows', () => {
     expect(within(win).queryByText(/•/)).toBeNull();
   });
 
+  it('History lists the admission order (date only) and the emergency assessment, each opening Medical Encounter', async () => {
+    renderWindows('employee');
+    act(() => homeActions().open('emr-records', { norawat: NR }));
+    const win = await waitFor(() => windowByTitle(/^Medical Records · /));
+    await within(win).findByRole('heading', { name: 'History' });
+    const order = within(win).getByRole('button', { name: /^Inpatient admission order/ });
+    // At 00:00 of its date (owner decision 2026-11-11), and it says the time is not recorded.
+    expect(order).toHaveTextContent(
+      /time not recorded · Melati · Acute decompensated heart failure/,
+    );
+    const igd = within(win).getByRole('button', { name: /^Emergency medical assessment/ });
+    expect(igd).toHaveTextContent(
+      /dr\. Sari Wulandari · Acute decompensated heart failure · Rawat Inap di/,
+    );
+    // Time order: the order's 00:00 comes before the 14:30 registration, the 14:50 assessment after it.
+    const registration = within(win).getByText('Registration');
+    const follows = (a: Node, b: Node) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(order, registration)).toBe(true);
+    expect(follows(registration, igd)).toBe(true);
+    await userEvent.click(igd);
+    await waitFor(() => expect(windowIds()).toContain(`emr-encounter:${NR}`));
+  });
+
+  it('Medical Encounter shows the emergency assessment and the admission order only on a visit that has them', async () => {
+    renderWindows('employee');
+    act(() => homeActions().open('emr-encounter', { norawat: NR }));
+    const win = await waitFor(() => windowByTitle(/^Medical Encounter · /));
+    await within(win).findByRole('heading', { name: 'Emergency medical assessment' });
+    const igd = within(win).getByRole('article', {
+      name: 'Emergency assessment by dr. Sari Wulandari',
+    });
+    for (const h of ['History', 'Examination', 'Physical examination', 'Investigations']) {
+      expect(within(igd).getByRole('heading', { name: h })).toBeInTheDocument();
+    }
+    // An abnormal region says so in words, never by colour alone.
+    expect(within(igd).getByText('Thorax').nextElementSibling).toHaveTextContent('Abnormal');
+    expect(within(igd).getByText('Teeth').nextElementSibling).toHaveTextContent('Tidak Diperiksa');
+    expect(within(igd).getByText('Rawat Inap di')).toBeInTheDocument();
+    expect(within(igd).getByText('Medication history').nextElementSibling).toHaveTextContent(
+      'Amlodipine 10 mg daily.',
+    );
+    expect(within(igd).getByText('Family history').nextElementSibling).toHaveTextContent(
+      'Not recorded',
+    );
+
+    expect(
+      within(win).getByRole('heading', { name: 'Inpatient admission order' }),
+    ).toBeInTheDocument();
+    expect(within(win).getByText(/time not recorded/)).toBeInTheDocument();
+    expect(within(win).queryByText(/00:00/)).toBeNull();
+    expect(await axeViolations(win)).toEqual([]);
+  });
+
+  it('a visit without them has no such sections', async () => {
+    renderWindows('employee');
+    act(() => homeActions().open('emr-encounter', { norawat: '2026/08/14/000051' }));
+    const win = await waitFor(() => windowByTitle(/^Medical Encounter · /));
+    await within(win).findAllByRole('heading', { name: 'Clinical notes (CPPT)' });
+    expect(within(win).queryByRole('heading', { name: 'Emergency medical assessment' })).toBeNull();
+    expect(within(win).queryByRole('heading', { name: 'Inpatient admission order' })).toBeNull();
+  });
+
+  it('lists each SEP as a row that expands to its details and collapses again', async () => {
+    renderWindows('employee');
+    act(() => homeActions().open('emr-records', { norawat: NR }));
+    const win = await waitFor(() => windowByTitle(/^Medical Records · /));
+    const list = await within(win).findByRole('list', { name: 'SEP list' });
+    const row = within(list).getByRole('button', { name: /0301R0011026V000123/ });
+    expect(row).toHaveTextContent(/Inpatient.*Class 2.*SEP date/);
+    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(within(list).queryByText('Initial diagnosis (SEP)')).toBeNull();
+
+    await userEvent.click(row);
+    expect(row).toHaveAttribute('aria-expanded', 'true');
+    const panel = document.getElementById(row.getAttribute('aria-controls')!)!;
+    expect(panel).toBeVisible();
+    expect(within(panel).getByText('Initial diagnosis (SEP)')).toBeInTheDocument();
+    expect(within(panel).getByText('R06.0 Dyspnoea')).toBeInTheDocument();
+
+    await userEvent.click(row);
+    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(panel).not.toBeVisible();
+    expect(await axeViolations(win)).toEqual([]);
+  });
+
   it('Medical Records finds a patient by name or no_rkm_medis and lists their visits underneath', async () => {
     renderWindows('employee');
     act(() => homeActions().open('emr-records'));
@@ -86,9 +172,12 @@ describe('EMR windows', () => {
   it('shows doctor edit actions only to the doctor (UI only)', async () => {
     const { unmount } = renderWindows('doctor');
     act(() => homeActions().open('emr-encounter', { norawat: NR }));
-    const button = await screen.findByRole('button', { name: /new cppt note/i });
-    await userEvent.click(button);
-    expect(screen.getByText(/preview only — nothing is saved/i)).toBeInTheDocument();
+    // Says it cannot save before anyone presses it: visibly unavailable, still focusable, the reason as its description.
+    const button = await screen.findByRole('button', { name: /new cppt note.*preview/i });
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).toHaveAccessibleDescription(
+      /preview only — this action cannot save anything yet/i,
+    );
     unmount();
 
     renderWindows('employee');
@@ -122,6 +211,32 @@ describe('EMR windows', () => {
     await within(win).findByRole('heading', { name: 'History' });
     await userEvent.click(within(win).getByRole('button', { name: 'Encounter' }));
     await waitFor(() => expect(windowMode(`emr-encounter:${NR}`)).toBe('maximized'));
+  });
+
+  it('a drill-down sits next to the window it was opened from in the dock, not at the end', async () => {
+    renderWindows('employee');
+    act(() => homeActions().open('emr-records', { norawat: NR }));
+    act(() => homeActions().open('emr-profile', { mrn: '00012345' }));
+    act(() => homeActions().activate(`emr-records:${NR}`));
+    const win = await waitFor(() => windowByTitle(/^Medical Records · /));
+    await within(win).findByRole('heading', { name: 'History' });
+    await userEvent.click(within(win).getByRole('button', { name: 'Encounter' }));
+    await waitFor(() =>
+      expect(windowIds()).toEqual([
+        `emr-records:${NR}`,
+        `emr-encounter:${NR}`,
+        'emr-profile:00012345',
+      ]),
+    );
+  });
+
+  it("puts the window's actions in the identity strip's name row (no toolbar row of their own)", async () => {
+    renderWindows('employee');
+    act(() => homeActions().open('emr-records', { norawat: NR }));
+    const win = await waitFor(() => windowByTitle(/^Medical Records · /));
+    const strip = await within(win).findByRole('group', { name: 'Patient identity' });
+    const actions = within(strip).getByRole('group', { name: 'Window actions' });
+    expect(within(actions).getByRole('button', { name: 'Encounter' })).toBeInTheDocument();
   });
 
   it('has no axe violations in the Medical Records window', async () => {

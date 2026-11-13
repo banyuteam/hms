@@ -132,6 +132,20 @@ var TimelineSections = func() []Section {
 			"s.`diagnosa_utama`, s.`kd_diagnosa_sekunder`, s.`diagnosa_sekunder`, s.`kd_prosedur_utama`, s.`prosedur_utama`, s.`alergi`, " +
 			"CAST(s.`keadaan` AS CHAR), CAST(s.`cara_keluar` AS CHAR), s.`obat_pulang`, s.`diet`, s.`edukasi`, s.`kontrol` " +
 			"FROM `resume_pasien_ranap` s LEFT JOIN `dokter` d ON d.`kd_dokter` = s.`kd_dokter` WHERE s.`no_rawat` = ? LIMIT 1", 16, 1},
+		// Inpatient admission order (Surat Perintah Rawat Inap) and the emergency medical assessment: one row per visit
+		// (no_rawat is the primary key of both; inventory hms_database/legacy/schema-inventory/admission-order-and-
+		// emergency-assessment.md). Columns never read: perintah_ranap.kd_dpjp (the stored nm_dpjp is read instead) and
+		// penilaian_medis_igd.kd_dokter (the name is looked up).
+		Section{"admission_order", "SELECT CAST(o.`tanggal` AS CHAR), o.`kd_kamar`, b.`nm_bangsal`, CAST(k.`kelas` AS CHAR), " +
+			"o.`diagnosa`, o.`catatan`, o.`nm_dpjp` FROM `perintah_ranap` o LEFT JOIN `kamar` k ON k.`kd_kamar` = o.`kd_kamar` " +
+			"LEFT JOIN `bangsal` b ON b.`kd_bangsal` = k.`kd_bangsal` WHERE o.`no_rawat` = ? LIMIT 1", 7, 1},
+		Section{"emergency_assessment", "SELECT CAST(a.`tanggal` AS CHAR), d.`nm_dokter`, CAST(a.`anamnesis` AS CHAR), a.`hubungan`, " +
+			"a.`keluhan_utama`, a.`rps`, a.`rpd`, a.`rpk`, a.`rpo`, a.`alergi`, CAST(a.`keadaan` AS CHAR), a.`gcs`, " +
+			"CAST(a.`kesadaran` AS CHAR), a.`td`, a.`nadi`, a.`rr`, a.`suhu`, a.`spo`, a.`bb`, a.`tb`, CAST(a.`kepala` AS CHAR), " +
+			"CAST(a.`mata` AS CHAR), CAST(a.`gigi` AS CHAR), CAST(a.`leher` AS CHAR), CAST(a.`thoraks` AS CHAR), " +
+			"CAST(a.`abdomen` AS CHAR), CAST(a.`genital` AS CHAR), CAST(a.`ekstremitas` AS CHAR), a.`ket_fisik`, a.`ket_lokalis`, " +
+			"a.`ekg`, a.`rad`, a.`lab`, a.`diagnosis`, a.`tata`, CAST(a.`cara_keluar` AS CHAR), a.`deskripsi`, a.`indikasi` " +
+			"FROM `penilaian_medis_igd` a LEFT JOIN `dokter` d ON d.`kd_dokter` = a.`kd_dokter` WHERE a.`no_rawat` = ? LIMIT 1", 38, 1},
 	)
 }()
 

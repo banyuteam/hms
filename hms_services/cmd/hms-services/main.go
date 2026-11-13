@@ -4,6 +4,7 @@
 //	hms-services [-env-file FILE] setup-organization -org-code RSUB2 -org-name "..." -facility-code RSUB2-MAIN \
 //	             -facility-name "..." -timezone Asia/Jakarta
 //	hms-services [-env-file FILE] legacy-bridge [-once]
+//	hms-services check-python-worker [-engine process|embedded] [-python PATH] [-script PATH] [-max-memory-mb N]
 //
 // serve is the native transaction layer (and the legacy read-through slices); legacy-bridge is the separate legacy
 // bridge worker with its own database login (ADR-ROOT-002). Neither starts with the other's database credentials.
@@ -25,6 +26,8 @@ import (
 	"net/netip"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"runtime"
 	"slices"
 	"sort"
 	"strings"
@@ -46,6 +49,7 @@ import (
 	"hms/services/platform/audit"
 	"hms/services/platform/iam"
 	"hms/services/platform/tenancy"
+	"hms/services/runtimes/go-runtime/pyworker"
 	"hms/services/tariffs"
 )
 
@@ -68,7 +72,7 @@ func run(args []string) error {
 	}
 	rest := global.Args()
 	if len(rest) == 0 {
-		return errors.New("usage: hms-services [-env-file FILE] serve | legacy-bridge | healthcheck | setup-organization | check-legacy-key | check-clinical-read | check-bill-sources | inventory-legacy-schema | bootstrap-admin")
+		return errors.New("usage: hms-services [-env-file FILE] serve | legacy-bridge | healthcheck | setup-organization | check-legacy-key | check-clinical-read | check-bill-sources | inventory-legacy-schema | bootstrap-admin | check-python-worker")
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -91,6 +95,8 @@ func run(args []string) error {
 		return checkBillSources(ctx, lookup, rest[1:])
 	case "inventory-legacy-schema":
 		return inventoryLegacySchema(ctx, lookup, rest[1:])
+	case "check-python-worker":
+		return checkPythonWorker(ctx, rest[1:])
 	default:
 		return fmt.Errorf("unknown command %q", rest[0])
 	}
@@ -476,6 +482,53 @@ func checkLegacyKey(ctx context.Context, lookup config.Lookup) error {
 	default:
 		fmt.Println("result: ID key is correct. Confirm the password key with a real sign-in.")
 	}
+	return nil
+}
+
+// checkPythonWorker starts the isolated Python worker (ADR-SVC-011), prints its handshake and one runtime.ping round
+// trip, and stops it. It needs no database, configuration or secrets. The embedded engine needs no Python installed.
+func checkPythonWorker(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("check-python-worker", flag.ContinueOnError)
+	defaultPython := "python3"
+	if runtime.GOOS == "windows" {
+		defaultPython = "python"
+	}
+	engine := fs.String("engine", string(pyworker.EngineProcess),
+		"process (external Python as a child process) or embedded (go-python inside this binary)")
+	python := fs.String("python", defaultPython, "process engine: Python 3.10+ interpreter")
+	script := fs.String("script", filepath.Join("runtimes", "python-workers", "hms_worker.py"), "worker script")
+	memoryMB := fs.Int("max-memory-mb", 256,
+		"memory limit: the process worker's own address-space limit (POSIX only), the embedded interpreter's cap (any OS, >= 64); 0 = none")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	cfg := pyworker.Config{Engine: pyworker.Engine(*engine), Python: *python, Script: *script, MaxMemoryMB: *memoryMB,
+		Capabilities: []pyworker.Capability{pyworker.PingCapability()}}
+	if cfg.Engine == pyworker.EngineEmbedded {
+		cfg.Python = ""
+	}
+	rt, err := pyworker.New(cfg)
+	if err != nil {
+		return err
+	}
+	defer rt.Close()
+	info, err := rt.Start(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("engine:        %s\n", cfg.Engine)
+	fmt.Printf("worker:        %s %s\n", info.Worker, info.Version)
+	fmt.Printf("capabilities:  %s\n", strings.Join(info.Capabilities, ", "))
+	fmt.Printf("memory limit:  %s\n", info.MemoryLimit)
+	start := time.Now()
+	var out pyworker.PingOutput
+	if err := rt.Call(ctx, pyworker.PingName, pyworker.PingInput{Echo: "hms"}, &out); err != nil {
+		return err
+	}
+	if out.Echo != "hms" {
+		return fmt.Errorf("runtime.ping echoed %q", out.Echo)
+	}
+	fmt.Printf("runtime.ping:  ok in %s\n", time.Since(start).Round(time.Microsecond))
 	return nil
 }
 

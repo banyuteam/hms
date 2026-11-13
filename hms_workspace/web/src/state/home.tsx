@@ -68,6 +68,8 @@ export interface WindowState {
    */
   onTop: boolean;
   lastUsed: number;
+  /** The window this one was opened from (a drill-down such as Records → Prescription); absent = Home or the launcher. */
+  openedFrom?: string;
 }
 
 export interface HomeState {
@@ -82,7 +84,7 @@ export interface HomeState {
 
 export type HomeAction =
   | { type: 'area/resized'; area: Area }
-  | { type: 'window/opened'; kind: WindowKind; params: WindowParams }
+  | { type: 'window/opened'; kind: WindowKind; params: WindowParams; from?: string }
   | { type: 'window/closed'; id: string }
   | { type: 'window/activated'; id: string }
   | { type: 'window/minimized'; id: string }
@@ -133,6 +135,22 @@ function firstFreeSlot(windows: readonly WindowState[], layout: LayoutKey): numb
   );
   for (let i = 0; i < n; i++) if (!taken.has(i)) return i;
   return null;
+}
+
+/**
+ * Dock order for a new window: a drill-down goes right after the window it was opened from and that window's earlier
+ * drill-downs, so the windows of one patient and visit stay together instead of trailing at the end of the dock.
+ */
+function placed(windows: readonly WindowState[], win: WindowState): WindowState[] {
+  const at = win.openedFrom ? windows.findIndex((w) => w.id === win.openedFrom) : -1;
+  if (at < 0) return [...windows, win];
+  const family = new Set([win.openedFrom]);
+  let end = at;
+  for (let next = windows[end + 1]; next && family.has(next.openedFrom); next = windows[end + 1]) {
+    family.add(next.id);
+    end += 1;
+  }
+  return [...windows.slice(0, end + 1), win, ...windows.slice(end + 1)];
 }
 
 /** Re-numbers `z` 1..n in the current order so z-index never grows past the token band. */
@@ -202,6 +220,7 @@ export function homeReducer(s: HomeState, action: HomeAction): HomeState {
       if (s.windows.some((w) => w.id === id)) return activate(s, id);
       const slot = firstFreeSlot(s.windows, s.layout);
       const floatingCount = s.windows.filter((w) => w.mode === 'floating').length;
+      const opener = action.from ? s.windows.find((w) => w.id === action.from) : undefined;
       const win: WindowState = {
         id,
         kind: action.kind,
@@ -215,8 +234,9 @@ export function homeReducer(s: HomeState, action: HomeAction): HomeState {
         z: s.windows.length + 1,
         lastUsed: s.clock,
         onTop: false,
+        openedFrom: opener?.id,
       };
-      return { ...s, windows: compactZ([...s.windows, win]), activeId: id, clock: s.clock + 1 };
+      return { ...s, windows: compactZ(placed(s.windows, win)), activeId: id, clock: s.clock + 1 };
     }
     case 'window/closed':
       return close(s, action.id);
@@ -284,7 +304,11 @@ export function homeReducer(s: HomeState, action: HomeAction): HomeState {
       return {
         ...s,
         windows: s.windows.map((w) =>
-          w.id === action.id ? { ...w, id: next, params: action.params } : w,
+          w.id === action.id
+            ? { ...w, id: next, params: action.params }
+            : w.openedFrom === action.id
+              ? { ...w, openedFrom: next }
+              : w,
         ),
         activeId: s.activeId === action.id ? next : s.activeId,
       };
@@ -337,7 +361,8 @@ export function homeReducer(s: HomeState, action: HomeAction): HomeState {
 
 export interface HomeActions {
   setArea: (area: Area) => void;
-  open: (kind: WindowKind, params?: WindowParams) => void;
+  /** `from`: the window it is opened from — set by <WindowOpenerProvider/> for everything opened inside a window. */
+  open: (kind: WindowKind, params?: WindowParams, from?: string) => void;
   close: (id: string) => void;
   /** Focus (and restore) a window — what clicking a dock tab does. */
   activate: (id: string) => void;
@@ -362,7 +387,7 @@ export interface HomeActions {
 export function bindHomeActions(dispatch: Dispatch<HomeAction>): HomeActions {
   return {
     setArea: (area) => dispatch({ type: 'area/resized', area }),
-    open: (kind, params = {}) => dispatch({ type: 'window/opened', kind, params }),
+    open: (kind, params = {}, from) => dispatch({ type: 'window/opened', kind, params, from }),
     close: (id) => dispatch({ type: 'window/closed', id }),
     activate: (id) => dispatch({ type: 'window/activated', id }),
     minimize: (id) => dispatch({ type: 'window/minimized', id }),
@@ -395,6 +420,20 @@ export function HomeProvider({
       <HomeStateContext.Provider value={state}>{children}</HomeStateContext.Provider>
     </HomeActionsContext.Provider>
   );
+}
+
+/**
+ * Wraps a window's content: every window opened from inside it is its drill-down, placed next to it in the dock (a
+ * maximised opener is handled by `useOpen`). Home, the launcher and the assistant stay outside, so what they open is
+ * not a drill-down.
+ */
+export function WindowOpenerProvider({ id, children }: { id: string; children: ReactNode }) {
+  const actions = useHomeActions();
+  const value = useMemo<HomeActions>(
+    () => ({ ...actions, open: (kind, params, from = id) => actions.open(kind, params, from) }),
+    [actions, id],
+  );
+  return <HomeActionsContext.Provider value={value}>{children}</HomeActionsContext.Provider>;
 }
 
 export function useHome(): HomeState {

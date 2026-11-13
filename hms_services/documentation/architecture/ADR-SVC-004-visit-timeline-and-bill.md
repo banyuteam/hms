@@ -77,3 +77,28 @@ would need its own visit header: follow-up.
 - [ ] Role catalog for `encounter.clinical.read` / `billing.read` reviewed with clinical governance.
 
 **Amendment 2026-11-09:** references to the previous implementation outside this workspace removed; decisions unchanged.
+
+**Amendment 2026-11-11 (owner): admission order and emergency medical assessment.** Decision 2 adds two sections,
+clinical-timeline-v1 1.4.0 (additive; clients ignore entry types they do not know):
+- `admission_order` — Surat Perintah Rawat Inap (`perintah_ranap`): date, room ordered (with ward and class from
+  `kamar`/`bangsal`), diagnosis, note and the DPJP name as stored. The legacy row stores a **date without a time**;
+  owner decision: the entry is placed at 00:00 of that date. Because 00:00 is not a recorded time, the entry carries
+  `time_recorded: false` and the screens say "jam tidak tercatat" instead of showing 00:00. Alternatives offered and
+  not chosen: after that day's timed entries; attached to the first room stay (an inferred link).
+- `emergency_assessment` — the emergency department's medical assessment (`penilaian_medis_igd`): history,
+  examination and vital signs, body-region results, findings, results as written, diagnosis, management and
+  disposition, with the doctor's name from `dokter`. Its allergy text is shown in the assessment only and does
+  **not** feed the patient allergy list of clinical-read-v1 (owner decision 2026-11-11).
+
+Both tables have `no_rawat` as their primary key: one fixed SELECT each, `LIMIT 1`, primary-key LEFT JOINs, never
+truncated. Columns were taken from the schema inventory, not from memory (ADR-SVC-007 Decision 1):
+`hms_database/legacy/schema-inventory/admission-order-and-emergency-assessment.md`; meanings, the columns never read
+(`perintah_ranap.kd_dpjp`, `penilaian_medis_igd.kd_dokter`) and the open questions (`deskripsi`, `indikasi`) are in
+the field mapping and query catalog of the same name. Same permission (`encounter.clinical.read`) and audit event;
+no new route. Web: both appear in the Records History (opening Medical Encounter) and as their own sections in
+Medical Encounter, shown only when the visit has them.
+- [x] Allowlist, never-read-column and mapping tests (2026-11-11).
+- [x] `check-clinical-read` on the dev Khanza (2026-11-11): both statements run without error (columns and joins
+      exist). Its sample (the 25 most recent registrations) had no clinical rows yet: 0 rows of either section.
+- [ ] Verified on visits that have an admission order and an IGD assessment (sample of IGD → inpatient visits).
+- [ ] Owner confirmation of `deskripsi`, `indikasi` and `perintah_ranap.kd_dpjp`.

@@ -317,6 +317,64 @@ function addEntry(data: Record<string, JourneyMoment>, e: Entry): void {
       });
       return;
     }
+    case 'admission_order':
+      push('admission_order', {
+        // 1.4.0 always sends false (the legacy row has a date only); anything but an explicit true is "not recorded".
+        time_recorded: e.time_recorded === true,
+        kd_kamar: str(e.room_code),
+        nm_bangsal: text(e.ward),
+        kelas: text(e.room_class),
+        diagnosa: text(e.diagnosis),
+        catatan: text(e.note),
+        nm_dpjp: text(e.dpjp_name),
+      });
+      return;
+    case 'emergency_assessment': {
+      const v = (e.vitals ?? {}) as Record<string, unknown>;
+      const px = (e.physical_exam ?? {}) as Record<string, unknown>;
+      push('emergency_assessment', {
+        doctor_name: text(e.doctor_name),
+        anamnesis: str(e.history_source),
+        hubungan: str(e.informant_relationship),
+        keluhan_utama: str(e.chief_complaint),
+        rps: str(e.present_illness),
+        rpd: str(e.past_illness),
+        rpk: str(e.family_history),
+        rpo: str(e.medication_history),
+        alergi: str(e.allergy),
+        keadaan: str(e.general_condition),
+        kesadaran: text(e.consciousness),
+        gcs: text(v.gcs),
+        td: text(v.blood_pressure),
+        nadi: text(v.pulse),
+        rr: text(v.respiration),
+        suhu: text(v.temperature),
+        spo: text(v.spo2),
+        bb: text(v.weight),
+        tb: text(v.height),
+        fisik: {
+          kepala: text(px.head),
+          mata: text(px.eyes),
+          gigi: text(px.teeth),
+          leher: text(px.neck),
+          thoraks: text(px.thorax),
+          abdomen: text(px.abdomen),
+          genital: text(px.genitals),
+          ekstremitas: text(px.extremities),
+        },
+        ket_fisik: str(e.physical_findings),
+        ket_lokalis: str(e.local_findings),
+        ekg: str(e.ecg),
+        rad: str(e.radiology),
+        lab: str(e.laboratory),
+        diagnosis: str(e.diagnosis),
+        tata: str(e.management),
+        cara_keluar: str(e.disposition),
+        deskripsi: str(e.disposition_detail),
+        indikasi: str(e.indication),
+      });
+      return;
+    }
   }
 }
 

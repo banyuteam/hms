@@ -1,13 +1,15 @@
 openapi: 3.1.0
 info:
   title: HMS Clinical Timeline and Bill API
-  version: 1.3.0
+  version: 1.4.0
   description: |
     Visit timeline and bill, read through from the legacy HMS (ADR-SVC-004). Session (auth-v1) and permission at
     the session facility required; every request is audited and nothing is returned when the audit event cannot be
     written. Errors use the auth-v1 envelope (401, 403 forbidden, 404 not_found, 503 service_unavailable).
     Values are returned as recorded; "" or null means not recorded. `at` is hospital local time with the facility
     offset, or null when the legacy row has no valid date. Sections that hit their row cap are listed in `truncated`.
+    1.4.0 (ADR-SVC-004 amendment 2026-11-11): entry types `admission_order` (Surat Perintah Rawat Inap) and
+    `emergency_assessment` (emergency medical assessment). Additive; clients ignore entry types they do not know.
 servers:
   - url: /api/v1
 paths:
@@ -124,7 +126,7 @@ components:
               type:
                 type: string
                 enum: [registration, room_stay, clinical_note, procedure, lab_test, radiology_exam, radiology_report,
-                       prescription, medication_given, surgery, surgery_report]
+                       prescription, medication_given, surgery, surgery_report, admission_order, emergency_assessment]
               at: { type: [string, 'null'], format: date-time }
         truncated:
           type: array
@@ -132,7 +134,8 @@ components:
             Section names that hit their row cap: room_stay, clinical_note_outpatient, clinical_note_inpatient,
             procedure_<legacy table>, lab_test, lab_result, radiology_exam, radiology_report, prescription,
             prescription_item, prescription_compound, medication_given, surgery, surgery_report, diagnosis,
-            coded_procedure, attending_doctor, sep (1.3.0).
+            coded_procedure, attending_doctor, sep (1.3.0). admission_order and emergency_assessment (1.4.0) are one
+            row per visit and are never truncated.
           items: { type: string }
     Text: { type: [string, 'null'] }
     EntryRegistration:
@@ -273,6 +276,54 @@ components:
         bleeding: { type: string, description: legacy Ya/Tidak }
         complication: { type: string, description: legacy Ya/Tidak }
         finished_at: { type: [string, 'null'], format: date-time }
+    EntryAdmissionOrder:
+      description: |
+        1.4.0. type=admission_order: the inpatient admission order (Surat Perintah Rawat Inap, legacy `perintah_ranap`),
+        at most one per visit. The legacy row stores a date only: `at` is 00:00 of that date and `time_recorded` is
+        false, so 00:00 is never a recorded time.
+      properties:
+        time_recorded: { type: boolean, const: false, description: 'false: `at` carries the date only' }
+        room_code: { type: string, description: kd_kamar (room ordered) }
+        ward: { $ref: '#/components/schemas/Text' }
+        room_class: { $ref: '#/components/schemas/Text' }
+        diagnosis: { $ref: '#/components/schemas/Text' }
+        note: { $ref: '#/components/schemas/Text' }
+        dpjp_name: { type: [string, 'null'], description: nm_dpjp as stored on the order }
+    EntryEmergencyAssessment:
+      description: |
+        1.4.0. type=emergency_assessment: the emergency department's medical assessment (legacy `penilaian_medis_igd`),
+        at most one per visit; `at` = its date and time. Free text and legacy codes as recorded; "" or null = not recorded.
+        The allergy text here is not part of the patient allergy list (clinical-read-v1).
+      properties:
+        doctor_name: { $ref: '#/components/schemas/Text' }
+        history_source: { type: string, description: "anamnesis: 'Autoanamnesis' / 'Alloanamnesis'" }
+        informant_relationship: { type: string, description: hubungan (informant of an alloanamnesis) }
+        chief_complaint: { type: string, description: keluhan_utama }
+        present_illness: { type: string, description: rps }
+        past_illness: { type: string, description: rpd }
+        family_history: { type: string, description: rpk }
+        medication_history: { type: string, description: rpo }
+        allergy: { type: string }
+        general_condition: { type: string, description: keadaan as recorded }
+        consciousness: { type: [string, 'null'], description: legacy kesadaran }
+        vitals:
+          type: object
+          description: blood_pressure, pulse, respiration, temperature, spo2, gcs, weight, height (text or null, as recorded)
+          additionalProperties: { $ref: '#/components/schemas/Text' }
+        physical_exam:
+          type: object
+          description: "head, eyes, teeth, neck, thorax, abdomen, genitals, extremities: 'Normal' / 'Abnormal' / 'Tidak Diperiksa' as recorded"
+          additionalProperties: { $ref: '#/components/schemas/Text' }
+        physical_findings: { type: string, description: ket_fisik }
+        local_findings: { type: string, description: ket_lokalis }
+        ecg: { type: string }
+        radiology: { type: string, description: rad }
+        laboratory: { type: string, description: lab }
+        diagnosis: { type: string }
+        management: { type: string, description: tata (tatalaksana) }
+        disposition: { type: string, description: cara_keluar as recorded }
+        disposition_detail: { type: string, description: deskripsi (meaning not confirmed by the legacy owner) }
+        indication: { type: string, description: indikasi (meaning not confirmed by the legacy owner) }
     Bill:
       type: object
       description: |

@@ -1,6 +1,6 @@
 import { type PatientStatus, type SyntheticPatient } from '@/data/syntheticPatients';
 import { LiveUnsupportedError, NotFoundError } from './errors';
-import { liveGetPatientProfile } from './livePatientApi';
+import { ageInYears, liveGetPatientProfile } from './livePatientApi';
 import { findSyntheticRecord, listSyntheticPatients } from '@/data/syntheticRecords';
 import { searchPatients, searchTerms } from './patientSearch';
 import type { PatientCore } from './types';
@@ -56,7 +56,9 @@ const syntheticPatientApi: PatientApi = {
     after(() => {
       const rec = findSyntheticRecord(mrn);
       if (!rec) throw new NotFoundError();
-      return rec;
+      // Age on today's date from the birth date, as live data and the search results compute it — never the
+      // fixture's stored number, which goes stale (search said 41 while the profile said 40).
+      return { ...rec, ageYears: ageInYears(rec.birthDate) };
     }),
   listPatients: ({ query, status } = {}) =>
     after(() => {

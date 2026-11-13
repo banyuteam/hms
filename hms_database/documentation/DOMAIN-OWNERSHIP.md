@@ -20,6 +20,7 @@ cluster does not imply shared write access: other projects use APIs, events or a
 | `readmodel` | Active (0018) | Clinical timeline, patient summaries, projection checkpoints (derived) | `hms_services` projection consumers | `hms_services` | `hms_readmodel_rw` | restricted |
 | `privacy` | Active (0019) | Processing register, disclosure accounting, data subject requests | `hms_services` privacy module (register: DPO via reviewed change) | `hms_services`, DPO/audit reviewers | `hms_privacy_rw`, `hms_audit_read` | restricted |
 | `analytics` | Active (0020) | Pseudonymized clinical fact views (pseudonym keys owner-only) | owner triggers only | reporting | `hms_report_read` | confidential |
+| `catalogue` | Active (0022) | External reference sources (links, Excel, PDF, Word, images) and their data titles; file metadata only | `hms_services` catalogue module (holders of `catalogue.manage`) | `hms_services` (any signed-in session through the API) | `hms_catalogue_rw` | internal |
 
 `platform` also holds `locations` (0008). `integration` also holds the interoperability state (0016). `audit` also holds
 `chain_anchors` (0019). Every tenant-scoped table in `patient`, `workforce`, `clinical`, `imaging`, `privacy`, `readmodel`

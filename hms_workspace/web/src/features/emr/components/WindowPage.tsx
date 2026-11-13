@@ -38,9 +38,10 @@ function scrollToSection(pane: HTMLElement | null, domId: string) {
 }
 
 /**
- * Remodel window layout (no tab bar, nothing hidden): identity strip · toolbar · vertical section index ·
- * one scrolling page. Below the compact container width the index turns into a "Sections" menu button —
- * never a horizontal bar. Every section stays in the page.
+ * Remodel window layout (no tab bar, nothing hidden): identity strip (with the window's actions in its name row) ·
+ * vertical section index · one scrolling page. Below the compact container width the index turns into a "Sections"
+ * menu button — never a horizontal bar. Every section stays in the page. Without an identity strip the actions get a
+ * toolbar row of their own.
  */
 export function WindowPage({
   label,
@@ -51,7 +52,8 @@ export function WindowPage({
 }: {
   /** Accessible name of the page region (the window title). */
   label: string;
-  identity?: ReactNode;
+  /** Renders the identity strip; `actions` (the toolbar and the compact "Sections" menu) go into its name row. */
+  identity?: (actions: ReactNode) => ReactNode;
   toolbar?: ReactNode;
   sections: readonly SectionDef[];
   children: ReactNode;
@@ -66,6 +68,31 @@ export function WindowPage({
     scrollToSection(paneRef.current, domId(id));
   };
   const navLabel = t('emr.sections');
+  const sectionsMenu = sections.length > 1 && (
+    <Popover
+      label={navLabel}
+      placement="bottom-start"
+      trigger={(props) => (
+        <button
+          type="button"
+          {...props}
+          data-sections-menu=""
+          className="type-body-strong hidden min-h-control cursor-pointer items-center gap-8 rounded-md border border-line bg-surface px-12 text-ink-secondary focus-visible:focus-ring cq-compact:inline-flex"
+        >
+          <Icon name="listChecks" size={16} />
+          <span>{navLabel}</span>
+          <Icon name="chevronDown" size={16} />
+        </button>
+      )}
+    >
+      {sections.map((s) => (
+        <MenuItem key={s.id} onSelect={() => go(s.id)}>
+          <span className={menu.itemText}>{s.label}</span>
+          {s.count !== undefined && <span className={menu.hint}>{s.count}</span>}
+        </MenuItem>
+      ))}
+    </Popover>
+  );
 
   return (
     <SectionIds.Provider value={domId}>
@@ -74,40 +101,24 @@ export function WindowPage({
         role="region"
         aria-label={label}
       >
-        {identity}
-        <div className="flex items-center gap-8 border-b border-line-subtle bg-surface px-16 py-8 cq-compact:px-12 [&:has([data-toolbar-actions]:empty):not(:has([data-sections-menu]))]:hidden">
-          {sections.length > 1 && (
-            <Popover
-              label={navLabel}
-              placement="bottom-start"
-              trigger={(props) => (
-                <button
-                  type="button"
-                  {...props}
-                  data-sections-menu=""
-                  className="type-body-strong hidden min-h-control cursor-pointer items-center gap-8 rounded-md border border-line bg-surface px-12 text-ink-secondary focus-visible:focus-ring cq-compact:inline-flex"
-                >
-                  <Icon name="listChecks" size={16} />
-                  <span>{navLabel}</span>
-                  <Icon name="chevronDown" size={16} />
-                </button>
-              )}
+        {identity ? (
+          identity(
+            <>
+              {sectionsMenu}
+              {toolbar}
+            </>,
+          )
+        ) : (
+          <div className="flex items-center gap-8 border-b border-line-subtle bg-surface px-16 py-8 cq-compact:px-12 [&:has([data-toolbar-actions]:empty):not(:has([data-sections-menu]))]:hidden">
+            {sectionsMenu}
+            <div
+              data-toolbar-actions=""
+              className="ml-auto flex flex-wrap items-center gap-8 cq-compact:gap-4"
             >
-              {sections.map((s) => (
-                <MenuItem key={s.id} onSelect={() => go(s.id)}>
-                  <span className={menu.itemText}>{s.label}</span>
-                  {s.count !== undefined && <span className={menu.hint}>{s.count}</span>}
-                </MenuItem>
-              ))}
-            </Popover>
-          )}
-          <div
-            data-toolbar-actions=""
-            className="ml-auto flex flex-wrap items-center gap-8 cq-compact:gap-4"
-          >
-            {toolbar}
+              {toolbar}
+            </div>
           </div>
-        </div>
+        )}
         <div
           className={cn(
             'grid min-h-0 flex-1',

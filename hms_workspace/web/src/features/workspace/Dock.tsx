@@ -44,24 +44,23 @@ export function Dock() {
       className="relative z-dock flex h-dock-bar items-center gap-8 border-t border-line bg-dock px-24 shadow-dock phone:px-16"
       aria-label={t('dock.label')}
     >
+      {/* Home stays put: with many windows only the window tabs scroll, so the way back is never scrolled away. */}
+      <button
+        type="button"
+        className={cn(tabBase, 'flex-none pr-12')}
+        data-active={activeId === null || undefined}
+        aria-current={activeId === null ? 'page' : undefined}
+        onClick={showHome}
+      >
+        <span className={chip}>
+          <Icon name="home" size={16} />
+        </span>
+        <span className="truncate">{t('dock.home')}</span>
+      </button>
       <ul
-        className="m-0 flex min-w-0 list-none gap-8 overflow-x-auto px-0 py-4 [scrollbar-width:thin]"
+        className="m-0 flex min-w-0 list-none gap-8 overflow-x-auto px-0 py-4 [scrollbar-width:thin] empty:hidden"
         ref={tabsRef}
       >
-        <li className="min-w-0 flex-none">
-          <button
-            type="button"
-            className={cn(tabBase, 'pr-12')}
-            data-active={activeId === null || undefined}
-            aria-current={activeId === null ? 'page' : undefined}
-            onClick={showHome}
-          >
-            <span className={chip}>
-              <Icon name="home" size={16} />
-            </span>
-            <span className="truncate">{t('dock.home')}</span>
-          </button>
-        </li>
         {windows.map((w) => {
           const title = windowTitle(t, w);
           const isActive = activeId === w.id;

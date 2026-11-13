@@ -1,4 +1,4 @@
-import { act, configure, screen, within } from '@testing-library/react';
+import { act, configure, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { emrApi } from '@/api/emrApi';
@@ -55,14 +55,14 @@ describe('Patient Profile · special notes', () => {
     expect(await within(strip(win)).findByText(/^Allergy: Amoxicillin — rash/)).toBeInTheDocument();
   });
 
-  it('nothing written on any visit says "not recorded", never "no known allergy", in the profile and the strip', async () => {
+  it('nothing written on any visit: the profile says "not recorded" (never "no known allergy"); the strip shows nothing', async () => {
     noAllergies();
     const { win, section } = await openProfile();
     expect(await within(section).findByText(/^Not recorded on any visit/)).toBeInTheDocument();
     expect(within(win).queryByText(/no known allerg/i)).toBeNull();
-    expect(
-      await within(strip(win)).findByText('Allergy not recorded (not the same as no allergy)'),
-    ).toBeInTheDocument();
+    // Owner decision 2026-11-11: no "not recorded" pill in the strip, and no empty context list left behind.
+    expect(within(strip(win)).queryByText(/allerg/i)).toBeNull();
+    expect(within(strip(win)).queryByRole('list', { name: 'Visit context and safety' })).toBeNull();
   });
 
   it('an allergy list that cannot be loaded is an error with Try again, never "not recorded"', async () => {
@@ -120,14 +120,14 @@ describe('encounter windows · identity strip', () => {
     expect(await within(group).findByText(/^Allergy: Amoxicillin/)).toBeInTheDocument();
   });
 
-  it('states "not recorded" when no allergy is written on any visit', async () => {
+  it('shows no allergy pill when no allergy is written on any visit (owner decision 2026-11-11)', async () => {
     journeyWithoutAllergy();
     noAllergies();
     renderWindows('employee');
     act(() => homeActions().open('emr-encounter', { norawat: NR }));
     const win = await screen.findByRole('region', { name: /^Medical Encounter · / });
-    expect(
-      await within(strip(win)).findByText('Allergy not recorded (not the same as no allergy)'),
-    ).toBeInTheDocument();
+    // The visit context is there and "Loading allergy notes…" has gone: loaded, and nothing is said about allergies.
+    expect(await within(strip(win)).findByText(/^DPJP:/)).toBeInTheDocument();
+    await waitFor(() => expect(within(strip(win)).queryByText(/allerg/i)).toBeNull());
   });
 });

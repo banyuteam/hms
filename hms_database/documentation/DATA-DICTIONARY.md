@@ -72,6 +72,9 @@ definitions with `\d+ schema.table` in psql.
 | `privacy.data_subject_requests` | 0019 | one request | `id` | versioned; decisions with reasons |
 | `audit.chain_anchors` | 0019 | one external anchor | `id` | must match the chain on insert |
 | `analytics.encounter_facts` / `diagnosis_facts` / `observation_facts` (views) | 0020 | pseudonymized fact | - | pseudonym keys owner-only |
+| `catalogue.sources` | 0022 | one external reference source | `id` (UUIDv7) | url | excel | pdf | word | image; type fixed; https URL for links only; `version` for edits |
+| `catalogue.data_titles` | 0022 | one data title of a source | (`source_id`, `position`) | ordered; deleted with the source |
+| `catalogue.files` | 0022 | the stored file of a source | `source_id` | volume key `catalogue/yyyy/mm/<uuid>`, type matches the source, <= 20 MiB, SHA-256; no bytes, no file name |
 
 Details: [platform](../schemas/platform/README.md), [audit](../schemas/audit/README.md),
 [eventing](../schemas/eventing/README.md), [integration](../schemas/integration/README.md), [iam](../schemas/iam/README.md),
@@ -79,4 +82,4 @@ Details: [platform](../schemas/platform/README.md), [audit](../schemas/audit/REA
 [patient](../schemas/patient/README.md), [clinical](../schemas/clinical/README.md),
 [knowledge](../schemas/knowledge/README.md), [imaging](../schemas/imaging/README.md),
 [readmodel](../schemas/readmodel/README.md), [privacy](../schemas/privacy/README.md),
-[analytics](../schemas/analytics/README.md). Requirement traceability: [standards-traceability](standards-traceability.md).
+[analytics](../schemas/analytics/README.md), [catalogue](../schemas/catalogue/README.md). Requirement traceability: [standards-traceability](standards-traceability.md).

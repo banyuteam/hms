@@ -1,0 +1,238 @@
+openapi: 3.1.0
+info:
+  title: HMS Catalogue API
+  version: 1.0.0
+  description: |
+    Reference sources from outside HMS (web links and Excel, PDF, Word or image files) and the titles of the data each
+    one holds (ADR-SVC-012). Session (auth-v1) required for every call. Reading is open to any signed-in session of the
+    organization (no patient data; reads are not audited). Every change needs the permission `catalogue.manage` and is
+    audited in the same transaction (`catalogue.source.created` / `updated` / `deleted`, `catalogue.file.stored`,
+    `catalogue.import`; administration), with no titles or file contents in the audit detail. Uploads that are refused
+    are audited with their reason code.
+    Errors use the auth-v1 envelope `{"error": {"code": "...", "message": "..."}}`: 400 invalid_request, 401
+    unauthenticated, 403 forbidden / origin_not_allowed, 404 not_found, 409 version_conflict, 413 too_large, 415
+    unsupported_media_type, 422 file_rejected (with `reason`), 503 service_unavailable (database, file volume or
+    malware scanner unavailable: nothing is stored).
+    State-changing calls need the same-origin check of auth-v1. JSON bodies are `application/json`; the file upload is
+    `multipart/form-data` with exactly one part named `file`. The uploaded file name is never read or stored.
+servers:
+  - url: /api/v1
+paths:
+  /catalogue/sources:
+    get:
+      summary: One page of the organization's sources, most recently changed first
+      parameters:
+        - { name: q, in: query, description: 'part of a title, publisher or data title; up to 100 characters', schema: { type: string } }
+        - { name: type, in: query, schema: { $ref: '#/components/schemas/SourceType' } }
+        - { name: after, in: query, description: next_after of the previous page, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        '200':
+          description: Sources (next_after present when a further page may exist)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Source' } }
+                  next_after: { type: string }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+    post:
+      summary: Create a source (catalogue.manage). A file-type source has no file until one is uploaded.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SourceInput' } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Source' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '415': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /catalogue/sources/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      summary: One source
+      responses:
+        '200': { description: Source, content: { application/json: { schema: { $ref: '#/components/schemas/Source' } } } }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+    put:
+      summary: Change title, publisher, description, URL (links only) and data titles (catalogue.manage). The type cannot change.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SourceUpdate' } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Source' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error', description: 'version_conflict: changed since it was read' }
+        '503': { $ref: '#/components/responses/Error' }
+    delete:
+      summary: Delete a source with its data titles and stored file (catalogue.manage)
+      parameters:
+        - { name: version, in: query, required: true, description: the version that was read, schema: { type: integer, minimum: 1 } }
+      responses:
+        '204': { description: Deleted }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /catalogue/sources/{id}/file:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      summary: The stored file (checked against its SHA-256 before it is sent)
+      description: |
+        Sent as an attachment named after the source title with the extension of its type, with
+        `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox` and
+        `Cache-Control: private, no-store`. `inline=true` is honoured for PNG and JPEG only (shown in the window).
+      parameters:
+        - { name: inline, in: query, schema: { type: boolean, default: false } }
+      responses:
+        '200':
+          description: File
+          content:
+            application/pdf: { schema: { type: string, format: binary } }
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: { schema: { type: string, format: binary } }
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error', description: 'not_found: no such source, or it has no file' }
+        '503': { $ref: '#/components/responses/Error', description: 'service_unavailable, also when the stored file fails its SHA-256 check' }
+    put:
+      summary: Store or replace the file of a file-type source (catalogue.manage)
+      description: |
+        The type is found from the bytes and must match the source: excel = XLSX, word = DOCX, pdf = PDF, image = PNG or
+        JPEG. Refused (422, `reason`): unsupported_type, type_mismatch, legacy_office (.doc/.xls), macro_document,
+        active_content (ActiveX; PDF JavaScript, launch or embedded files), encrypted_pdf, unreadable_file,
+        malware_found. Images are re-encoded (metadata such as EXIF/GPS removed). At most 20 MiB (413). The previous file,
+        if any, is removed after the change commits.
+      parameters:
+        - { name: version, in: query, required: true, description: the version that was read, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200': { description: Stored, content: { application/json: { schema: { $ref: '#/components/schemas/Source' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '415': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Rejected' }
+        '503': { $ref: '#/components/responses/Error' }
+  /catalogue/import:
+    post:
+      summary: Create many sources at once from a catalogue JSON document (catalogue.manage); all or nothing
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ImportDocument' } } }
+      responses:
+        '201':
+          description: Created; file-type sources still need their file
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [created]
+                properties:
+                  created: { type: integer }
+        '400':
+          description: 'invalid_request; `problems` lists each refused entry by its index (nothing was created)'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - type: object
+                    properties:
+                      problems:
+                        type: array
+                        items:
+                          type: object
+                          properties: { index: { type: integer }, field: { type: string }, code: { type: string } }
+        '403': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+components:
+  parameters:
+    Id: { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+  schemas:
+    SourceType: { type: string, enum: [url, excel, pdf, word, image] }
+    SourceInput:
+      type: object
+      additionalProperties: false
+      required: [title, type]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 300 }
+        type: { $ref: '#/components/schemas/SourceType' }
+        publisher: { type: [string, 'null'], maxLength: 200 }
+        description: { type: [string, 'null'], maxLength: 2000 }
+        url: { type: [string, 'null'], maxLength: 2000, description: 'https only; required for type url, absent otherwise' }
+        data_titles: { type: array, maxItems: 200, items: { type: string, minLength: 1, maxLength: 300 } }
+    SourceUpdate:
+      type: object
+      additionalProperties: false
+      required: [version, title]
+      properties:
+        version: { type: integer, minimum: 1 }
+        title: { type: string, minLength: 1, maxLength: 300 }
+        publisher: { type: [string, 'null'], maxLength: 200 }
+        description: { type: [string, 'null'], maxLength: 2000 }
+        url: { type: [string, 'null'], maxLength: 2000 }
+        data_titles: { type: array, maxItems: 200, items: { type: string, minLength: 1, maxLength: 300 } }
+    Source:
+      type: object
+      required: [id, title, type, publisher, description, url, data_titles, file, version, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        type: { $ref: '#/components/schemas/SourceType' }
+        publisher: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
+        url: { type: [string, 'null'] }
+        data_titles: { type: array, items: { type: string } }
+        file:
+          type: [object, 'null']
+          description: null for a link, and for a file-type source whose file is not uploaded yet
+          properties:
+            media_type: { type: string }
+            size_bytes: { type: integer }
+            uploaded_at: { type: string, format: date-time }
+        version: { type: integer }
+        updated_at: { type: string, format: date-time }
+    ImportDocument:
+      type: object
+      additionalProperties: false
+      required: [format, version, sources]
+      properties:
+        format: { type: string, const: hms-catalogue }
+        version: { type: integer, const: 1 }
+        sources: { type: array, minItems: 1, maxItems: 500, items: { $ref: '#/components/schemas/SourceInput' } }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties: { code: { type: string }, message: { type: string }, reason: { type: string } }
+  responses:
+    Error:
+      description: Error
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Rejected:
+      description: 'file_rejected; error.reason says why'
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }

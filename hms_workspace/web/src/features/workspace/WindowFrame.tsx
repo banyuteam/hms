@@ -154,7 +154,10 @@ export function WindowFrame({ win, frame, title, icon, active, children }: Props
       data-maximized={maximized || undefined}
       data-tier={frame.tier}
       data-on-top={win.onTop || undefined}
-      className="group/win absolute flex flex-col overflow-hidden rounded-lg border border-line bg-surface shadow-window focus:outline-none data-[maximized]:rounded-none"
+      // overflow-clip, not -hidden: a hidden box can still be scrolled by the browser (find in page, a screen reader's
+      // reading cursor, selecting text, scrollIntoView), which slid the title bar and identity strip out of view with no
+      // scrollbar to bring them back. A clipped box never scrolls; only the window body and its panes do.
+      className="group/win absolute flex flex-col overflow-clip rounded-lg border border-line bg-surface shadow-window focus:outline-none data-[maximized]:rounded-none"
       style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h, zIndex: frame.zIndex }}
       onPointerDownCapture={() => {
         if (!active) activate(win.id);

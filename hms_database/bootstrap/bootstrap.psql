@@ -89,6 +89,8 @@ BEGIN
             ('hms_clinical_rw',        false, 'hms_database:group:clinical record read/write',     -1),
             ('hms_readmodel_rw',       false, 'hms_database:group:clinical read models',           -1),
             ('hms_privacy_rw',         false, 'hms_database:group:privacy records read/write',     -1),
+            ('hms_catalogue_rw',       false, 'hms_database:group:catalogue read/write',           -1),
+            ('hms_document_rw',        false, 'hms_database:group:document attachments read/write', -1),
             ('hms_audit_append',       false, 'hms_database:group:audit append-only writer',       -1),
             ('hms_audit_read',         false, 'hms_database:group:audit reader',                   -1),
             ('hms_report_read',        false, 'hms_database:group:reporting reader',               -1),
@@ -124,7 +126,7 @@ BEGIN
     EXECUTE format('GRANT %I TO %I WITH INHERIT FALSE, SET TRUE', prefix || '_owner', prefix || '_migrator');
     EXECUTE format('GRANT hms_platform_rw, hms_iam_rw, hms_eventing_rw, hms_integration_rw, hms_audit_append, '
                    'hms_terminology_rw, hms_workforce_rw, hms_patient_rw, hms_clinical_rw, hms_readmodel_rw, '
-                   'hms_privacy_rw TO %I WITH INHERIT TRUE, SET FALSE',
+                   'hms_privacy_rw, hms_catalogue_rw, hms_document_rw TO %I WITH INHERIT TRUE, SET FALSE',
                    prefix || '_runtime');
     -- The bridge gets the canonical record groups and its marker, never iam, platform, privacy, read models or the
     -- integration group of the native runtime (outbound submissions). The runtime is never a member of the marker.

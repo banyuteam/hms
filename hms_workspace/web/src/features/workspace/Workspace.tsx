@@ -14,6 +14,7 @@ import { WindowGuardProvider } from './windowGuard';
 import { computeFrames } from './frames';
 import { ModuleMenu } from './ModuleMenu';
 import { TopBar } from './TopBar';
+import { useLeaveWarning } from './useLeaveWarning';
 import { WindowBody } from './WindowBody';
 import { WindowFrame } from './WindowFrame';
 import { HOME_CARDS, windowIcon, windowTitle } from './windowMeta';
@@ -29,6 +30,7 @@ export function Workspace() {
   const { windows, activeId, layout, area } = useHome();
   const { setArea, open } = useHomeActions();
   const endSession = useEndSession();
+  useLeaveWarning(windows.length > 0);
 
   // DEV live API: the server rejected the token (expired or revoked) -> end the session like an idle lock.
   useEffect(() => {
@@ -102,7 +104,7 @@ export function Workspace() {
         <div className="relative flex min-h-0 min-w-0">
           <main
             id="main-content"
-            className="relative min-w-0 flex-1 overflow-hidden bg-wallpaper outline-none before:pointer-events-none before:absolute before:inset-0 before:bg-canvas before:opacity-[var(--hms-wallpaper-scrim)]"
+            className="relative min-w-0 flex-1 overflow-clip bg-wallpaper outline-none before:pointer-events-none before:absolute before:inset-0 before:bg-canvas before:opacity-[var(--hms-wallpaper-scrim)]"
             ref={areaRef}
             tabIndex={-1}
           >

@@ -27,6 +27,11 @@ services:
       LEGACY_DB_PASSWORD_FILE: /run/secrets/legacy_db_password
       LEGACY_LOGIN_ID_KEY_FILE: /run/secrets/legacy_login_id_key
       LEGACY_LOGIN_PASSWORD_KEY_FILE: /run/secrets/legacy_login_password_key
+      # Uploads (platform/filestore, ADR-SVC-012/013) stay off unless both are set. FILES_DIR must then be a mount of
+      # durable, backed-up storage (attachments are part of the medical record), and CLAMAV_ADDR a clamd reachable
+      # only from hms-services. With a read-only root filesystem and no mount, hms-services refuses to start.
+      FILES_DIR: ${FILES_DIR:-}
+      CLAMAV_ADDR: ${CLAMAV_ADDR:-}
     secrets:
       - hms_runtime_password
       - legacy_db_password

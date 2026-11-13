@@ -183,11 +183,7 @@ func (h *Handler) RequirePermission(permission string, next http.Handler) http.H
 // unsafeRequestAllowed blocks cross-site state changes: the request must come from the public origin and be JSON
 // (a cross-site form cannot send application/json without a CORS preflight, which this API never grants).
 func (h *Handler) unsafeRequestAllowed(w http.ResponseWriter, r *http.Request) bool {
-	origin := r.Header.Get("Origin")
-	sameOrigin := origin == h.opt.PublicOrigin.String() ||
-		(origin == "" && r.Header.Get("Sec-Fetch-Site") == "same-origin")
-	if !sameOrigin {
-		httpx.WriteError(w, http.StatusForbidden, "origin_not_allowed", "Request origin not allowed.")
+	if !h.sameOriginAllowed(w, r) {
 		return false
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.ContentLength != 0 &&
@@ -206,10 +202,27 @@ func (h *Handler) clearCookie(w http.ResponseWriter) {
 // RequestInfo describes a request for audit events written by other modules.
 func (h *Handler) RequestInfo(r *http.Request) RequestInfo { return h.requestInfo(r) }
 
+// sameOriginAllowed is the CSRF defence of every state-changing request (ADR-SVC-001): the Origin header, or for
+// browsers that omit it Sec-Fetch-Site, must name PUBLIC_ORIGIN.
+func (h *Handler) sameOriginAllowed(w http.ResponseWriter, r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == h.opt.PublicOrigin.String() || (origin == "" && r.Header.Get("Sec-Fetch-Site") == "same-origin") {
+		return true
+	}
+	httpx.WriteError(w, http.StatusForbidden, "origin_not_allowed", "Request origin not allowed.")
+	return false
+}
+
 // AllowStateChange applies the same-origin and JSON checks of state-changing requests for other modules' POST routes.
 // false = the error has been written.
 func (h *Handler) AllowStateChange(w http.ResponseWriter, r *http.Request) bool {
 	return h.unsafeRequestAllowed(w, r)
+}
+
+// AllowUpload applies only the same-origin check, for file uploads (ADR-SVC-012, ADR-SVC-013); the route itself
+// checks its content type and size (platform/filestore.ReadMultipart). false = the error has been written.
+func (h *Handler) AllowUpload(w http.ResponseWriter, r *http.Request) bool {
+	return h.sameOriginAllowed(w, r)
 }
 
 // Can reports whether the request's caller holds permission at the session's facility, for checks a module makes

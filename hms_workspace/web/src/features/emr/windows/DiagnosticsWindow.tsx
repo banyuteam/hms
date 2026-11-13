@@ -48,7 +48,9 @@ export function DiagnosticsWindow({ winId, norawat }: { winId: string; norawat?:
         return (
           <WindowPage
             label={`${t('emr.w4.title')} · ${nr}`}
-            identity={<IdentityStrip person={person} facts={facts} />}
+            identity={(actions) => (
+              <IdentityStrip person={person} facts={facts} actions={actions} />
+            )}
             sections={[
               { id: 'lab', label: t('emr.lab.title'), count: labRows.length },
               { id: 'rad', label: t('emr.rad.title'), count: radRows.length },
@@ -183,7 +185,12 @@ export function DiagnosticsWindow({ winId, norawat }: { winId: string; norawat?:
                   rows={vitalRows}
                   rowKey={(n) => `${n.key}-${n.index}`}
                   columns={[
-                    { key: 'at', header: t('emr.col.time'), render: (n) => when(n.key) },
+                    {
+                      key: 'at',
+                      header: t('emr.col.time'),
+                      nowrap: true,
+                      render: (n) => when(n.key),
+                    },
                     ...VITAL_KEYS.map((k) => ({
                       key: k,
                       header: t(`emr.vitals.${k}`),
@@ -232,6 +239,7 @@ export function DiagnosticsWindow({ winId, norawat }: { winId: string; norawat?:
                     {
                       key: 'at',
                       header: t('emr.col.time'),
+                      nowrap: true,
                       render: (r) => (
                         <StoredTime
                           value={`${r.p.tgl_peresepan ?? ''} ${r.p.jam_peresepan ?? ''}`}
@@ -245,6 +253,7 @@ export function DiagnosticsWindow({ winId, norawat }: { winId: string; norawat?:
                     {
                       key: 'h',
                       header: t('emr.pharmacy.handedOver'),
+                      nowrap: true,
                       render: (r) => (
                         <StoredTime value={`${r.p.tgl_penyerahan} ${r.p.jam_penyerahan}`} />
                       ),
@@ -261,7 +270,12 @@ export function DiagnosticsWindow({ winId, norawat }: { winId: string; norawat?:
                   rows={given}
                   rowKey={(g) => `${g.key}-${g.index}`}
                   columns={[
-                    { key: 'at', header: t('emr.col.time'), render: (g) => when(g.key) },
+                    {
+                      key: 'at',
+                      header: t('emr.col.time'),
+                      nowrap: true,
+                      render: (g) => when(g.key),
+                    },
                     { key: 'd', header: t('emr.rx.drug'), render: (g) => g.drug_name ?? '—' },
                     {
                       key: 'q',

@@ -91,7 +91,7 @@ function Profile({ mrn }: { mrn: string }) {
     <AuditSubjectProvider patient={p.mrn}>
       <WindowPage
         label={`${t('emr.w1.title')} · ${p.mrn}`}
-        identity={
+        identity={(actions) => (
           <IdentityStrip
             person={{
               name: p.name,
@@ -102,8 +102,9 @@ function Profile({ mrn }: { mrn: string }) {
               allergies: allergyStatus,
             }}
             scope="patient"
+            actions={actions}
           />
-        }
+        )}
         sections={[
           { id: 'identity', label: t('emr.w1.identity') },
           { id: 'background', label: t('emr.w1.background') },

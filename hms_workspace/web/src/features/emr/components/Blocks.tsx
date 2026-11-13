@@ -120,6 +120,11 @@ export interface Column<T> {
   header: string;
   render: (row: T) => ReactNode;
   numeric?: boolean;
+  /**
+   * Keep the cell on one line (dates and times): a squeezed table scrolls sideways rather than breaking a date into four
+   * lines. Numeric cells never wrap either, so a value stays with its unit ("4 ampoule", "11.2 g/dL").
+   */
+  nowrap?: boolean;
 }
 
 /** Plain semantic table in a focusable scroll region (keyboard: Tab into it, arrows scroll). */
@@ -164,7 +169,7 @@ export function DataTable<T>({
               {columns.map((c) => (
                 <td
                   key={c.key}
-                  className={`${cell} border-b border-line-subtle align-top text-ink`}
+                  className={`${cell} border-b border-line-subtle align-top text-ink${c.nowrap || c.numeric ? ' whitespace-nowrap' : ''}`}
                   data-numeric={c.numeric || undefined}
                 >
                   {c.render(r)}

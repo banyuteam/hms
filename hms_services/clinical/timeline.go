@@ -272,6 +272,7 @@ func MapTimeline(number string, rows legacyhms.SectionRows, loc *time.Location) 
 			"bleeding": text(r, 4), "complication": text(r, 5), "finished_at": stamp(LocalTime(col(r, 6), nil, loc)),
 		})
 	}
+	mapAdmissionAndEmergency(b, rows)
 	mapSummary(&tl.Summary, rows)
 	// Column order: legacyhms.SEPColumns.
 	for _, r := range rows.Rows["sep"] {
@@ -284,6 +285,38 @@ func MapTimeline(number string, rows legacyhms.SectionRows, loc *time.Location) 
 	}
 	tl.Entries = b.sorted()
 	return tl
+}
+
+// mapAdmissionAndEmergency maps the admission order (perintah_ranap) and the emergency medical assessment
+// (penilaian_medis_igd), one row each per visit. The admission order stores a date without a time: it is placed at
+// 00:00 of that date (owner decision 2026-11-11) and says so with `time_recorded: false`, so no client reads 00:00 as
+// a recorded time. Coded values (kesadaran, the body-region results, cara_keluar …) are returned as recorded.
+func mapAdmissionAndEmergency(b *timelineBuilder, rows legacyhms.SectionRows) {
+	for _, r := range rows.Rows["admission_order"] {
+		b.add("admission_order", LocalTime(col(r, 0), nil, b.loc), Entry{
+			"time_recorded": false, "room_code": text(r, 1), "ward": opt(r, 2), "room_class": opt(r, 3),
+			"diagnosis": opt(r, 4), "note": opt(r, 5), "dpjp_name": opt(r, 6),
+		})
+	}
+	for _, r := range rows.Rows["emergency_assessment"] {
+		b.add("emergency_assessment", LocalTime(col(r, 0), nil, b.loc), Entry{
+			"doctor_name": opt(r, 1), "history_source": text(r, 2), "informant_relationship": text(r, 3),
+			"chief_complaint": text(r, 4), "present_illness": text(r, 5), "past_illness": text(r, 6),
+			"family_history": text(r, 7), "medication_history": text(r, 8), "allergy": text(r, 9),
+			"general_condition": text(r, 10), "consciousness": opt(r, 12),
+			"vitals": map[string]*string{
+				"blood_pressure": opt(r, 13), "pulse": opt(r, 14), "respiration": opt(r, 15), "temperature": opt(r, 16),
+				"spo2": opt(r, 17), "gcs": opt(r, 11), "weight": opt(r, 18), "height": opt(r, 19),
+			},
+			"physical_exam": map[string]*string{
+				"head": opt(r, 20), "eyes": opt(r, 21), "teeth": opt(r, 22), "neck": opt(r, 23), "thorax": opt(r, 24),
+				"abdomen": opt(r, 25), "genitals": opt(r, 26), "extremities": opt(r, 27),
+			},
+			"physical_findings": text(r, 28), "local_findings": text(r, 29), "ecg": text(r, 30), "radiology": text(r, 31),
+			"laboratory": text(r, 32), "diagnosis": text(r, 33), "management": text(r, 34), "disposition": text(r, 35),
+			"disposition_detail": text(r, 36), "indication": text(r, 37),
+		})
+	}
 }
 
 func mapLab(b *timelineBuilder, rows legacyhms.SectionRows) {

@@ -374,3 +374,43 @@ func TestBillLinesCarryTodaysTariff(t *testing.T) {
 		t.Errorf("no drug price column for intensive care: %+v", l)
 	}
 }
+
+func TestMapTimelineAdmissionOrderAndEmergencyAssessment(t *testing.T) {
+	loc, _ := time.LoadLocation("Asia/Jakarta")
+	igd := r("2026-10-26 14:50:00", "dr. Jaga", "Autoanamnesis", "-", "sesak", "sesak 2 hari", "hipertensi", "-", "amlodipin",
+		"amoksisilin", "Sakit Sedang", "15", "Compos Mentis", "150/95", "104", "26", "36.8", "91", "60", "158",
+		"Normal", "Normal", "Tidak Diperiksa", "Normal", "Abnormal", "Normal", "Tidak Diperiksa", "Abnormal",
+		"ronki basah", "edema tungkai", "sinus takikardi", "kardiomegali", "-", "CHF", "O2 3 lpm, furosemid IV",
+		"Rawat Inap di", "Melati", "-")
+	rows := legacyhms.SectionRows{Rows: map[string]legacyhms.TextRows{
+		"admission_order":      {r("2026-10-26", "MEL.02", "Melati", "Kelas 2", "CHF", "<nil>", "dr. Andi")},
+		"emergency_assessment": {igd},
+	}}
+	tl := MapTimeline("2026/10/26/000123", rows, loc)
+	if len(tl.Entries) != 2 {
+		t.Fatalf("entries: %v", tl.Entries)
+	}
+	order, a := tl.Entries[0], tl.Entries[1]
+	if order["type"] != "admission_order" || *order["at"].(*string) != "2026-10-26T00:00:00+07:00" || order["time_recorded"] != false {
+		t.Errorf("admission order: date only, at 00:00 and marked as such: %v", order)
+	}
+	if order["room_code"] != "MEL.02" || *order["ward"].(*string) != "Melati" || *order["diagnosis"].(*string) != "CHF" ||
+		order["note"].(*string) != nil || *order["dpjp_name"].(*string) != "dr. Andi" {
+		t.Errorf("admission order fields: %v", order)
+	}
+	if a["type"] != "emergency_assessment" || *a["at"].(*string) != "2026-10-26T14:50:00+07:00" || *a["doctor_name"].(*string) != "dr. Jaga" {
+		t.Errorf("emergency assessment: %v", a)
+	}
+	if a["chief_complaint"] != "sesak" || a["family_history"] != "" || a["allergy"] != "amoksisilin" ||
+		a["informant_relationship"] != "" || a["laboratory"] != "" || a["disposition"] != "Rawat Inap di" ||
+		a["disposition_detail"] != "Melati" || a["indication"] != "" || *a["consciousness"].(*string) != "Compos Mentis" {
+		t.Errorf("assessment text ('-' is not recorded): %v", a)
+	}
+	v := a["vitals"].(map[string]*string)
+	if *v["blood_pressure"] != "150/95" || *v["gcs"] != "15" || *v["spo2"] != "91" || *v["weight"] != "60" || *v["height"] != "158" {
+		t.Errorf("vitals: %v", v)
+	}
+	if px := a["physical_exam"].(map[string]*string); *px["thorax"] != "Abnormal" || *px["teeth"] != "Tidak Diperiksa" {
+		t.Errorf("physical exam values as recorded: %v", px)
+	}
+}

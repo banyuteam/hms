@@ -121,6 +121,40 @@ export function RecordsWindow({ winId, norawat }: { winId: string; norawat?: str
               />,
             ),
           );
+          m.emergency_assessment?.forEach((a, i) =>
+            rows.push(
+              <SummaryRow
+                key={`igd${i}`}
+                icon="clipboardCheck"
+                label={t('emr.seg.igd')}
+                preview={[a.doctor_name, a.diagnosis || a.keluhan_utama, a.cara_keluar]
+                  .filter(Boolean)
+                  .join(' · ')}
+                onOpen={() => open('emr-encounter', { norawat: nr })}
+                openLabel={t('emr.open.encounter')}
+              />,
+            ),
+          );
+          m.admission_order?.forEach((o, i) =>
+            rows.push(
+              <SummaryRow
+                key={`spri${i}`}
+                icon="forward"
+                label={t('emr.seg.admissionOrder')}
+                preview={[
+                  // The moment is 00:00 of the order's date (owner decision 2026-11-11); the time itself is not recorded.
+                  o.time_recorded ? null : t('emr.admissionOrder.timeNotRecorded'),
+                  o.nm_bangsal ?? o.kd_kamar,
+                  o.diagnosa,
+                  o.nm_dpjp,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+                onOpen={() => open('emr-encounter', { norawat: nr })}
+                openLabel={t('emr.open.encounter')}
+              />,
+            ),
+          );
           m.room_stay?.forEach((r, i) =>
             rows.push(
               <SummaryRow
@@ -264,9 +298,10 @@ export function RecordsWindow({ winId, norawat }: { winId: string; norawat?: str
           return rows;
         };
 
+        const sepCount = facts.sep.state === 'present' ? facts.sep.records.length : undefined;
         const sections = [
           { id: 'stay', label: t('emr.w2.stay') },
-          ...(bpjs ? [{ id: 'sep', label: t('emr.sep.title') }] : []),
+          ...(bpjs ? [{ id: 'sep', label: t('emr.sep.title'), count: sepCount }] : []),
           { id: 'timeline', label: t('emr.w2.timeline'), count: all.length },
           { id: 'diagnoses', label: t('emr.dx.title'), count: dx.length },
           { id: 'procedures', label: t('emr.px.title'), count: px.length },
@@ -277,7 +312,9 @@ export function RecordsWindow({ winId, norawat }: { winId: string; norawat?: str
         return (
           <WindowPage
             label={`${t('emr.w2.title')} · ${nr}`}
-            identity={<IdentityStrip person={person} facts={facts} />}
+            identity={(actions) => (
+              <IdentityStrip person={person} facts={facts} actions={actions} />
+            )}
             sections={sections}
             toolbar={
               <>
@@ -338,7 +375,7 @@ export function RecordsWindow({ winId, norawat }: { winId: string; norawat?: str
             </Section>
 
             {bpjs && (
-              <Section id="sep" title={t('emr.sep.title')} icon="shield">
+              <Section id="sep" title={t('emr.sep.title')} icon="shield" count={sepCount}>
                 <SepDetails sep={facts.sep} />
               </Section>
             )}

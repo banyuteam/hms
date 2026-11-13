@@ -68,7 +68,7 @@ var (
 		"jns_perawatan_inap|periksa_lab|jns_perawatan_lab|detail_periksa_lab|template_laboratorium|periksa_radiologi|" +
 		"jns_perawatan_radiologi|hasil_radiologi|resep_obat|resep_dokter|resep_dokter_racikan|databarang|" +
 		"detail_pemberian_obat|aturan_pakai|returpasien|resep_pulang|tambahan_biaya|pengurangan_biaya|operasi|paket_operasi|laporan_operasi|diagnosa_pasien|penyakit|" +
-		"prosedur_pasien|icd9|dpjp_ranap|resume_pasien_ranap|nota_jalan|nota_inap|detail_nota_jalan|" +
+		"prosedur_pasien|icd9|dpjp_ranap|resume_pasien_ranap|perintah_ranap|penilaian_medis_igd|nota_jalan|nota_inap|detail_nota_jalan|" +
 		"detail_nota_inap|piutang_pasien"
 	tableRef = regexp.MustCompile("(?:FROM|JOIN) `([a-z_0-9]+)`")
 	tableOK  = regexp.MustCompile("^(" + timelineTables + ")$")
@@ -328,5 +328,27 @@ func TestTariffListBindsEveryFilter(t *testing.T) {
 	// q and its two patterns, status twice, after: all off; then the limit.
 	if a := q.sent[1].args; len(a) != 7 || a[0] != "" || a[1] != "" || a[3] != "" || a[5] != "" || a[6] != 10 {
 		t.Errorf("no filter: %q", a)
+	}
+}
+
+// The admission order and the emergency assessment read one row per visit and never the codes they replace by a
+// name (data minimisation; field mapping hms_database/legacy/field-mapping/admission-order-and-emergency-assessment.md).
+func TestAdmissionOrderAndEmergencyAssessmentColumns(t *testing.T) {
+	order, igd := sectionNamed("admission_order"), sectionNamed("emergency_assessment")
+	for _, s := range []Section{order, igd} {
+		if s.Cap != 1 {
+			t.Errorf("%s: one row per visit (no_rawat is the primary key), cap %d", s.Name, s.Cap)
+		}
+	}
+	if strings.Contains(order.SQL, "kd_dpjp") {
+		t.Error("perintah_ranap.kd_dpjp is never read (the stored nm_dpjp is)")
+	}
+	if strings.Contains(igd.SQL, "a.`kd_dokter`,") || strings.Contains(igd.SQL, "a.`kd_dokter` FROM") {
+		t.Error("penilaian_medis_igd.kd_dokter is only a join key, never a selected column")
+	}
+	for _, c := range []string{"keluhan_utama", "rps", "rpd", "rpk", "rpo", "alergi", "ket_lokalis", "tata", "cara_keluar", "indikasi"} {
+		if !strings.Contains(igd.SQL, "a.`"+c+"`") {
+			t.Errorf("emergency assessment does not read %s", c)
+		}
 	}
 }

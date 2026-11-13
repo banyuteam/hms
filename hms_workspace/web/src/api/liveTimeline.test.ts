@@ -215,6 +215,92 @@ describe('toJourney (clinical-timeline-v1 → journey)', () => {
     ).toThrow(/BAD_SHAPE/);
   });
 
+  it('maps the admission order (date only, at 00:00) and the emergency assessment of 1.4.0', () => {
+    const j = toJourney({
+      ...TIMELINE,
+      entries: [
+        {
+          type: 'admission_order',
+          at: '2026-10-26T00:00:00+07:00',
+          time_recorded: false,
+          room_code: 'MEL.02',
+          ward: 'Melati',
+          room_class: 'Kelas 2',
+          diagnosis: 'CHF',
+          note: null,
+          dpjp_name: 'dr. Contoh',
+        },
+        {
+          type: 'emergency_assessment',
+          at: '2026-10-26T14:50:00+07:00',
+          doctor_name: 'dr. Jaga',
+          history_source: 'Alloanamnesis',
+          informant_relationship: 'Istri',
+          chief_complaint: 'sesak',
+          present_illness: 'sesak 2 hari',
+          past_illness: '',
+          family_history: '',
+          medication_history: '',
+          allergy: 'amoksisilin',
+          general_condition: 'Sakit Sedang',
+          consciousness: 'Compos Mentis',
+          vitals: { blood_pressure: '150/95', pulse: '104', spo2: '91', weight: null },
+          physical_exam: { thorax: 'Abnormal', teeth: 'Tidak Diperiksa' },
+          physical_findings: 'ronki basah',
+          local_findings: '',
+          ecg: '',
+          radiology: '',
+          laboratory: '',
+          diagnosis: 'CHF',
+          management: 'O2, furosemid',
+          disposition: 'Rawat Inap di',
+          disposition_detail: 'Melati',
+          indication: '',
+        },
+        // A server that leaves out time_recorded never makes 00:00 a recorded time.
+        { type: 'admission_order', at: '2026-10-27T00:00:00+07:00', room_code: 'X' },
+      ],
+    });
+    expect(Object.keys(j.data)).toEqual([
+      '2026-10-26T00:00:00',
+      '2026-10-26T14:50:00',
+      '2026-10-27T00:00:00',
+    ]);
+    expect(j.data['2026-10-26T00:00:00']!.admission_order).toEqual([
+      {
+        time_recorded: false,
+        kd_kamar: 'MEL.02',
+        nm_bangsal: 'Melati',
+        kelas: 'Kelas 2',
+        diagnosa: 'CHF',
+        catatan: null,
+        nm_dpjp: 'dr. Contoh',
+      },
+    ]);
+    expect(j.data['2026-10-27T00:00:00']!.admission_order![0]!.time_recorded).toBe(false);
+    const a = j.data['2026-10-26T14:50:00']!.emergency_assessment![0]!;
+    expect(a).toMatchObject({
+      doctor_name: 'dr. Jaga',
+      anamnesis: 'Alloanamnesis',
+      hubungan: 'Istri',
+      keluhan_utama: 'sesak',
+      rpd: '',
+      alergi: 'amoksisilin',
+      kesadaran: 'Compos Mentis',
+      td: '150/95',
+      spo: '91',
+      bb: null,
+      tb: null,
+      ket_fisik: 'ronki basah',
+      tata: 'O2, furosemid',
+      cara_keluar: 'Rawat Inap di',
+      deskripsi: 'Melati',
+    });
+    expect(a.fisik).toMatchObject({ thoraks: 'Abnormal', gigi: 'Tidak Diperiksa', kepala: null });
+    // Its allergy text is the form's own: not part of the patient allergy list (owner decision 2026-11-11).
+    expect(facts(j).allergy).toEqual({ state: 'notRecorded' });
+  });
+
   it('keys and stored times use the local time as written', () => {
     expect(journeyKey('2026-10-26T08:15:00+07:00')).toBe('2026-10-26T08:15:00');
     expect(journeyKey(null)).toBe('undated');

@@ -21,7 +21,7 @@ export function ModuleCard({
   description: string;
   /** Alt+<n> hint. */
   shortcut?: number;
-  /** Role-aware verb under the title ("Open" / "Open & edit"). */
+  /** Verb under the title (e.g. "Open"). */
   verb: string;
   tone?: 'default' | 'ai';
   /** `row` = full-width, one line (icon · text · verb) — used for the AI card under the task tiles. */

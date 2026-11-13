@@ -4,7 +4,8 @@
 #   docker compose -f deployment/compose.yaml up --build        # build and start
 #   docker compose -f deployment/compose.yaml down              # stop (add -v to delete the dev database)
 #
-# Start order: postgres -> db-bootstrap -> db-migrate -> org-setup -> hms-services -> hms-web.
+# Start order: postgres -> db-bootstrap -> db-migrate -> org-setup -> hms-services -> hms-web; clamav starts beside
+# hms-services (uploads are refused until its signatures are loaded, a few minutes after the first start).
 # Optional profile legacy-bridge (ADR-ROOT-002): add `--profile legacy-bridge` to `up` to also start the legacy bridge
 # worker, which maps Khanza patients into HMS as hms_meta_legacy_bridge.
 # The database superuser is used only by db-bootstrap. Migrations run once as hms_meta_migrator; hms-services runs as
@@ -148,6 +149,12 @@ services:
       LEGACY_LOGIN_ID_KEY_FILE: /run/secrets/legacy_login_id_key
       LEGACY_LOGIN_PASSWORD_KEY_FILE: /run/secrets/legacy_login_password_key
       LEGACY_LOGIN_EMPLOYEE_FIELD: ${LEGACY_LOGIN_EMPLOYEE_FIELD:-nik}
+      # Uploaded files (platform/filestore: document attachments ADR-SVC-013, catalogue ADR-SVC-012). Every upload is
+      # scanned by clamav first; when the scanner is down uploads are refused, reads still work.
+      FILES_DIR: /data/files
+      CLAMAV_ADDR: clamav:3310
+    volumes:
+      - hms_files:/data/files
     # Lets LEGACY_DB_HOST=host.docker.internal reach a development Khanza on the host (Linux needs this line).
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -157,10 +164,32 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
-    networks: [hms-private]
+    networks: [hms-private, hms-scan]
     init: true
     restart: unless-stopped
     mem_limit: 512m
+    cpus: 1.0
+
+  # Malware scanner for uploads: hms-services streams each file to clamd (INSTREAM); nothing is written to disk here.
+  # Only hms-services shares its network, so it reaches neither the database nor the legacy HMS. The network is not
+  # internal because freshclam downloads signatures (production: allow only the ClamAV mirrors, deployment/README.md).
+  # Loading the signatures takes a few minutes and about 1.5-2.5 GB of memory.
+  clamav:
+    image: ${CLAMAV_IMAGE:-clamav/clamav:1.4}
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "SETGID", "SETUID", "DAC_OVERRIDE"]   # the image drops to its clamav user at start
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - hms_clamav_signatures:/var/lib/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "echo PING | nc -w 2 127.0.0.1 3310 | grep -q PONG"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 300s
+    networks: [hms-scan]
+    restart: unless-stopped
+    mem_limit: 3g
     cpus: 1.0
 
   # Legacy bridge worker (ADR-ROOT-002, ADR-SVC-010): reads Khanza `pasien` SELECT-only and maps it into the canonical
@@ -231,9 +260,14 @@ networks:
     ipam:
       config:
         - subnet: ${HMS_NETWORK_SUBNET:-172.28.50.0/24}
+  hms-scan:
+    driver: bridge
 
 volumes:
   hms_postgres_dev:
+  # Uploaded files (synthetic or de-identified data only in development). `down -v` deletes them with the database.
+  hms_files:
+  hms_clamav_signatures:
 
 # Development secret files (git-ignored). Create them as described in deployment/README.md.
 secrets:

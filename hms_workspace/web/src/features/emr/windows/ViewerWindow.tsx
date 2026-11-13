@@ -252,7 +252,7 @@ function ViewerBody({
   return (
     <WindowPage
       label={`${title} · ${nr}${item ? ` · ${item}` : ''}`}
-      identity={<IdentityStrip person={person} facts={facts} />}
+      identity={(actions) => <IdentityStrip person={person} facts={facts} actions={actions} />}
       sections={[]}
       toolbar={
         <>

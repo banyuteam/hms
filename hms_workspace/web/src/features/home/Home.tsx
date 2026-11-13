@@ -7,28 +7,20 @@ import { useI18n } from '@/locales/I18nProvider';
 import { useAssistantActions } from '@/state/assistant';
 import { PERMISSIONS } from '@/features/iam/iamApi';
 import { TARIFF_PERMISSION } from '@/features/tariffs/tariffApi';
-import {
-  displayName,
-  useAuth,
-  useCanEdit,
-  usePermission,
-  useRole,
-  useRoleLabelKey,
-} from '@/state/auth';
+import { displayName, useAuth, usePermission, useRole, useRoleLabelKey } from '@/state/auth';
 import { useHome, useHomeActions } from '@/state/home';
 import { ModuleCard } from './ModuleCard';
 
 const overline = 'type-overline mt-0 mb-12 text-ink-muted uppercase';
 
 /**
- * Home: search first (name / MRN / no_rawat), four task cards with a role-aware verb, the AI assistant card, and the records
+ * Home: search first (name / MRN / no_rawat), four task cards ("Open": no edits are saved yet), the AI assistant card, and the records
  * already open in this session (from the window state, in memory only — nothing stored).
  */
 export function Home() {
   const { t, locale } = useI18n();
   const { user } = useAuth();
   const role = useRole();
-  const canEdit = useCanEdit();
   const roleLabel = useRoleLabelKey();
   // UI hint only: hms_services authorizes every IAM request.
   const canAdminister = usePermission(PERMISSIONS.usersRead);
@@ -80,7 +72,7 @@ export function Home() {
                   title={t(`emr.${c.key}.title`)}
                   description={t(`emr.${c.key}.desc`)}
                   shortcut={c.shortcut}
-                  verb={t(canEdit ? 'emr.home.verbDoctor' : 'emr.home.verbEmployee')}
+                  verb={t('emr.home.verbOpen')}
                   onOpen={() => open(c.kind)}
                 />
               </li>

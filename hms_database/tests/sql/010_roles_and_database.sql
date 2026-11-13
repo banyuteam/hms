@@ -17,9 +17,10 @@ BEGIN
                            WHERE rolname IN ('hms_platform_rw', 'hms_iam_rw', 'hms_eventing_rw', 'hms_integration_rw',
                                              'hms_audit_append', 'hms_audit_read', 'hms_report_read',
                                              'hms_terminology_rw', 'hms_workforce_rw', 'hms_patient_rw', 'hms_clinical_rw',
-                                             'hms_readmodel_rw', 'hms_privacy_rw', 'hms_legacy_bridge')
-                             AND NOT rolcanlogin AND NOT rolsuper) = 14,
-                          'the fourteen group roles exist and cannot log in');
+                                             'hms_readmodel_rw', 'hms_privacy_rw', 'hms_catalogue_rw', 'hms_document_rw',
+                                             'hms_legacy_bridge')
+                             AND NOT rolcanlogin AND NOT rolsuper) = 16,
+                          'the sixteen group roles exist and cannot log in');
     PERFORM pg_temp.ok(NOT (SELECT rolcanlogin FROM pg_roles WHERE rolname = p || '_owner'), 'owner cannot log in');
     PERFORM pg_temp.ok((SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = current_database()) = p || '_owner',
                           'database is owned by the owner role');
@@ -42,10 +43,11 @@ BEGIN
     PERFORM pg_temp.ok((SELECT array_agg(g.rolname ORDER BY g.rolname) FROM pg_auth_members m
                            JOIN pg_roles g ON g.oid = m.roleid JOIN pg_roles u ON u.oid = m.member
                            WHERE u.rolname = p || '_runtime')
-                          = ARRAY['hms_audit_append', 'hms_clinical_rw', 'hms_eventing_rw', 'hms_iam_rw', 'hms_integration_rw',
-                                  'hms_patient_rw', 'hms_platform_rw', 'hms_privacy_rw', 'hms_readmodel_rw',
-                                  'hms_terminology_rw', 'hms_workforce_rw']::name[],
-                          'runtime is a member of exactly the eleven runtime groups');
+                          = ARRAY['hms_audit_append', 'hms_catalogue_rw', 'hms_clinical_rw', 'hms_document_rw',
+                                  'hms_eventing_rw', 'hms_iam_rw', 'hms_integration_rw', 'hms_patient_rw',
+                                  'hms_platform_rw', 'hms_privacy_rw', 'hms_readmodel_rw', 'hms_terminology_rw',
+                                  'hms_workforce_rw']::name[],
+                          'runtime is a member of exactly the thirteen runtime groups');
     PERFORM pg_temp.ok(NOT pg_has_role(p || '_runtime', p || '_owner', 'MEMBER'), 'runtime is not a member of owner');
     PERFORM pg_temp.ok(NOT pg_has_role(p || '_runtime', 'hms_audit_read', 'MEMBER'), 'runtime cannot read the audit trail');
 

@@ -12,7 +12,7 @@ successful run; there is no ingress or TLS yet.
 
 | Path | Purpose |
 |---|---|
-| `cmd/hms-services` | Binary: `serve` (native layer), `legacy-bridge` (legacy bridge worker, own database login), `setup-organization`, `check-legacy-key`, `check-clinical-read`, `check-bill-sources`, `inventory-legacy-schema` (metadata-only legacy schema inventory into `hms_database/legacy/schema-inventory/`), `bootstrap-admin` |
+| `cmd/hms-services` | Binary: `serve` (native layer), `legacy-bridge` (legacy bridge worker, own database login), `setup-organization`, `check-legacy-key`, `check-clinical-read`, `check-bill-sources`, `inventory-legacy-schema` (metadata-only legacy schema inventory into `hms_database/legacy/schema-inventory/`), `bootstrap-admin`, `check-python-worker` (no database; ADR-SVC-011) |
 | `core/config` | Typed, validated environment configuration; secrets via `NAME` or `NAME_FILE`, redacted in logs |
 | `core/httpx` | Request IDs, security headers, access log, JSON errors, trusted-proxy client address, per-key rate limiter |
 | `integrations/legacyhms` | Read-only legacy HMS (Khanza): login check (4 fixed SELECTs), patient/encounter/allergy reads (14 fixed SELECTs, listed by `Statements()`), visit timeline and bill charges (one fixed SELECT per section), bill reconciliation check |
@@ -26,6 +26,7 @@ successful run; there is no ingress or TLS yet.
 | `platform/tenancy` | Organization/facility resolution and setup |
 | `tariffs` | Tariff book API (tariff-book-v1): legacy master price tables, read-only |
 | `assistant`, `assistant/rules` | Assistant rule evaluation (assistant-v1, ADR-SVC-006): deterministic rule sets in Go (no language model), first `claim-readiness` v1 over the visit timeline; the approved general-help knowledge release (`knowledge.go`) |
+| `runtimes/go-runtime/pyworker`, `runtimes/python-workers/hms_worker.py` | Python worker runtime (ADR-SVC-011): Go calls allowlisted capabilities over line-delimited JSON, with timeouts, size limits, strict output validation and restart. Two engines: `process` starts an isolated Python process (`python -I`, no inherited environment); `embedded` runs CPython 3.14 inside the binary through [go-python](https://github.com/goccy/go-python) (pure Go, no cgo, no Python installed; in-memory filesystem, no network or subprocess, memory cap on any OS). Capabilities are written against the adapter package `hms_runtime` (decorator, input/output schemas, data-free errors; guide in `runtimes/python-workers/README.md`). Only `runtime.ping` exists; not used by `serve` yet. `hms-services check-python-worker [-engine embedded]` tries it. Python tests run in the embedded interpreter with `go test ./runtimes/go-runtime/pyworker -run 'TestEmbeddedPythonUnitTests$' -v [-args -py=ABS_PATH]` (default: every `test_*.py` in `runtimes/python-workers`) |
 | `runtimes/python-workers/assistant/datasets` | Assistant datasets (source-controlled, reviewed); `general-help.seed.json` is embedded into the service (`embed.go`) and served once approved |
 | `contracts/api/auth-v1.openapi.yaml`, `iam-admin-v1.openapi.yaml`, `clinical-read-v1.openapi.yaml`, `clinical-timeline-v1.openapi.yaml`, `tariff-book-v1.openapi.yaml`, `assistant-v1.openapi.yaml`, `patient-records-v1.openapi.yaml` | API contracts |
 | `documentation/architecture/ADR-SVC-00*.md` | Design and decisions (sign-in, IAM administration, clinical read, visit timeline and bill, tariff book, assistant evaluation, BPJS bridging read) |
@@ -140,6 +141,9 @@ jobs.
 - SEP (`bridging_sep`) is read with every visit timeline and returned as `summary.sep` (clinical-timeline-v1 1.3.0,
   number in full) and checked by claim readiness v3 (ADR-SVC-007). INA-CBG / E-Klaim tables (`inacbg_*`) are
   inventoried but not read (B-2, B-3 wait for the casemix team).
+- The inpatient admission order (`perintah_ranap`, date only: at 00:00 with `time_recorded: false`) and the emergency
+  medical assessment (`penilaian_medis_igd`) are timeline entries since clinical-timeline-v1 1.4.0 (ADR-SVC-004
+  amendment 2026-11-11). Owner to confirm `deskripsi`, `indikasi` and `kd_dpjp` (field mapping in hms_database).
 - Not yet served: the outpatient discharge summary, other clinical documents.
 - First green CI run; image scan, SBOM and digest-pinned base images for releases.
 - Ingress rate limiting/TLS, purge of expired sessions and lockout rows, mobile token design.

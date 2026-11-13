@@ -111,3 +111,25 @@ func TestBridgeConfiguration(t *testing.T) {
 		}
 	}
 }
+
+func TestFiles(t *testing.T) {
+	c, err := Load(env(nil))
+	if err != nil || c.Files.Enabled || c.Files.MaxBytes != 20<<20 {
+		t.Fatalf("files off by default: %+v, %v", c.Files, err)
+	}
+	c, err = Load(env(map[string]string{"FILES_DIR": "/data/files", "CLAMAV_ADDR": "clamav:3310", "FILES_MAX_MB": "10"}))
+	if err != nil || !c.Files.Enabled || c.Files.ClamAVAddr != "clamav:3310" || c.Files.MaxBytes != 10<<20 {
+		t.Fatalf("files on: %+v, %v", c.Files, err)
+	}
+	for name, over := range map[string]map[string]string{
+		"scanner required":  {"FILES_DIR": "/data/files"},
+		"scanner needs dir": {"CLAMAV_ADDR": "clamav:3310"},
+		"relative dir":      {"FILES_DIR": "data/files", "CLAMAV_ADDR": "clamav:3310"},
+		"size cap":          {"FILES_DIR": "/data/files", "CLAMAV_ADDR": "clamav:3310", "FILES_MAX_MB": "21"},
+		"scanner host:port": {"FILES_DIR": "/data/files", "CLAMAV_ADDR": "clamav"},
+	} {
+		if _, err := Load(env(over)); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}

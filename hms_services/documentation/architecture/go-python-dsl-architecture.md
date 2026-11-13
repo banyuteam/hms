@@ -21,3 +21,5 @@ IR is language-neutral, typed, versioned, deterministic, capability-declared and
 
 ## Worker boundary
 Use typed RPC, deadlines, scoped inputs, bounded resources and output validation. Do not provide unrestricted database credentials or general network access. Treat worker output as untrusted.
+Implemented by `runtimes/go-runtime/pyworker` (ADR-SVC-011): one supervisor with two engines, an external Python child
+process or CPython embedded through go-python (pure Go, no cgo), both behind the same protocol and checks.

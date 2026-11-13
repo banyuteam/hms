@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useI18n } from '@/locales/I18nProvider';
 import { Icon } from '@/components/Icon';
 import { StatusPill } from '@/components/StatusPill';
@@ -34,13 +35,14 @@ export interface IdentityPerson {
 
 /**
  * Patient-safety strip at the top of every patient window: two identifiers (name + date of birth, plus MRN),
- * the patient's allergies (every visit; "not recorded" stated), encounter context, DPJP, payer, a deceased banner and a
+ * the patient's allergies (every visit; nothing shown when none is written), encounter context, DPJP, payer, a deceased banner and a
  * warning when the server truncated a list.
  */
 export function IdentityStrip({
   person,
   facts,
   scope = 'encounter',
+  actions,
 }: {
   person: IdentityPerson | null;
   facts?: EncounterFacts | null;
@@ -49,6 +51,11 @@ export function IdentityStrip({
    * "admitted now". Allergies are patient-level, so they are shown in both scopes.
    */
   scope?: 'encounter' | 'patient';
+  /**
+   * The window's actions, at the end of the name row (they wrap below it when narrow) instead of a toolbar row of their
+   * own: one row less between the patient's identity and the clinical content on short screens.
+   */
+  actions?: ReactNode;
 }) {
   const { t, locale } = useI18n();
   const dob = formatStoredDate(person?.birthDate, locale);
@@ -109,8 +116,17 @@ export function IdentityStrip({
         {facts && scope === 'encounter' && (
           <span className={id}>{t('emr.identity.norawat', { norawat: facts.norawat })}</span>
         )}
+        {actions && (
+          <div
+            role="group"
+            aria-label={t('emr.window.actions')}
+            className="ml-auto flex flex-wrap items-center gap-8 cq-compact:gap-4"
+          >
+            {actions}
+          </div>
+        )}
       </div>
-      {(person?.allergies || (facts && scope === 'encounter')) && (
+      {(hasAllergyFlags(person?.allergies, facts?.allergy) || (facts && scope === 'encounter')) && (
         <ul className={flags} aria-label={t('emr.identity.context')}>
           <AllergyFlags status={person?.allergies} visit={facts?.allergy} />
           {facts && scope === 'encounter' && <EncounterFlags facts={facts} />}
@@ -121,9 +137,10 @@ export function IdentityStrip({
 }
 
 /**
- * Allergy first, always stated (owner decision 2026-11-10, replacing 2026-11-09): every distinct text written on any
- * visit, plus this visit's notes; "not recorded" when nothing is written anywhere (never "no allergy"); a warning when
- * the list is incomplete. When the other visits could not be read, only this visit's allergies are shown, with no
+ * Allergy first (owner decision 2026-11-10, replacing 2026-11-09): every distinct text written on any visit, plus this
+ * visit's notes; a warning when the list is incomplete. When nothing is written anywhere the strip shows nothing (owner
+ * decision 2026-11-11, replacing the "not recorded" pill); the Patient Profile's Special notes still says "not recorded"
+ * (never "no allergy"). When the other visits could not be read, only this visit's allergies are shown, with no
  * warning (owner decision 2026-11-10; the Profile still reports the failure). Nothing is shown to a session without
  * clinical access.
  */
@@ -135,12 +152,7 @@ function AllergyFlags({
   visit: EncounterFacts['allergy'] | undefined;
 }) {
   const { t } = useI18n();
-  const texts = [
-    ...new Set([
-      ...(status?.state === 'ready' ? status.entries.map((e) => e.text) : []),
-      ...(visit?.state === 'recorded' ? visit.texts : []),
-    ]),
-  ];
+  const texts = allergyTexts(status, visit);
   return (
     <>
       {texts.length > 0 && (
@@ -148,11 +160,6 @@ function AllergyFlags({
           <StatusPill status="danger">
             {t('emr.identity.allergy', { text: texts.join('; ') })}
           </StatusPill>
-        </li>
-      )}
-      {texts.length === 0 && status?.state === 'ready' && (
-        <li>
-          <StatusPill status="warning">{t('emr.identity.allergyNone')}</StatusPill>
         </li>
       )}
       {texts.length === 0 && status?.state === 'loading' && (
@@ -166,6 +173,31 @@ function AllergyFlags({
         </li>
       )}
     </>
+  );
+}
+
+/** Every distinct allergy text: the patient's list (all visits) plus this visit's notes. */
+function allergyTexts(
+  status: AllergyStatus | undefined,
+  visit: EncounterFacts['allergy'] | undefined,
+): string[] {
+  return [
+    ...new Set([
+      ...(status?.state === 'ready' ? status.entries.map((e) => e.text) : []),
+      ...(visit?.state === 'recorded' ? visit.texts : []),
+    ]),
+  ];
+}
+
+/** Whether <AllergyFlags/> shows anything (no empty context list is left in the strip). */
+function hasAllergyFlags(
+  status: AllergyStatus | undefined,
+  visit: EncounterFacts['allergy'] | undefined,
+): boolean {
+  return (
+    allergyTexts(status, visit).length > 0 ||
+    status?.state === 'loading' ||
+    (status?.state === 'ready' && status.truncated)
   );
 }
 

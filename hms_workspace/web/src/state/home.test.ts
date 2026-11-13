@@ -106,6 +106,27 @@ describe('home reducer — states and transitions', () => {
       'lab:2026/10/26/000123|hb',
     );
   });
+  it('a drill-down goes right after its opener and that opener’s earlier drill-downs; Home and the launcher append', () => {
+    s().open('emr-records', { norawat: 'A' });
+    s().open('emr-profile', { mrn: 'P' }); // from Home: appended
+    s().open('emr-encounter', { norawat: 'A' }, 'emr-records:A');
+    s().open('prescription', { norawat: 'A', item: 'R1' }, 'emr-encounter:A');
+    s().open('emr-diagnostics', { norawat: 'A' }, 'emr-records:A');
+    expect(s().windows.map((w) => w.id)).toEqual([
+      'emr-records:A',
+      'emr-encounter:A',
+      'prescription:A|R1',
+      'emr-diagnostics:A',
+      'emr-profile:P',
+    ]);
+    expect(win('prescription:A|R1').openedFrom).toBe('emr-encounter:A');
+    // Pointing the opener at another record keeps its drill-downs attached to it.
+    s().retarget('emr-records:A', { norawat: 'B' });
+    expect(win('emr-encounter:A').openedFrom).toBe('emr-records:B');
+    // An opener that is gone: the window is simply appended.
+    s().open('lab', { norawat: 'A', item: 'L1' }, 'closed-window');
+    expect(s().windows.at(-1)!.id).toBe('lab:A|L1');
+  });
   it('retarget points a blank window at a record, or focuses the existing one instead of duplicating', () => {
     s().open('emr-records');
     s().retarget('emr-records', { norawat: '2026/10/26/000123' });
