@@ -151,13 +151,14 @@ Whatever is decided here becomes the pattern the next outward integration copies
 - [x] `core/config`: `ACCOUNTING_API_BASE_URL` and `ACCOUNTING_API_TOKEN` (with `_FILE`), validated at startup,
       with tests for the missing and the both-set cases.
       with tests for the missing and the both-set cases.
-- [ ] GET-only client with timeout, typed decoding, and a test proving a non-GET method is refused before a request
+- [x] GET-only client with timeout, typed decoding, and a test proving a non-GET method is refused before a request
       is built.
-- [ ] Seven permissions registered; every endpoint behind `RequireSession` + `RequirePermission`; a test proving one
-      report's permission does not open another.
-- [ ] Audit written per read, fail closed, with a test that withholds the data when the audit write fails.
+- [x] Neraca: permission registered, endpoint behind `RequireSession` + `RequirePermission`.
+- [ ] The remaining six reports, each with its own permission, and a test proving one report's permission does not
+      open another.
+- [x] Audit written per read, fail closed, with a test that withholds the data when the audit write fails.
 - [ ] Buku Besar refuses a request without `account_id`.
-- [ ] Upstream failure answers 503 and leaks nothing: a test asserting the upstream error body does not appear in
+- [x] Upstream failure answers 503 and leaks nothing: a test asserting the upstream error body does not appear in
       the response.
 - [ ] PostgreSQL integration tests, as the other modules have.
 - [ ] Web: the Keuangan window reads through `/api`, and hides what the session may not see — the shell already
