@@ -37,12 +37,14 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"hms/services/accounting"
 	"hms/services/assistant"
 	"hms/services/assistant/rules"
 	"hms/services/canonical/recordtx"
 	"hms/services/clinical"
 	"hms/services/core/config"
 	"hms/services/core/httpx"
+	accountingintegration "hms/services/integrations/accounting"
 	"hms/services/integrations/legacyhms"
 	"hms/services/legacybridge/patientsync"
 	nativepatient "hms/services/native/patient"
@@ -173,6 +175,11 @@ func serve(ctx context.Context, lookup config.Lookup) error {
 	tariffs.NewHandler(legacyhms.NewTariff(legacyhms.RowsQuerierFor(legacyDB)), store, handler, logger).Register(mux)
 	assistant.NewHandler(clinicalReader, store, handler, loc, logger).Register(mux)
 	nativepatient.NewHandler(nativepatient.NewService(pool), handler, logger).Register(mux)
+	// Off unless configured (ADR-SVC-014 Decision 11): accounting must not be able to stop sign-in from working.
+	if cfg.Accounting.Enabled {
+		accountingclient := accountingintegration.NewClient(cfg.Accounting)
+		accounting.NewHandler(accountingclient, store, handler, logger).Register(mux)
+	}
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -435,6 +442,7 @@ func permissionRegistry() []iam.PermissionDef {
 	all = append(all, clinical.Permissions...)
 	all = append(all, tariffs.Permissions...)
 	all = append(all, nativepatient.Permissions...)
+	all = append(all, accounting.Permissions...)
 	return append(all, assistant.Permissions...)
 }
 
