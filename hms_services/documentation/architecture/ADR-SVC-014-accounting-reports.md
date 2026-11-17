@@ -74,9 +74,10 @@ Whatever is decided here becomes the pattern the next outward integration copies
    acceptable only because hms_services writes the audit itself (Decision 5). The accounting application's own
    audit is not useful for this path and must not be relied on for it.
 
-   The token is configuration, read through `config.parser.secret("ACCOUNTING_API_TOKEN", true)` so that
+   The token is configuration, read through `config.parser.secret("ACCOUNTING_API_TOKEN", false)` so that
    `ACCOUNTING_API_TOKEN_FILE` works and the value is a `config.Secret` — redacted by `String`, `GoString` and
-   `MarshalText`, revealed only where the code says `Reveal()`.
+   `MarshalText`, revealed only where the code says `Reveal()`. It is optional at the parser and required by
+   Decision 11; setting both the variable and its `_FILE` form is refused either way.
 
 7. **Responses are parsed into typed structs, never `map[string]any`.** If the accounting application changes a
    field, Go fails loudly here rather than sending `null` to React. The lesson is already written in that
@@ -96,6 +97,12 @@ Whatever is decided here becomes the pattern the next outward integration copies
 10. **When the accounting application is unreachable, HMS answers 503** with a neutral message and logs the real
     error — the `unavailable(w)` pattern from `tariffs`. Upstream error bodies, hosts and credentials never reach
     the browser.
+11. **Off by default.** Unless `ACCOUNTING_API_BASE_URL` is set the module is off and hms-services serves its
+    other modules unchanged; once set, the token is required and the URL must carry a scheme. A token without a
+    base URL is refused rather than ignored. This follows `config.Files`, which is off unless `FILES_DIR` is set
+    and then requires its scanner, and refuses `CLAMAV_ADDR` without it. Accounting must not be able to stop
+    sign-in from working. Timeout is `ACCOUNTING_API_TIMEOUT_SECONDS`, 1–30, default 5 — the same default as
+    `LEGACY_DB_TIMEOUT_SECONDS`.
 
 ## Alternatives considered
 
@@ -141,7 +148,8 @@ Whatever is decided here becomes the pattern the next outward integration copies
 
 ## Acceptance criteria
 
-- [ ] `core/config`: `ACCOUNTING_API_BASE_URL` and `ACCOUNTING_API_TOKEN` (with `_FILE`), validated at startup,
+- [x] `core/config`: `ACCOUNTING_API_BASE_URL` and `ACCOUNTING_API_TOKEN` (with `_FILE`), validated at startup,
+      with tests for the missing and the both-set cases.
       with tests for the missing and the both-set cases.
 - [ ] GET-only client with timeout, typed decoding, and a test proving a non-GET method is refused before a request
       is built.

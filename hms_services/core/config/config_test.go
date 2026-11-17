@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func env(over map[string]string) Lookup {
@@ -127,6 +128,36 @@ func TestFiles(t *testing.T) {
 		"relative dir":      {"FILES_DIR": "data/files", "CLAMAV_ADDR": "clamav:3310"},
 		"size cap":          {"FILES_DIR": "/data/files", "CLAMAV_ADDR": "clamav:3310", "FILES_MAX_MB": "21"},
 		"scanner host:port": {"FILES_DIR": "/data/files", "CLAMAV_ADDR": "clamav"},
+	} {
+		if _, err := Load(env(over)); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+func TestAccounting(t *testing.T) {
+	c, err := Load(env(nil))
+	if err != nil || c.Accounting.Enabled || c.Accounting.Timeout != 5*time.Second {
+		t.Fatalf("accounting off by default: %+v, %v", c.Accounting, err)
+	}
+
+	// Trailing slash is dropped so that joining a path cannot produce a double slash.
+	c, err = Load(env(map[string]string{
+		"ACCOUNTING_API_BASE_URL":        "http://127.0.0.1/",
+		"ACCOUNTING_API_TOKEN":           "t",
+		"ACCOUNTING_API_TIMEOUT_SECONDS": "10",
+	}))
+	if err != nil || !c.Accounting.Enabled || c.Accounting.BaseURL != "http://127.0.0.1" ||
+		c.Accounting.Token.Reveal() != "t" || c.Accounting.Timeout != 10*time.Second {
+		t.Fatalf("accounting on: %+v, %v", c.Accounting, err)
+	}
+
+	for name, over := range map[string]map[string]string{
+		"token required":   {"ACCOUNTING_API_BASE_URL": "http://127.0.0.1"},
+		"token needs base": {"ACCOUNTING_API_TOKEN": "t"},
+		"scheme":           {"ACCOUNTING_API_BASE_URL": "127.0.0.1", "ACCOUNTING_API_TOKEN": "t"},
+		"timeout range":    {"ACCOUNTING_API_BASE_URL": "http://127.0.0.1", "ACCOUNTING_API_TOKEN": "t", "ACCOUNTING_API_TIMEOUT_SECONDS": "31"},
+		"token and file":   {"ACCOUNTING_API_BASE_URL": "http://127.0.0.1", "ACCOUNTING_API_TOKEN": "t", "ACCOUNTING_API_TOKEN_FILE": "x"},
 	} {
 		if _, err := Load(env(over)); err == nil {
 			t.Errorf("%s: accepted", name)

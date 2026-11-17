@@ -85,6 +85,17 @@ type Files struct {
 	MaxBytes   int    // cap for any one file; a feature may set a lower limit
 }
 
+// Accounting configures the read-through to the accounting application (ADR-SVC-014). Off unless
+// ACCOUNTING_API_BASE_URL is set; then the token is required too — the module never calls without one.
+// hms-services serves its other modules either way: accounting must not be able to stop sign-in from working,
+// the same shape as Files above.
+type Accounting struct {
+	Enabled bool
+	BaseURL string
+	Token   Secret
+	Timeout time.Duration
+}
+
 type Config struct {
 	Env              Env
 	HTTPAddr         string
@@ -99,6 +110,7 @@ type Config struct {
 	Session          Session
 	SignIn           SignIn
 	Files            Files
+	Accounting       Accounting
 }
 
 // Lookup reads one variable; os.LookupEnv in production, a map in tests.
@@ -144,7 +156,8 @@ func Load(get Lookup) (*Config, error) {
 			LockoutDuration: time.Duration(p.integer("SIGNIN_LOCKOUT_MINUTES", 15, 1, 240)) * time.Minute,
 			PerIPPerMinute:  p.integer("SIGNIN_RATE_PER_MINUTE", 20, 1, 600),
 		},
-		Files: p.files(),
+		Files:      p.files(),
+		Accounting: p.accounting(),
 	}
 
 	switch c.Env {
@@ -320,6 +333,31 @@ func (p *parser) files() Files {
 		p.fail("CLAMAV_ADDR (host:port of clamd) is required with FILES_DIR: uploads are always scanned")
 	}
 	return f
+}
+
+// accounting reads the accounting application's read-through configuration (ADR-SVC-014). Off unless
+// ACCOUNTING_API_BASE_URL is set; then the token is required too — the module never calls without one.
+// Same shape as files() above: a half-filled configuration is refused rather than quietly half-enabled.
+func (p *parser) accounting() Accounting {
+	a := Accounting{
+		BaseURL: strings.TrimRight(p.str("ACCOUNTING_API_BASE_URL", ""), "/"),
+		Timeout: time.Duration(p.integer("ACCOUNTING_API_TIMEOUT_SECONDS", 5, 1, 30)) * time.Second,
+	}
+	token := p.secret("ACCOUNTING_API_TOKEN", false)
+	if a.BaseURL == "" {
+		if token.IsSet() {
+			p.fail("ACCOUNTING_API_TOKEN needs ACCOUNTING_API_BASE_URL")
+		}
+		return a
+	}
+	if !strings.HasPrefix(a.BaseURL, "http://") && !strings.HasPrefix(a.BaseURL, "https://") {
+		p.fail("ACCOUNTING_API_BASE_URL must start with http:// or https://")
+	}
+	if !token.IsSet() {
+		p.fail("ACCOUNTING_API_TOKEN or ACCOUNTING_API_TOKEN_FILE is required with ACCOUNTING_API_BASE_URL")
+	}
+	a.Enabled, a.Token = true, token
+	return a
 }
 
 type parser struct {
