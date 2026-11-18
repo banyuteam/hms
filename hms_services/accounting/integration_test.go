@@ -86,17 +86,16 @@ func systemEvent(orgID string) audit.Event {
 type report struct {
 	path       string
 	permission string
-	action     string
 }
 
 var reports = []report{
-	{"/api/v1/accounting/neraca?year=2026&month=11", PermNeracaRead, "accounting.neraca.read"},
-	{"/api/v1/accounting/laba-rugi?year=2026&month=11", PermLabaRugiRead, "accounting.laba_rugi.read"},
-	{"/api/v1/accounting/neraca-saldo?year=2026&month=11", PermNeracaSaldoRead, "accounting.neraca_saldo.read"},
-	{"/api/v1/accounting/neraca-lajur?year=2026&month=11", PermNeracaLajurRead, "accounting.neraca_lajur.read"},
-	{"/api/v1/accounting/cash-flow?year=2026&month=11", PermCashFlowRead, "accounting.cash_flow.read"},
-	{"/api/v1/accounting/buku-besar?year=2026&month=11&account_id=3", PermBukuBesarRead, "accounting.buku_besar.read"},
-	{"/api/v1/accounting/aging?type=receivable", PermAgingRead, "accounting.aging.read"},
+	{"/api/v1/accounting/neraca?year=2026&month=11", PermNeracaRead},
+	{"/api/v1/accounting/laba-rugi?year=2026&month=11", PermLabaRugiRead},
+	{"/api/v1/accounting/neraca-saldo?year=2026&month=11", PermNeracaSaldoRead},
+	{"/api/v1/accounting/neraca-lajur?year=2026&month=11", PermNeracaLajurRead},
+	{"/api/v1/accounting/cash-flow?year=2026&month=11", PermCashFlowRead},
+	{"/api/v1/accounting/buku-besar?year=2026&month=11&account_id=3", PermBukuBesarRead},
+	{"/api/v1/accounting/aging?type=receivable", PermAgingRead},
 }
 
 func TestPGAccountingPermissionsAndAudit(t *testing.T) {
@@ -244,11 +243,11 @@ func TestPGAccountingPermissionsAndAudit(t *testing.T) {
 		var m int
 		if err := admin.QueryRow(ctx,
 			`SELECT count(*) FROM audit.audit_events WHERE organization_id = $1::uuid AND action = $2`,
-			org.OrganizationID, r.action).Scan(&m); err != nil {
+			org.OrganizationID, r.permission).Scan(&m); err != nil {
 			t.Fatal(err)
 		}
 		if m == 0 {
-			t.Errorf("%s: no audit event with action %s", r.path, r.action)
+			t.Errorf("%s: no audit event with action %s", r.path, r.permission)
 		}
 	}
 }

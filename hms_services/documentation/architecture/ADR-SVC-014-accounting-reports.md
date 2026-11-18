@@ -155,13 +155,13 @@ Whatever is decided here becomes the pattern the next outward integration copies
       is built.
 - [x] Neraca: permission registered, endpoint behind `RequireSession` + `RequirePermission`.
 - [x] The remaining six reports, each with its own permission.
-- [ ] A test proving one report's permission does not open another. Needs the database: `RequirePermission` calls
+- [x] A test proving one report's permission does not open another. Needs the database: `RequirePermission` calls
       `svc.Authorize`, so this belongs with the PostgreSQL integration tests below.
 - [x] Audit written per read, fail closed, with a test that withholds the data when the audit write fails.
 - [x] Buku Besar refuses a request without `account_id`.
 - [x] Upstream failure answers 503 and leaks nothing: a test asserting the upstream error body does not appear in
       the response.
-- [ ] PostgreSQL integration tests, as the other modules have.
+- [x] PostgreSQL integration tests, as the other modules have.
 - [ ] Web: the Keuangan window reads through `/api`, and hides what the session may not see — the shell already
       does this elsewhere (`emr.payer.forbidden`).
 - [ ] Owner: the rights matrix; the base URL per environment; the service account.

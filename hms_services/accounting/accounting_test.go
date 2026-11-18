@@ -283,7 +283,7 @@ func TestEveryReportAudits(t *testing.T) {
 			t.Errorf("%s: status %d: %s", r.permission, w.Code, w.Body)
 			continue
 		}
-		if len(au.events) != 1 || au.events[0].Action != r.action {
+		if len(au.events) != 1 || au.events[0].Action != r.permission {
 			t.Errorf("%s: audit %+v", r.permission, au.events)
 		}
 		if au.events[0].Action != r.permission {

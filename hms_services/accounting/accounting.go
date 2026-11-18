@@ -367,7 +367,8 @@ func (h *Handler) neracaLajur(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) cashFlow(w http.ResponseWriter, r *http.Request) {
 	var out CashFlow
-	if h.report(w, r, "/api/v1/laporan/cash-flow", "cash-flow", PermCashFlowRead, &out, nil) {		httpx.WriteJSON(w, http.StatusOK, out)
+	if h.report(w, r, "/api/v1/laporan/cash-flow", "cash-flow", PermCashFlowRead, &out, nil) {
+		httpx.WriteJSON(w, http.StatusOK, out)
 	}
 }
 
