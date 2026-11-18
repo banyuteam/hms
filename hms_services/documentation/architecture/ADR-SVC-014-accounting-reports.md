@@ -154,10 +154,11 @@ Whatever is decided here becomes the pattern the next outward integration copies
 - [x] GET-only client with timeout, typed decoding, and a test proving a non-GET method is refused before a request
       is built.
 - [x] Neraca: permission registered, endpoint behind `RequireSession` + `RequirePermission`.
-- [ ] The remaining six reports, each with its own permission, and a test proving one report's permission does not
-      open another.
+- [x] The remaining six reports, each with its own permission.
+- [ ] A test proving one report's permission does not open another. Needs the database: `RequirePermission` calls
+      `svc.Authorize`, so this belongs with the PostgreSQL integration tests below.
 - [x] Audit written per read, fail closed, with a test that withholds the data when the audit write fails.
-- [ ] Buku Besar refuses a request without `account_id`.
+- [x] Buku Besar refuses a request without `account_id`.
 - [x] Upstream failure answers 503 and leaks nothing: a test asserting the upstream error body does not appear in
       the response.
 - [ ] PostgreSQL integration tests, as the other modules have.
