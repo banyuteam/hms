@@ -353,22 +353,21 @@ func (h *Handler) neracaSaldo(w http.ResponseWriter, r *http.Request) {
 		extra.Set("sertakan_akun_nol", r.URL.Query().Get("sertakan_akun_nol"))
 	}
 	var out TrialBalance
-	if h.report(w, r, "/api/v1/laporan/neraca-saldo", "neraca-saldo", "accounting.neraca-saldo.read", &out, extra) {
+	if h.report(w, r, "/api/v1/laporan/neraca-saldo", "neraca-saldo", PermNeracaSaldoRead, &out, extra) {
 		httpx.WriteJSON(w, http.StatusOK, out)
 	}
 }
 
 func (h *Handler) neracaLajur(w http.ResponseWriter, r *http.Request) {
 	var out Worksheet
-	if h.report(w, r, "/api/v1/laporan/neraca-lajur", "neraca-lajur", "accounting.neraca-lajur.read", &out, nil) {
+	if h.report(w, r, "/api/v1/laporan/neraca-lajur", "neraca-lajur", PermNeracaLajurRead, &out, nil) {
 		httpx.WriteJSON(w, http.StatusOK, out)
 	}
 }
 
 func (h *Handler) cashFlow(w http.ResponseWriter, r *http.Request) {
 	var out CashFlow
-	if h.report(w, r, "/api/v1/laporan/cash-flow", "cash-flow", "accounting.cash-flow.read", &out, nil) {
-		httpx.WriteJSON(w, http.StatusOK, out)
+	if h.report(w, r, "/api/v1/laporan/cash-flow", "cash-flow", PermCashFlowRead, &out, nil) {		httpx.WriteJSON(w, http.StatusOK, out)
 	}
 }
 
@@ -389,7 +388,7 @@ func (h *Handler) bukuBesar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var out Ledger
-	if h.report(w, r, "/api/v1/laporan/buku-besar", "buku-besar", "accounting.buku-besar.read", &out, extra) {
+	if h.report(w, r, "/api/v1/laporan/buku-besar", "buku-besar", PermBukuBesarRead, &out, extra) {
 		httpx.WriteJSON(w, http.StatusOK, out)
 	}
 }

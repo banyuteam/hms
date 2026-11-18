@@ -257,28 +257,37 @@ func TestAgingTypeIsBounded(t *testing.T) {
 }
 
 func TestEveryReportAudits(t *testing.T) {
-	// Six reports, one audit each, with the action matching the permission. A report that reads without
-	// recording is the failure this whole module is shaped around.
-	for _, tc := range []struct {
-		name, action, body string
-		fn                 func(*Handler) http.HandlerFunc
-		target             string
-	}{
-		{"neraca", PermNeracaRead, neracaBody,
-			func(h *Handler) http.HandlerFunc { return h.neraca }, "/x?year=2026&month=11"},
-		{"laba-rugi", PermLabaRugiRead,
-			`{"periode":{"tahun":2026,"bulan":11},"pendapatan":[],"hpp":[],"beban":[],"biaya_lain":[],"pajak":[],"total":{"pendapatan":0,"hpp":0,"beban":0,"biaya_lain":0,"pajak":0,"laba_kotor":0,"laba_operasi":0,"laba_rugi":0}}`,
-			func(h *Handler) http.HandlerFunc { return h.labaRugi }, "/x?year=2026&month=11"},
-	} {
+	// Seven reports, one audit each, with the action equal to the permission. The integration test catches a
+	// wrong action too, but only when a database is at hand; this one catches it on every `go test`.
+	//
+	// It is not hypothetical: four of these carried a hand-typed action string with a hyphen after the
+	// permissions moved to underscores, and the earlier version of this test passed because it covered only the
+	// two that happened to be right.
+	for _, r := range reports {
 		h, rd, au := newHandler()
-		rd.body = tc.body
+		h.reader = stubReader{}
+		_ = rd
 
-		if w := call(tc.fn(h), tc.target); w.Code != http.StatusOK {
-			t.Errorf("%s: status %d: %s", tc.name, w.Code, w.Body)
+		path := strings.TrimPrefix(r.path, "/api/v1/accounting")
+		fn := map[string]http.HandlerFunc{
+			PermNeracaRead:      h.neraca,
+			PermLabaRugiRead:    h.labaRugi,
+			PermNeracaSaldoRead: h.neracaSaldo,
+			PermNeracaLajurRead: h.neracaLajur,
+			PermCashFlowRead:    h.cashFlow,
+			PermBukuBesarRead:   h.bukuBesar,
+			PermAgingRead:       h.aging,
+		}[r.permission]
+
+		if w := call(fn, path); w.Code != http.StatusOK {
+			t.Errorf("%s: status %d: %s", r.permission, w.Code, w.Body)
 			continue
 		}
-		if len(au.events) != 1 || au.events[0].Action != tc.action {
-			t.Errorf("%s: audit %+v", tc.name, au.events)
+		if len(au.events) != 1 || au.events[0].Action != r.action {
+			t.Errorf("%s: audit %+v", r.permission, au.events)
+		}
+		if au.events[0].Action != r.permission {
+			t.Errorf("%s: audit action and permission differ: %s", r.permission, au.events[0].Action)
 		}
 	}
 }
