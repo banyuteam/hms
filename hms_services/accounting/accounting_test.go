@@ -167,3 +167,118 @@ func TestFailsClosedWhenAuditFails(t *testing.T) {
 		t.Errorf("data returned without an audit trail: %s", w.Body)
 	}
 }
+
+func TestAllSevenRoutesAreRegistered(t *testing.T) {
+	// This proves the routes exist, not that each carries the right permission: RequirePermission calls
+	// svc.Authorize, which needs a database. The permission check belongs to the PostgreSQL integration tests
+	// (ADR-SVC-014, still open).
+	h, _, _ := newHandler()
+	mux := http.NewServeMux()
+	h.Register(mux)
+
+	for _, path := range []string{
+		"/api/v1/accounting/neraca",
+		"/api/v1/accounting/laba-rugi",
+		"/api/v1/accounting/neraca-saldo",
+		"/api/v1/accounting/neraca-lajur",
+		"/api/v1/accounting/cash-flow",
+		"/api/v1/accounting/buku-besar",
+		"/api/v1/accounting/aging",
+	} {
+		if _, pattern := mux.Handler(httptest.NewRequest(http.MethodGet, path, nil)); pattern == "" {
+			t.Errorf("%s: not registered", path)
+		}
+	}
+
+	// Without this the loop above would pass on a mux with no routes at all: mux.Handler answers every path,
+	// falling back to its own 404 handler.
+	if _, pattern := mux.Handler(httptest.NewRequest(http.MethodGet, "/api/v1/accounting/tidak-ada", nil)); pattern != "" {
+		t.Errorf("unregistered path matched %q — the loop above proves nothing", pattern)
+	}
+}
+
+func TestBukuBesarRequiresAccount(t *testing.T) {
+	// October 2026 without an account is 5.225 rows across 156 accounts. The accounting application's own PDF
+	// route already refuses "all accounts"; an API looser than the UI only moves the failure out of sight.
+	h, rd, au := newHandler()
+	rd.body = `{"periode":{"tahun":2026,"bulan":11},"akun":[]}`
+
+	for _, target := range []string{
+		"/x?year=2026&month=11",
+		"/x?year=2026&month=11&account_id=0",
+		"/x?year=2026&month=11&account_id=-1",
+		"/x?year=2026&month=11&account_id=abc",
+	} {
+		w := call(h.bukuBesar, target)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s: status %d", target, w.Code)
+		}
+	}
+
+	// Nothing was read, so nothing was recorded and upstream was never called.
+	if len(au.events) != 0 || rd.gotPth != "" {
+		t.Errorf("refused request still called upstream or audited")
+	}
+
+	w := call(h.bukuBesar, "/x?year=2026&month=11&account_id=3")
+	if w.Code != http.StatusOK {
+		t.Fatalf("with account: status %d", w.Code)
+	}
+	if rd.gotQ.Get("account_id") != "3" {
+		t.Errorf("account_id not forwarded: %v", rd.gotQ)
+	}
+	if au.events[0].Detail["account_id"] != "3" {
+		t.Errorf("account_id not audited: %+v", au.events[0].Detail)
+	}
+}
+
+func TestAgingTypeIsBounded(t *testing.T) {
+	h, rd, au := newHandler()
+	rd.body = `{"type":"receivable","rows":[],"grand_total":{"name":"","penjamin":null,"current":0,"b31_60":0,"b61_90":0,"b91_180":0,"over180":0,"total":0},"buckets":{},"as_of_date":"30 September 2026"}`
+
+	if w := call(h.aging, "/x?type=sembarang"); w.Code != http.StatusBadRequest {
+		t.Errorf("status %d", w.Code)
+	}
+
+	// Defaults to receivable, and the audit says which kind was read — payable and receivable are different
+	// people's names.
+	w := call(h.aging, "/x")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", w.Code, w.Body)
+	}
+	if rd.gotQ.Get("type") != "receivable" || au.events[0].Detail["type"] != "receivable" {
+		t.Errorf("type: query %v, audit %+v", rd.gotQ, au.events[0].Detail)
+	}
+
+	// Counterparty names are in the response but must not reach the trail.
+	if strings.Contains(au.events[0].ResourceID, "nama") {
+		t.Errorf("resource id carries content: %s", au.events[0].ResourceID)
+	}
+}
+
+func TestEveryReportAudits(t *testing.T) {
+	// Six reports, one audit each, with the action matching the permission. A report that reads without
+	// recording is the failure this whole module is shaped around.
+	for _, tc := range []struct {
+		name, action, body string
+		fn                 func(*Handler) http.HandlerFunc
+		target             string
+	}{
+		{"neraca", PermNeracaRead, neracaBody,
+			func(h *Handler) http.HandlerFunc { return h.neraca }, "/x?year=2026&month=11"},
+		{"laba-rugi", PermLabaRugiRead,
+			`{"periode":{"tahun":2026,"bulan":11},"pendapatan":[],"hpp":[],"beban":[],"biaya_lain":[],"pajak":[],"total":{"pendapatan":0,"hpp":0,"beban":0,"biaya_lain":0,"pajak":0,"laba_kotor":0,"laba_operasi":0,"laba_rugi":0}}`,
+			func(h *Handler) http.HandlerFunc { return h.labaRugi }, "/x?year=2026&month=11"},
+	} {
+		h, rd, au := newHandler()
+		rd.body = tc.body
+
+		if w := call(tc.fn(h), tc.target); w.Code != http.StatusOK {
+			t.Errorf("%s: status %d: %s", tc.name, w.Code, w.Body)
+			continue
+		}
+		if len(au.events) != 1 || au.events[0].Action != tc.action {
+			t.Errorf("%s: audit %+v", tc.name, au.events)
+		}
+	}
+}
