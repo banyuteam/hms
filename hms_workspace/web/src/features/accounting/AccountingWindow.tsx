@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import { formStyles } from '@/components/formStyles';
 import { isLiveApi } from '@/api/liveApi';
 import { ErrorState, LoadingState } from '@/components/QueryState';
-
 import { useResource } from '@/lib/resource';
 import { useI18n } from '@/locales/I18nProvider';
 import { usePermission } from '@/state/auth';
@@ -26,7 +26,9 @@ type ReportKey = 'neraca' | 'labaRugi';
 export function AccountingWindow() {
   const { t } = useI18n();
   const [report, setReport] = useState<ReportKey>('neraca');
-
+  const periods = recentPeriods();
+  const [period, setPeriod] = useState(periods[0]);
+  const periodId = useId();
   const canNeraca = usePermission(ACCOUNTING_PERMISSIONS.neraca);
   const canLabaRugi = usePermission(ACCOUNTING_PERMISSIONS.labaRugi);
 
@@ -66,21 +68,54 @@ export function AccountingWindow() {
           ))}
         </div>
       )}
-
-      {current === 'neraca' ? <Neraca /> : <LabaRugi />}
+      <div className={`${formStyles.field} max-w-[280px]`}>
+        <label htmlFor={periodId}>{t('accounting.period')}</label>
+        <select
+          id={periodId}
+          className={formStyles.input}
+          value={`${period.year}-${period.month}`}
+          onChange={(e) => {
+            // Value is built from the same list below, so a match always exists; this also keeps the chosen period
+            // a Period rather than two numbers that might be NaN.
+            const picked = periods.find((p) => `${p.year}-${p.month}` === e.target.value);
+            if (picked) setPeriod(picked);
+          }}
+        >
+          {periods.map((p) => (
+            <option key={`${p.year}-${p.month}`} value={`${p.year}-${p.month}`}>
+              {`${t(monthKey(p.month))} ${p.year}`}
+            </option>
+          ))}
+        </select>
+      </div>
+  
+            {current === 'neraca' ? <Neraca {...period} /> : <LabaRugi {...period} />}
     </div>
+
   );
 }
 
-/** Period: this month. A picker is the next piece; the reports already accept any year and month. */
-function thisPeriod(): { year: number; month: number } {
-  const now = new Date();
-  return { year: now.getFullYear(), month: now.getMonth() + 1 };
+function monthKey(month: number): string {
+  return `month.${month}`;
 }
 
-function Neraca() {
+type Period = { year: number; month: number };
+
+/** Periods offered: this month and the 23 before it. Older books exist, but a two-year window covers what anyone
+ *  looks up from a hospital workspace, and a free year field invites typos that produce an empty report. */
+function recentPeriods(): [Period, ...Period[]] {
+  const now = new Date();
+  const first: Period = { year: now.getFullYear(), month: now.getMonth() + 1 };
+  const rest: Period[] = [];
+  for (let i = 1; i < 24; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    rest.push({ year: d.getFullYear(), month: d.getMonth() + 1 });
+  }
+  return [first, ...rest];
+}
+
+function Neraca({ year, month }: { year: number; month: number }) {
   const { t, locale } = useI18n();
-  const { year, month } = thisPeriod();
   const state = useResource(['accounting', 'neraca', year, month], () => getBalanceSheet(year, month));
 
 if (state.isPending) return <LoadingState message={t('accounting.loading')} />;
@@ -125,9 +160,8 @@ if (state.isPending) return <LoadingState message={t('accounting.loading')} />;
   );
 }
 
-function LabaRugi() {
+function LabaRugi({ year, month }: { year: number; month: number }) {
   const { t, locale } = useI18n();
-  const { year, month } = thisPeriod();
   const state = useResource(['accounting', 'laba-rugi', year, month], () =>
     getIncomeStatement(year, month),
   );
