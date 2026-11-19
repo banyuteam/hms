@@ -16,6 +16,7 @@ export const WORKFLOWS = {
   prescription: 'prescription',
   access: 'iam-admin',
   tariffs: 'tariffs',
+  accounting: 'accounting',
 } as const satisfies Record<string, WindowKind>;
 
 export type WorkflowSlug = keyof typeof WORKFLOWS;

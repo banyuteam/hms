@@ -17,6 +17,7 @@ export const WINDOW_META: Record<WindowKind, { titleKey: string; icon: IconName 
   prescription: { titleKey: 'emr.viewer.prescription.title', icon: 'pill' },
   'iam-admin': { titleKey: 'iam.title', icon: 'shield' },
   tariffs: { titleKey: 'tariff.title', icon: 'book' },
+  accounting: { titleKey: 'accounting.title', icon: 'receipt' },
 };
 
 /** The four task windows on Home, in Alt+1…4 order. Viewers are not on Home. */

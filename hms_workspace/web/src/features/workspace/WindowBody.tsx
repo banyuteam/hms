@@ -5,6 +5,7 @@ import { RecordsWindow } from '@/features/emr/windows/RecordsWindow';
 import { ViewerWindow } from '@/features/emr/windows/ViewerWindow';
 import { AccessWindow } from '@/features/iam/AccessWindow';
 import { TariffWindow } from '@/features/tariffs/TariffWindow';
+import { AccountingWindow } from '@/features/accounting/AccountingWindow';
 import { WindowOpenerProvider, type WindowState } from '@/state/home';
 import { WindowIdProvider } from './windowGuard';
 
@@ -41,5 +42,7 @@ function Content({ win }: { win: WindowState }) {
       return <AccessWindow key={win.id} winId={win.id} />;
     case 'tariffs':
       return <TariffWindow key={win.id} winId={win.id} />;
+    case 'accounting':
+      return <AccountingWindow key={win.id} />;
   }
 }

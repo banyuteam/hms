@@ -34,7 +34,8 @@ export type WindowKind =
   | 'billing'
   | 'prescription'
   | 'iam-admin'
-  | 'tariffs';
+  | 'tariffs'
+  | 'accounting';
 export type WindowMode = 'floating' | 'tiled' | 'maximized' | 'minimized';
 export type RestoreMode = 'floating' | 'tiled';
 
@@ -106,6 +107,7 @@ const DEFAULT_SIZE: Partial<Record<WindowKind, { w: number; h: number }>> = {
   prescription: { w: 760, h: 640 },
   'iam-admin': { w: 1120, h: 720 },
   tariffs: { w: 1120, h: 720 },
+  accounting: { w: 1120, h: 720 },
 };
 
 export const initialHomeState: HomeState = {

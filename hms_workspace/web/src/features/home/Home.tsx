@@ -7,6 +7,7 @@ import { useI18n } from '@/locales/I18nProvider';
 import { useAssistantActions } from '@/state/assistant';
 import { PERMISSIONS } from '@/features/iam/iamApi';
 import { TARIFF_PERMISSION } from '@/features/tariffs/tariffApi';
+import { ACCOUNTING_PERMISSIONS } from '@/features/accounting/accountingApi';
 import { displayName, useAuth, usePermission, useRole, useRoleLabelKey } from '@/state/auth';
 import { useHome, useHomeActions } from '@/state/home';
 import { ModuleCard } from './ModuleCard';
@@ -31,6 +32,9 @@ export function Home() {
   const now = useNow(60_000);
   const name = user ? displayName(user, t) : '';
   const openRecords = windows.filter((w) => w.params.mrn || w.params.norawat);
+  const canNeraca = usePermission(ACCOUNTING_PERMISSIONS.neraca);
+  const canLabaRugi = usePermission(ACCOUNTING_PERMISSIONS.labaRugi);
+  const canAccounting = canNeraca || canLabaRugi;
 
   return (
     <div className="@container">
@@ -91,22 +95,35 @@ export function Home() {
           </ul>
         </section>
 
-        {canReadTariffs && (
+        {(canReadTariffs || canAccounting) && (
           <section aria-labelledby="home-finance">
             <h2 id="home-finance" className={overline}>
               {t('tariff.home.section')}
             </h2>
-            <ModuleCard
-              icon={windowIcon('tariffs')}
-              layout="row"
-              title={t('tariff.title')}
-              description={t('tariff.home.desc')}
-              verb={t('tariff.home.open')}
-              onOpen={() => open('tariffs')}
-            />
+            <div className="flex flex-col gap-16">
+              {canReadTariffs && (
+                <ModuleCard
+                  icon={windowIcon('tariffs')}
+                  layout="row"
+                  title={t('tariff.title')}
+                  description={t('tariff.home.desc')}
+                  verb={t('tariff.home.open')}
+                  onOpen={() => open('tariffs')}
+                />
+              )}
+              {canAccounting && (
+                <ModuleCard
+                  icon={windowIcon('accounting')}
+                  layout="row"
+                  title={t('accounting.title')}
+                  description={t('accounting.home.desc')}
+                  verb={t('accounting.home.open')}
+                  onOpen={() => open('accounting')}
+                />
+              )}
+            </div>
           </section>
         )}
-
         {canAdminister && (
           <section aria-labelledby="home-admin">
             <h2 id="home-admin" className={overline}>
